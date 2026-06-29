@@ -6,7 +6,7 @@ The MVP is intentionally browser-only: capture or loaded media stays local, OCR 
 
 ## Current Status
 
-M3 is in progress on top of the static app foundation:
+M4 is in progress on top of the static app foundation:
 
 - React + TypeScript + Vite
 - Vitest + React Testing Library
@@ -23,8 +23,12 @@ M3 is in progress on top of the static app foundation:
 - Bounded in-memory frame sample buffer
 - Browser OCR provider interface and Tesseract.js worker integration
 - Real-time OCR log entries with raw text, normalized text, confidence, timestamp, and frame index
+- Generated Pokemon and move name dictionaries from local `others/` reference lists
+- Safe fuzzy dictionary matching that keeps low-confidence corrections reviewable
+- Seed parser coverage for observed move messages, effectiveness messages, and unknown fallback
+- OCR log entries now show the current parser classification candidate
 
-Parsing, storage, statistics, and champout import are later milestones described in `AGENTS.md`.
+Storage, review timeline, statistics, and champout import are later milestones described in `AGENTS.md`.
 
 ## Commands
 
@@ -32,6 +36,7 @@ Run these from PowerShell in the repository root:
 
 ```powershell
 npm install
+npm run generate:dictionaries
 npm run dev
 npm run test
 npm run build

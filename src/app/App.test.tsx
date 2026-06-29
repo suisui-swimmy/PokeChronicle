@@ -110,7 +110,7 @@ describe("App", () => {
     });
   });
 
-  it("renders the M3 OCR workspace shell", async () => {
+  it("renders the M4 parser workspace shell", async () => {
     render(<App />);
 
     expect(await screen.findByRole("combobox", { name: "映像ソース" })).toHaveValue("video-usb");
@@ -136,7 +136,8 @@ describe("App", () => {
     expect(screen.getByText(/ROI: x=0.0600 y=0.7200 w=0.8800 h=0.2000/)).toBeInTheDocument();
     expect(screen.getByText("M1 完了")).toBeInTheDocument();
     expect(screen.getByText("M2 完了")).toBeInTheDocument();
-    expect(screen.getByText("M3 進行中")).toBeInTheDocument();
+    expect(screen.getByText("M3 完了")).toBeInTheDocument();
+    expect(screen.getByText("M4 進行中")).toBeInTheDocument();
   });
 
   it("starts selected video input with audio disabled when no audio is selected", async () => {

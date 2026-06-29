@@ -48,7 +48,19 @@ M3 moves recognition behind an OCR provider interface and keeps OCR work off the
 - OCR jobs are bounded to one pending recognition at a time so slow recognition does not build an unbounded queue.
 - Tesseract worker/core/language asset paths can be supplied with `VITE_TESSERACT_WORKER_PATH`, `VITE_TESSERACT_CORE_PATH`, and `VITE_TESSERACT_LANG_PATH`; relative values are resolved against the Vite base path.
 
-Parser, IndexedDB, and champout import are later milestones.
+## M4 Parser Boundary
+
+M4 keeps classification as pure browser-side TypeScript:
+
+- `src/core/normalize/ocrText.ts` derives display text and compact `matchText` without overwriting raw OCR text.
+- `scripts/generate-battle-dictionaries.mjs` reads local reference name lists from `others/pokemon-names` and `others/move-names`, then writes runtime-safe generated dictionaries under `src/core/dictionary` and `data/dictionaries`.
+- `src/core/dictionary/generatedBattleDictionary.ts` is the parser's default dictionary and contains generated Pokemon and move name entries only. The runtime app does not read `others/`.
+- `src/core/dictionary/seedBattleDictionary.ts` remains a tiny test/support dictionary, not the default parser dictionary.
+- `src/core/dictionary/fuzzyMatch.ts` accepts exact matches and only accepts fuzzy corrections when score, margin, and OCR confidence are high enough.
+- `src/core/parser/seedParser.ts` classifies the first seed rules: observed move messages, effectiveness messages, critical/miss/fail/protect/faint/switch hints, and unknown fallback.
+- OCR log entries display the current parser candidate, but review timeline, persistence, and statistics remain later milestones.
+
+IndexedDB, review timeline, statistics, and champout import are later milestones.
 
 ## Runtime Constraints
 

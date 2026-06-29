@@ -11,4 +11,9 @@ describe("normalizeOcrText", () => {
       "相手のエルフーンのアンコール",
     );
   });
+
+  it("normalizes slash-like OCR noise as an exclamation candidate", () => {
+    expect(normalizeOcrText("マフォオクシーの\nまもる/")).toBe("マフォオクシーのまもる!");
+    expect(createOcrMatchText("マフォオクシーの\nまもる/")).toBe("マフォオクシーのまもる");
+  });
 });

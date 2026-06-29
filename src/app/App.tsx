@@ -14,15 +14,19 @@ import {
   type MessagePreprocessOptions,
 } from "../core/preprocess/messagePreprocess";
 import { mapDisplayRoiToSourceRect } from "../core/media/roiMapping";
-import { normalizeOcrText } from "../core/normalize/ocrText";
 import { createTesseractWorkerConfig } from "../core/ocr/tesseractConfig";
 import type { OCRWorkerRequest, OCRWorkerResponse } from "../core/ocr/workerMessages";
+import {
+  parseBattleMessage,
+  type BattleMessageParseResult,
+} from "../core/parser/seedParser";
 
 const MILESTONES = [
   { id: "M0", label: "静的アプリ基盤", status: "完了" },
   { id: "M1", label: "キャプチャ表示とROI調整", status: "完了" },
   { id: "M2", label: "フレームサンプリングと前処理preview", status: "完了" },
-  { id: "M3", label: "OCR providerとリアルタイムOCRログ", status: "進行中" },
+  { id: "M3", label: "OCR providerとリアルタイムOCRログ", status: "完了" },
+  { id: "M4", label: "正規化、辞書、seed parser", status: "進行中" },
 ];
 
 const DEFAULT_ROI: NormalizedRoi = { x: 0.06, y: 0.72, w: 0.88, h: 0.2 };
@@ -112,6 +116,8 @@ type OCRLogEntry = {
   timestampMs: number;
   rawText: string;
   normalizedText: string;
+  matchText: string;
+  parseResult?: BattleMessageParseResult;
   confidence: number | null;
   lineCount: number;
   status: "recognized" | "empty" | "error";
@@ -170,6 +176,39 @@ function formatConfidence(confidence: number | null) {
 
 function formatProgress(progress: number) {
   return `${Math.round(clamp(progress, 0, 1) * 100)}%`;
+}
+
+function formatEventType(type: string) {
+  const labels: Record<string, string> = {
+    boost: "能力上昇",
+    critical: "急所",
+    fail: "失敗",
+    faint: "ひんし",
+    immune: "無効",
+    miss: "外れ",
+    move: "技",
+    protect: "まもる",
+    resisted: "半減",
+    supereffective: "抜群",
+    switch_in: "交代in",
+    switch_out: "交代out",
+    unboost: "能力下降",
+  };
+
+  return labels[type] ?? type;
+}
+
+function formatParseSummary(result: BattleMessageParseResult) {
+  if (result.status === "unknown") {
+    return result.candidateMatches.length > 0
+      ? `unknown / ${result.candidateMatches.length} candidates`
+      : "unknown";
+  }
+
+  const actor = result.event.actor.name ? ` / ${result.event.actor.name}` : "";
+  const move = result.event.move ? ` / ${result.event.move}` : "";
+
+  return `${formatEventType(result.event.type)} / ${result.event.classification.method}${actor}${move}`;
 }
 
 function createLog(message: string, level: LogLevel = "info"): SystemLog {
@@ -445,7 +484,7 @@ export function App() {
   const [pendingOcrJobs, setPendingOcrJobs] = useState(0);
   const [ocrLogs, setOcrLogs] = useState<OCRLogEntry[]>([]);
   const [logs, setLogs] = useState<SystemLog[]>(() => [
-    createLog("M1 capture workspace initialized."),
+    createLog("M4 parser workspace initialized."),
   ]);
   const roiRef = useRef(roi);
   const mediaModeRef = useRef(mediaMode);
@@ -474,7 +513,11 @@ export function App() {
 
       if (response.type === "result") {
         setPendingOcrJobCount(pendingOcrJobsRef.current - 1);
-        const normalizedText = normalizeOcrText(response.result.rawText);
+        const parseResult = parseBattleMessage({
+          rawText: response.result.rawText,
+          ocrConfidence: response.result.confidence,
+        });
+        const normalizedText = parseResult.normalizedText;
         const hasText = normalizedText.length > 0;
         const nextEntry: OCRLogEntry = {
           id: response.jobId,
@@ -482,6 +525,8 @@ export function App() {
           timestampMs: response.meta.timestampMs,
           rawText: response.result.rawText,
           normalizedText,
+          matchText: parseResult.matchText,
+          parseResult,
           confidence: response.result.confidence,
           lineCount: response.result.lines.length,
           status: hasText ? "recognized" : "empty",
@@ -503,6 +548,7 @@ export function App() {
           timestampMs: response.meta?.timestampMs ?? 0,
           rawText: "",
           normalizedText: "",
+          matchText: "",
           confidence: null,
           lineCount: 0,
           status: "error",
@@ -1463,6 +1509,16 @@ export function App() {
                       ) : (
                         <>
                           <p>{entry.normalizedText || "テキストなし"}</p>
+                          {entry.parseResult ? (
+                            <div className="parse-summary">
+                              <span
+                                className={`parse-chip parse-chip--${entry.parseResult.status}`}
+                              >
+                                {formatParseSummary(entry.parseResult)}
+                              </span>
+                              <span>{entry.matchText || "match empty"}</span>
+                            </div>
+                          ) : null}
                           <code>{entry.rawText || "raw empty"}</code>
                         </>
                       )}
@@ -1494,7 +1550,7 @@ export function App() {
         <aside className="log-panel" aria-labelledby="log-title">
           <div className="panel-heading">
             <h1 id="log-title">ログ</h1>
-            <span>M3</span>
+            <span>M4</span>
           </div>
           <ol className="log-list" aria-label="system log">
             {logs.map((log) => (

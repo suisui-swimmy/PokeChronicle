@@ -7,16 +7,19 @@ export function normalizeOcrText(rawText: string) {
     .filter(Boolean)
     .join("")
     .replace(/[！]/g, "!")
+    .replace(/[／/｜|]/g, "!")
+    .replace(/!+/g, "!")
     .replace(/[？]/g, "?")
     .replace(/[。｡]/g, "。")
     .replace(/[、､]/g, "、")
+    .replace(/[…]+/g, "...")
     .replace(/\s+/g, " ")
     .trim();
 }
 
 export function createOcrMatchText(rawText: string) {
   return normalizeOcrText(rawText)
-    .replace(/[!！?？。、,.]/g, "")
+    .replace(/[!！?？。、,.・･/／\\|｜…:：;；"'`´_＿\[\]（）(){}「」『』<>＜＞]/g, "")
     .replace(/\s+/g, "")
     .toLowerCase();
 }

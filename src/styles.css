@@ -666,7 +666,8 @@ button:disabled {
 }
 
 .ocr-log-entry p,
-.ocr-log-entry code {
+.ocr-log-entry code,
+.parse-summary {
   margin: 0;
   min-width: 0;
   overflow-wrap: anywhere;
@@ -686,6 +687,38 @@ button:disabled {
     "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 0.76rem;
   white-space: pre-wrap;
+}
+
+.parse-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  color: var(--faint);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.parse-chip {
+  display: inline-flex;
+  max-width: 100%;
+  padding: 3px 7px;
+  border: 1px solid rgb(102 112 133 / 0.42);
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgb(102 112 133 / 0.12);
+}
+
+.parse-chip--event {
+  border-color: rgb(32 217 152 / 0.36);
+  color: var(--green);
+  background: rgb(32 217 152 / 0.1);
+}
+
+.parse-chip--unknown {
+  border-color: rgb(255 180 84 / 0.36);
+  color: var(--warning);
+  background: rgb(255 180 84 / 0.1);
 }
 
 .log-panel {

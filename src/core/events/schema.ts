@@ -8,6 +8,15 @@ export type BattleEventType =
   | "battle_start"
   | "battle_end"
   | "turn_marker"
+  | "supereffective"
+  | "resisted"
+  | "immune"
+  | "critical"
+  | "boost"
+  | "unboost"
+  | "protect"
+  | "miss"
+  | "fail"
   | "unknown";
 
 export type ClassificationMethod =
@@ -113,4 +122,3 @@ export function createEmptyBattleLog(battleId: string): BattleLogDocument {
     manualCorrections: [],
   };
 }
-
