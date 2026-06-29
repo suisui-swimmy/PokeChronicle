@@ -6,15 +6,19 @@ The MVP is intentionally browser-only: capture or loaded media stays local, OCR 
 
 ## Current Status
 
-M0 is the static app foundation:
+M1 is in progress on top of the static app foundation:
 
 - React + TypeScript + Vite
 - Vitest + React Testing Library
 - Static GitHub Pages-ready build settings
 - Initial battle log, OCR message, event, and unknown schemas
-- Initial docs for architecture and Windows setup
+- Minimal capture console UI
+- `videoinput` source selection for OBS Virtual Camera, OBS-Camera, USB capture devices, and similar inputs
+- Separate `audioinput` selection with an `音声なし` option
+- SnapCrop-style 16:9-preferred video constraints and separate audio playback routing
+- ROI overlay movement and resizing
 
-Capture, OCR, parsing, storage, statistics, and champout import are later milestones described in `AGENTS.md`.
+OCR, parsing, storage, statistics, and champout import are later milestones described in `AGENTS.md`.
 
 ## Commands
 
@@ -45,4 +49,3 @@ For local preview with root-relative paths, run:
 ```powershell
 $env:VITE_BASE_PATH="/"; npm run build; npm run preview
 ```
-
