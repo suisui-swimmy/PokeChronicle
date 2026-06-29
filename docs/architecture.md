@@ -38,7 +38,17 @@ M2 keeps processing in the browser UI thread until OCR work begins:
 - The preprocessing pass extracts bright low-chroma text candidates, writes them onto a solid black or white background, optionally inverts the output, and upscales without smoothing.
 - Recent frame samples are kept in a small in-memory ring buffer. They are not persisted and do not grow without bounds.
 
-OCR, parser, IndexedDB, and champout import are later milestones.
+## M3 OCR Boundary
+
+M3 moves recognition behind an OCR provider interface and keeps OCR work off the UI thread:
+
+- `src/core/ocr/types.ts` defines the browser-side `OCRProvider` contract.
+- `src/workers/ocr.worker.ts` owns the Tesseract.js provider and receives preprocessed ROI images from the app.
+- The app keeps raw OCR text and derives normalized display text without overwriting the raw value.
+- OCR jobs are bounded to one pending recognition at a time so slow recognition does not build an unbounded queue.
+- Tesseract worker/core/language asset paths can be supplied with `VITE_TESSERACT_WORKER_PATH`, `VITE_TESSERACT_CORE_PATH`, and `VITE_TESSERACT_LANG_PATH`; relative values are resolved against the Vite base path.
+
+Parser, IndexedDB, and champout import are later milestones.
 
 ## Runtime Constraints
 

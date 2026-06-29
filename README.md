@@ -6,7 +6,7 @@ The MVP is intentionally browser-only: capture or loaded media stays local, OCR 
 
 ## Current Status
 
-M2 is in progress on top of the static app foundation:
+M3 is in progress on top of the static app foundation:
 
 - React + TypeScript + Vite
 - Vitest + React Testing Library
@@ -21,8 +21,10 @@ M2 is in progress on top of the static app foundation:
 - Raw ROI crop and Canvas-preprocessed preview
 - White-text candidate extraction, solid background, inversion, and upscale controls
 - Bounded in-memory frame sample buffer
+- Browser OCR provider interface and Tesseract.js worker integration
+- Real-time OCR log entries with raw text, normalized text, confidence, timestamp, and frame index
 
-OCR, parsing, storage, statistics, and champout import are later milestones described in `AGENTS.md`.
+Parsing, storage, statistics, and champout import are later milestones described in `AGENTS.md`.
 
 ## Commands
 
@@ -52,4 +54,14 @@ For local preview with root-relative paths, run:
 
 ```powershell
 $env:VITE_BASE_PATH="/"; npm run build; npm run preview
+```
+
+## OCR Assets
+
+Tesseract.js runs in a Web Worker. By default it may download worker/core/language assets from its upstream static CDN and cache language data in the browser; battle images are not uploaded.
+
+If you host those assets yourself, relative paths are resolved against `import.meta.env.BASE_URL`:
+
+```powershell
+$env:VITE_TESSERACT_LANG_PATH="tessdata"; npm run build
 ```

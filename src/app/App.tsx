@@ -14,11 +14,15 @@ import {
   type MessagePreprocessOptions,
 } from "../core/preprocess/messagePreprocess";
 import { mapDisplayRoiToSourceRect } from "../core/media/roiMapping";
+import { normalizeOcrText } from "../core/normalize/ocrText";
+import { createTesseractWorkerConfig } from "../core/ocr/tesseractConfig";
+import type { OCRWorkerRequest, OCRWorkerResponse } from "../core/ocr/workerMessages";
 
 const MILESTONES = [
   { id: "M0", label: "静的アプリ基盤", status: "完了" },
   { id: "M1", label: "キャプチャ表示とROI調整", status: "完了" },
-  { id: "M2", label: "フレームサンプリングと前処理preview", status: "進行中" },
+  { id: "M2", label: "フレームサンプリングと前処理preview", status: "完了" },
+  { id: "M3", label: "OCR providerとリアルタイムOCRログ", status: "進行中" },
 ];
 
 const DEFAULT_ROI: NormalizedRoi = { x: 0.06, y: 0.72, w: 0.88, h: 0.2 };
@@ -26,11 +30,14 @@ const MIN_ROI_SIZE = 0.08;
 const NO_AUDIO_DEVICE_ID = "none";
 const DEFAULT_SAMPLE_FPS = 3;
 const MAX_FRAME_BUFFER = 8;
+const MAX_OCR_LOGS = 24;
+const MAX_PENDING_OCR_JOBS = 1;
 const DEFAULT_PREPROCESS_OPTIONS: MessagePreprocessOptions = {
   whiteThreshold: 180,
   background: "black",
   invert: false,
 };
+const OCR_WORKER_CONFIG = createTesseractWorkerConfig(import.meta.env, import.meta.env.BASE_URL);
 const ASPECT_16_BY_9 = 16 / 9;
 const ASPECT_4_BY_3 = 4 / 3;
 const ASPECT_TOLERANCE = 0.03;
@@ -99,6 +106,18 @@ type FrameSample = CapturedFrameImages & {
   upscaleFactor: number;
 };
 
+type OCRLogEntry = {
+  id: string;
+  frameIndex: number;
+  timestampMs: number;
+  rawText: string;
+  normalizedText: string;
+  confidence: number | null;
+  lineCount: number;
+  status: "recognized" | "empty" | "error";
+  errorMessage?: string;
+};
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
@@ -139,6 +158,18 @@ function formatFps(frameRate: number | null) {
   }
 
   return `${Number.isInteger(frameRate) ? frameRate : frameRate.toFixed(1)} fps`;
+}
+
+function formatConfidence(confidence: number | null) {
+  if (confidence === null) {
+    return "--%";
+  }
+
+  return `${Math.round(confidence * 100)}%`;
+}
+
+function formatProgress(progress: number) {
+  return `${Math.round(clamp(progress, 0, 1) * 100)}%`;
 }
 
 function createLog(message: string, level: LogLevel = "info"): SystemLog {
@@ -381,8 +412,12 @@ export function App() {
   const audioGainNodeRef = useRef<GainNode | null>(null);
   const audioSourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const samplingTimerRef = useRef<number | null>(null);
+  const ocrWorkerRef = useRef<Worker | null>(null);
   const frameIndexRef = useRef(0);
+  const ocrJobCounterRef = useRef(0);
+  const pendingOcrJobsRef = useRef(0);
   const samplingStartMsRef = useRef(0);
+  const isOcrEnabledRef = useRef(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [mediaMode, setMediaMode] = useState<MediaMode>("idle");
   const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
@@ -404,6 +439,11 @@ export function App() {
     useState<MessagePreprocessOptions>(DEFAULT_PREPROCESS_OPTIONS);
   const [upscaleFactor, setUpscaleFactor] = useState(2);
   const [frameSamples, setFrameSamples] = useState<FrameSample[]>([]);
+  const [isOcrEnabled, setIsOcrEnabled] = useState(false);
+  const [ocrStatusLabel, setOcrStatusLabel] = useState("未開始");
+  const [ocrProgress, setOcrProgress] = useState(0);
+  const [pendingOcrJobs, setPendingOcrJobs] = useState(0);
+  const [ocrLogs, setOcrLogs] = useState<OCRLogEntry[]>([]);
   const [logs, setLogs] = useState<SystemLog[]>(() => [
     createLog("M1 capture workspace initialized."),
   ]);
@@ -415,6 +455,162 @@ export function App() {
   const addLog = useCallback((message: string, level: LogLevel = "info") => {
     setLogs((currentLogs) => [createLog(message, level), ...currentLogs].slice(0, 12));
   }, []);
+
+  const setPendingOcrJobCount = useCallback((nextCount: number) => {
+    const safeCount = Math.max(0, nextCount);
+    pendingOcrJobsRef.current = safeCount;
+    setPendingOcrJobs(safeCount);
+  }, []);
+
+  const handleOcrWorkerMessage = useCallback(
+    (event: MessageEvent<OCRWorkerResponse>) => {
+      const response = event.data;
+
+      if (response.type === "progress") {
+        setOcrProgress(response.progress);
+        setOcrStatusLabel(`${response.status} ${formatProgress(response.progress)}`);
+        return;
+      }
+
+      if (response.type === "result") {
+        setPendingOcrJobCount(pendingOcrJobsRef.current - 1);
+        const normalizedText = normalizeOcrText(response.result.rawText);
+        const hasText = normalizedText.length > 0;
+        const nextEntry: OCRLogEntry = {
+          id: response.jobId,
+          frameIndex: response.meta.frameIndex,
+          timestampMs: response.meta.timestampMs,
+          rawText: response.result.rawText,
+          normalizedText,
+          confidence: response.result.confidence,
+          lineCount: response.result.lines.length,
+          status: hasText ? "recognized" : "empty",
+        };
+
+        setOcrLogs((currentLogs) => [nextEntry, ...currentLogs].slice(0, MAX_OCR_LOGS));
+        setOcrProgress(0);
+        setOcrStatusLabel(hasText ? "認識済み" : "空候補");
+        return;
+      }
+
+      if (response.type === "error") {
+        setPendingOcrJobCount(pendingOcrJobsRef.current - 1);
+        setOcrProgress(0);
+        setOcrStatusLabel("OCR失敗");
+        const errorEntry: OCRLogEntry = {
+          id: response.jobId,
+          frameIndex: response.meta?.frameIndex ?? 0,
+          timestampMs: response.meta?.timestampMs ?? 0,
+          rawText: "",
+          normalizedText: "",
+          confidence: null,
+          lineCount: 0,
+          status: "error",
+          errorMessage: response.message,
+        };
+        setOcrLogs((currentLogs) => [
+          errorEntry,
+          ...currentLogs,
+        ].slice(0, MAX_OCR_LOGS));
+        addLog(`OCRに失敗しました: ${response.message}`, "error");
+        return;
+      }
+
+      if (response.type === "terminated") {
+        ocrWorkerRef.current?.terminate();
+        ocrWorkerRef.current = null;
+        setPendingOcrJobCount(0);
+        setOcrProgress(0);
+        setOcrStatusLabel("停止済み");
+      }
+    },
+    [addLog, setPendingOcrJobCount],
+  );
+
+  const ensureOcrWorker = useCallback(() => {
+    if (ocrWorkerRef.current) {
+      return ocrWorkerRef.current;
+    }
+
+    const worker = new Worker(new URL("../workers/ocr.worker.ts", import.meta.url), {
+      type: "module",
+    });
+    worker.onmessage = handleOcrWorkerMessage;
+    worker.onerror = () => {
+      setPendingOcrJobCount(0);
+      setOcrProgress(0);
+      setOcrStatusLabel("OCR worker失敗");
+      addLog("OCR workerの起動または実行に失敗しました。", "error");
+    };
+    ocrWorkerRef.current = worker;
+
+    return worker;
+  }, [addLog, handleOcrWorkerMessage, setPendingOcrJobCount]);
+
+  const requestOcrWorkerShutdown = useCallback(() => {
+    if (!ocrWorkerRef.current) {
+      setOcrStatusLabel("停止済み");
+      return;
+    }
+
+    const message: OCRWorkerRequest = {
+      type: "terminate",
+      jobId: `terminate-${Date.now()}`,
+    };
+    ocrWorkerRef.current.postMessage(message);
+  }, []);
+
+  const stopOcr = useCallback(
+    (message?: string) => {
+      isOcrEnabledRef.current = false;
+      setIsOcrEnabled(false);
+      setPendingOcrJobCount(0);
+      setOcrProgress(0);
+      setOcrStatusLabel("停止中");
+      requestOcrWorkerShutdown();
+
+      if (message) {
+        addLog(message);
+      }
+    },
+    [addLog, requestOcrWorkerShutdown, setPendingOcrJobCount],
+  );
+
+  const queueOcrRecognition = useCallback(
+    (sample: FrameSample) => {
+      if (!isOcrEnabledRef.current) {
+        return;
+      }
+
+      if (pendingOcrJobsRef.current >= MAX_PENDING_OCR_JOBS) {
+        setOcrStatusLabel("OCR処理待ち");
+        return;
+      }
+
+      const worker = ensureOcrWorker();
+      const nextPendingCount = pendingOcrJobsRef.current + 1;
+      const jobId = `ocr-${ocrJobCounterRef.current + 1}`;
+      const message: OCRWorkerRequest = {
+        type: "recognize",
+        jobId,
+        imageDataUrl: sample.processedDataUrl,
+        meta: {
+          cropHeight: sample.cropHeight,
+          cropWidth: sample.cropWidth,
+          frameIndex: sample.frameIndex,
+          roi: sample.roi,
+          timestampMs: sample.timestampMs,
+        },
+        config: OCR_WORKER_CONFIG,
+      };
+
+      ocrJobCounterRef.current += 1;
+      setPendingOcrJobCount(nextPendingCount);
+      setOcrStatusLabel("認識リクエスト送信");
+      worker.postMessage(message);
+    },
+    [ensureOcrWorker, setPendingOcrJobCount],
+  );
 
   useEffect(() => {
     roiRef.current = roi;
@@ -519,6 +715,7 @@ export function App() {
 
   const resetMedia = useCallback(() => {
     stopSampling();
+    stopOcr();
     stopTracks(stream);
     stopAudioInput();
     clearObjectUrl();
@@ -533,7 +730,7 @@ export function App() {
       videoRef.current.srcObject = null;
       videoRef.current.removeAttribute("src");
     }
-  }, [clearObjectUrl, stopAudioInput, stopSampling, stopTracks, stream]);
+  }, [clearObjectUrl, stopAudioInput, stopOcr, stopSampling, stopTracks, stream]);
 
   useEffect(() => {
     return () => {
@@ -543,6 +740,7 @@ export function App() {
 
       stopTracks(stream);
       clearObjectUrl();
+      ocrWorkerRef.current?.terminate();
     };
   }, [clearObjectUrl, stopTracks, stream]);
 
@@ -824,10 +1022,11 @@ export function App() {
       setFrameSamples((currentSamples) =>
         [nextSample, ...currentSamples].slice(0, MAX_FRAME_BUFFER),
       );
+      queueOcrRecognition(nextSample);
 
       return true;
     },
-    [addLog],
+    [addLog, queueOcrRecognition],
   );
 
   const handleStartSampling = useCallback(() => {
@@ -855,6 +1054,29 @@ export function App() {
   const handleStopSampling = useCallback(() => {
     stopSampling("フレームサンプリングを停止しました。");
   }, [stopSampling]);
+
+  const handleStartOcr = useCallback(() => {
+    if (mediaModeRef.current === "idle") {
+      addLog("OCRする映像または画像がありません。", "warn");
+      return;
+    }
+
+    ensureOcrWorker();
+    isOcrEnabledRef.current = true;
+    setIsOcrEnabled(true);
+    setOcrLogs([]);
+    setOcrProgress(0);
+    setOcrStatusLabel("OCR準備中");
+    addLog("リアルタイムOCRログを開始しました。");
+
+    if (samplingTimerRef.current === null) {
+      handleStartSampling();
+    }
+  }, [addLog, ensureOcrWorker, handleStartSampling]);
+
+  const handleStopOcr = useCallback(() => {
+    stopOcr("リアルタイムOCRログを停止しました。");
+  }, [stopOcr]);
 
   const handleResetRoi = useCallback(() => {
     setRoi(DEFAULT_ROI);
@@ -896,6 +1118,7 @@ export function App() {
   }, [audioDevices, audioReady, mediaMode, selectedAudioDeviceId]);
 
   const latestFrameSample = frameSamples[0] ?? null;
+  const latestOcrLog = ocrLogs[0] ?? null;
 
   return (
     <main className="capture-shell">
@@ -1186,6 +1409,68 @@ export function App() {
                 ))
               )}
             </ol>
+
+            <section className="ocr-panel" aria-label="realtime OCR log">
+              <div className="ocr-header">
+                <div>
+                  <h2>リアルタイムOCR</h2>
+                  <span>
+                    {ocrStatusLabel} / pending {pendingOcrJobs} / {formatConfidence(
+                      latestOcrLog?.confidence ?? null,
+                    )}
+                  </span>
+                </div>
+                <div className="analysis-actions">
+                  <button
+                    type="button"
+                    className="icon-button icon-button--compact"
+                    onClick={handleStartOcr}
+                    disabled={mediaMode === "idle" || isOcrEnabled}
+                  >
+                    <span aria-hidden="true">▶</span>
+                    <span>OCR開始</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button icon-button--compact"
+                    onClick={handleStopOcr}
+                    disabled={!isOcrEnabled && pendingOcrJobs === 0}
+                  >
+                    <span aria-hidden="true">■</span>
+                    <span>OCR停止</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="ocr-meter" aria-label="OCR progress">
+                <span style={{ width: `${Math.round(clamp(ocrProgress, 0, 1) * 100)}%` }} />
+              </div>
+
+              <ol className="ocr-log-list" aria-label="OCR result log">
+                {ocrLogs.length === 0 ? (
+                  <li className="ocr-log-empty">OCRログ空</li>
+                ) : (
+                  ocrLogs.map((entry) => (
+                    <li key={entry.id} className={`ocr-log-entry ocr-log-entry--${entry.status}`}>
+                      <div className="ocr-log-meta">
+                        <span>#{entry.frameIndex}</span>
+                        <span>{entry.timestampMs}ms</span>
+                        <span>{formatConfidence(entry.confidence)}</span>
+                        <span>{entry.lineCount} lines</span>
+                      </div>
+                      {entry.status === "error" ? (
+                        <p>{entry.errorMessage}</p>
+                      ) : (
+                        <>
+                          <p>{entry.normalizedText || "テキストなし"}</p>
+                          <code>{entry.rawText || "raw empty"}</code>
+                        </>
+                      )}
+                    </li>
+                  ))
+                )}
+              </ol>
+            </section>
           </section>
 
           <footer className="capture-statusbar" aria-label="media status">
@@ -1198,6 +1483,7 @@ export function App() {
             <span>解像度: {formatResolution(metadata)}</span>
             <span>{formatFps(metadata.frameRate)}</span>
             <span>サンプル: {isSampling ? `${sampleFps}fps` : "停止中"}</span>
+            <span>OCR: {isOcrEnabled ? ocrStatusLabel : "停止中"}</span>
             <span>
               ROI: x={roi.x.toFixed(4)} y={roi.y.toFixed(4)} w={roi.w.toFixed(4)} h=
               {roi.h.toFixed(4)}
@@ -1208,7 +1494,7 @@ export function App() {
         <aside className="log-panel" aria-labelledby="log-title">
           <div className="panel-heading">
             <h1 id="log-title">ログ</h1>
-            <span>M1</span>
+            <span>M3</span>
           </div>
           <ol className="log-list" aria-label="system log">
             {logs.map((log) => (

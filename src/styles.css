@@ -98,7 +98,8 @@ button:disabled {
 .range-control,
 .toggle-control,
 .crop-preview,
-.sample-buffer {
+.sample-buffer,
+.ocr-panel {
   border: 1px solid var(--border);
   background: var(--panel);
 }
@@ -568,6 +569,125 @@ button:disabled {
   font-weight: 800;
 }
 
+.ocr-panel {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border-radius: 5px;
+  background: #0f1218;
+}
+
+.ocr-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.ocr-header h2 {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.ocr-header span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.ocr-meter {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: #090b10;
+}
+
+.ocr-meter span {
+  display: block;
+  height: 100%;
+  background: var(--green);
+  transition: width 120ms ease;
+}
+
+.ocr-log-list {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  min-height: 78px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.ocr-log-empty,
+.ocr-log-entry {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 5px;
+  background: rgb(255 255 255 / 0.025);
+}
+
+.ocr-log-empty {
+  display: grid;
+  place-items: center;
+  min-height: 58px;
+  color: var(--faint);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.ocr-log-entry {
+  display: grid;
+  gap: 8px;
+}
+
+.ocr-log-entry--error {
+  border-color: rgb(255 107 95 / 0.45);
+}
+
+.ocr-log-entry--empty {
+  border-color: rgb(255 180 84 / 0.32);
+}
+
+.ocr-log-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: var(--faint);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.ocr-log-entry p,
+.ocr-log-entry code {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ocr-log-entry p {
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.ocr-log-entry code {
+  display: block;
+  color: var(--muted);
+  font-family:
+    "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.76rem;
+  white-space: pre-wrap;
+}
+
 .log-panel {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -705,11 +825,13 @@ button:disabled {
   }
 
   .analysis-header,
-  .analysis-actions {
+  .analysis-actions,
+  .ocr-header {
     align-items: stretch;
   }
 
-  .analysis-header {
+  .analysis-header,
+  .ocr-header {
     display: grid;
   }
 
