@@ -6,7 +6,7 @@ The MVP is intentionally browser-only: capture or loaded media stays local, OCR 
 
 ## Current Status
 
-M1 is in progress on top of the static app foundation:
+M2 is in progress on top of the static app foundation:
 
 - React + TypeScript + Vite
 - Vitest + React Testing Library
@@ -17,6 +17,10 @@ M1 is in progress on top of the static app foundation:
 - Separate `audioinput` selection with an `音声なし` option
 - SnapCrop-style 16:9-preferred video constraints and separate audio playback routing
 - ROI overlay movement and resizing
+- 3fps / 5fps ROI frame sampling
+- Raw ROI crop and Canvas-preprocessed preview
+- White-text candidate extraction, solid background, inversion, and upscale controls
+- Bounded in-memory frame sample buffer
 
 OCR, parsing, storage, statistics, and champout import are later milestones described in `AGENTS.md`.
 

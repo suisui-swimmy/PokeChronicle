@@ -9,16 +9,28 @@ import {
 } from "react";
 import { APP_ROUTES } from "./routes";
 import { BATTLE_LOG_SCHEMA_VERSION, type NormalizedRoi } from "../core/events/schema";
+import {
+  preprocessMessageImageData,
+  type MessagePreprocessOptions,
+} from "../core/preprocess/messagePreprocess";
+import { mapDisplayRoiToSourceRect } from "../core/media/roiMapping";
 
 const MILESTONES = [
   { id: "M0", label: "静的アプリ基盤", status: "完了" },
-  { id: "M1", label: "キャプチャ表示とROI調整", status: "進行中" },
-  { id: "M2", label: "フレームサンプリングと前処理preview", status: "未着手" },
+  { id: "M1", label: "キャプチャ表示とROI調整", status: "完了" },
+  { id: "M2", label: "フレームサンプリングと前処理preview", status: "進行中" },
 ];
 
 const DEFAULT_ROI: NormalizedRoi = { x: 0.06, y: 0.72, w: 0.88, h: 0.2 };
 const MIN_ROI_SIZE = 0.08;
 const NO_AUDIO_DEVICE_ID = "none";
+const DEFAULT_SAMPLE_FPS = 3;
+const MAX_FRAME_BUFFER = 8;
+const DEFAULT_PREPROCESS_OPTIONS: MessagePreprocessOptions = {
+  whiteThreshold: 180,
+  background: "black",
+  invert: false,
+};
 const ASPECT_16_BY_9 = 16 / 9;
 const ASPECT_4_BY_3 = 4 / 3;
 const ASPECT_TOLERANCE = 0.03;
@@ -64,6 +76,27 @@ type DragState = {
   startX: number;
   startY: number;
   startRoi: NormalizedRoi;
+};
+
+type FrameSourceElement = HTMLVideoElement | HTMLImageElement;
+
+type CapturedFrameImages = {
+  rawDataUrl: string;
+  processedDataUrl: string;
+  sourceWidth: number;
+  sourceHeight: number;
+  cropWidth: number;
+  cropHeight: number;
+};
+
+type FrameSample = CapturedFrameImages & {
+  id: string;
+  frameIndex: number;
+  timestampMs: number;
+  capturedAt: string;
+  roi: NormalizedRoi;
+  preprocess: MessagePreprocessOptions;
+  upscaleFactor: number;
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -235,14 +268,121 @@ async function playVideoElement(video: HTMLVideoElement) {
   }
 }
 
+function getFrameSourceDimensions(source: FrameSourceElement) {
+  if (source instanceof HTMLVideoElement) {
+    return {
+      width: source.videoWidth,
+      height: source.videoHeight,
+    };
+  }
+
+  return {
+    width: source.naturalWidth,
+    height: source.naturalHeight,
+  };
+}
+
+function getFrameDisplayDimensions(source: FrameSourceElement, sourceWidth: number, sourceHeight: number) {
+  const rect = source.getBoundingClientRect();
+
+  if (!rect.width || !rect.height) {
+    return { width: sourceWidth, height: sourceHeight };
+  }
+
+  return { width: rect.width, height: rect.height };
+}
+
+function captureRoiFrame(
+  source: FrameSourceElement,
+  roi: NormalizedRoi,
+  preprocess: MessagePreprocessOptions,
+  upscaleFactor: number,
+): CapturedFrameImages | null {
+  const { width: sourceWidth, height: sourceHeight } = getFrameSourceDimensions(source);
+
+  if (!sourceWidth || !sourceHeight) {
+    return null;
+  }
+
+  const crop = mapDisplayRoiToSourceRect(
+    roi,
+    { width: sourceWidth, height: sourceHeight },
+    getFrameDisplayDimensions(source, sourceWidth, sourceHeight),
+  );
+
+  if (!crop) {
+    return null;
+  }
+
+  const rawCanvas = document.createElement("canvas");
+  rawCanvas.width = crop.width;
+  rawCanvas.height = crop.height;
+  const rawContext = rawCanvas.getContext("2d", { willReadFrequently: true });
+
+  if (!rawContext) {
+    return null;
+  }
+
+  rawContext.drawImage(
+    source,
+    crop.x,
+    crop.y,
+    crop.width,
+    crop.height,
+    0,
+    0,
+    crop.width,
+    crop.height,
+  );
+
+  const rawImageData = rawContext.getImageData(0, 0, crop.width, crop.height);
+  const processedImageData = preprocessMessageImageData(rawImageData, preprocess);
+  const processedCanvas = document.createElement("canvas");
+  processedCanvas.width = crop.width;
+  processedCanvas.height = crop.height;
+  const processedContext = processedCanvas.getContext("2d");
+
+  if (!processedContext) {
+    return null;
+  }
+
+  processedContext.putImageData(processedImageData, 0, 0);
+
+  const scale = Math.max(1, Math.round(upscaleFactor));
+  const scaledCanvas = document.createElement("canvas");
+  scaledCanvas.width = crop.width * scale;
+  scaledCanvas.height = crop.height * scale;
+  const scaledContext = scaledCanvas.getContext("2d");
+
+  if (!scaledContext) {
+    return null;
+  }
+
+  scaledContext.imageSmoothingEnabled = false;
+  scaledContext.drawImage(processedCanvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
+
+  return {
+    rawDataUrl: rawCanvas.toDataURL("image/png"),
+    processedDataUrl: scaledCanvas.toDataURL("image/png"),
+    sourceWidth,
+    sourceHeight,
+    cropWidth: crop.width,
+    cropHeight: crop.height,
+  };
+}
+
 export function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const imagePreviewRef = useRef<HTMLImageElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const objectUrlRef = useRef<string | null>(null);
   const audioInputStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioGainNodeRef = useRef<GainNode | null>(null);
   const audioSourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const samplingTimerRef = useRef<number | null>(null);
+  const frameIndexRef = useRef(0);
+  const samplingStartMsRef = useRef(0);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [mediaMode, setMediaMode] = useState<MediaMode>("idle");
   const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
@@ -258,13 +398,39 @@ export function App() {
   });
   const [audioReady, setAudioReady] = useState(false);
   const [roi, setRoi] = useState<NormalizedRoi>(DEFAULT_ROI);
+  const [sampleFps, setSampleFps] = useState(DEFAULT_SAMPLE_FPS);
+  const [isSampling, setIsSampling] = useState(false);
+  const [preprocessOptions, setPreprocessOptions] =
+    useState<MessagePreprocessOptions>(DEFAULT_PREPROCESS_OPTIONS);
+  const [upscaleFactor, setUpscaleFactor] = useState(2);
+  const [frameSamples, setFrameSamples] = useState<FrameSample[]>([]);
   const [logs, setLogs] = useState<SystemLog[]>(() => [
     createLog("M1 capture workspace initialized."),
   ]);
+  const roiRef = useRef(roi);
+  const mediaModeRef = useRef(mediaMode);
+  const preprocessOptionsRef = useRef(preprocessOptions);
+  const upscaleFactorRef = useRef(upscaleFactor);
 
   const addLog = useCallback((message: string, level: LogLevel = "info") => {
     setLogs((currentLogs) => [createLog(message, level), ...currentLogs].slice(0, 12));
   }, []);
+
+  useEffect(() => {
+    roiRef.current = roi;
+  }, [roi]);
+
+  useEffect(() => {
+    mediaModeRef.current = mediaMode;
+  }, [mediaMode]);
+
+  useEffect(() => {
+    preprocessOptionsRef.current = preprocessOptions;
+  }, [preprocessOptions]);
+
+  useEffect(() => {
+    upscaleFactorRef.current = upscaleFactor;
+  }, [upscaleFactor]);
 
   const refreshDevices = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -335,13 +501,31 @@ export function App() {
     }
   }, []);
 
+  const stopSampling = useCallback(
+    (message?: string) => {
+      if (samplingTimerRef.current !== null) {
+        window.clearInterval(samplingTimerRef.current);
+        samplingTimerRef.current = null;
+      }
+
+      setIsSampling(false);
+
+      if (message) {
+        addLog(message);
+      }
+    },
+    [addLog],
+  );
+
   const resetMedia = useCallback(() => {
+    stopSampling();
     stopTracks(stream);
     stopAudioInput();
     clearObjectUrl();
     setStream(null);
     setMediaMode("idle");
     setFilePreviewUrl(null);
+    setFrameSamples([]);
     setStatusLabel("待機中");
     setMetadata({ width: null, height: null, frameRate: null });
 
@@ -349,10 +533,14 @@ export function App() {
       videoRef.current.srcObject = null;
       videoRef.current.removeAttribute("src");
     }
-  }, [clearObjectUrl, stopAudioInput, stopTracks, stream]);
+  }, [clearObjectUrl, stopAudioInput, stopSampling, stopTracks, stream]);
 
   useEffect(() => {
     return () => {
+      if (samplingTimerRef.current !== null) {
+        window.clearInterval(samplingTimerRef.current);
+      }
+
       stopTracks(stream);
       clearObjectUrl();
     };
@@ -591,6 +779,83 @@ export function App() {
     [addLog, resetMedia],
   );
 
+  const captureCurrentFrame = useCallback(
+    (options?: { logFailure?: boolean }) => {
+      const currentMediaMode = mediaModeRef.current;
+      const source =
+        currentMediaMode === "image-file" ? imagePreviewRef.current : videoRef.current;
+
+      if (currentMediaMode === "idle" || !source) {
+        if (options?.logFailure) {
+          addLog("サンプリングする映像または画像がありません。", "warn");
+        }
+
+        return false;
+      }
+
+      const captured = captureRoiFrame(
+        source,
+        roiRef.current,
+        preprocessOptionsRef.current,
+        upscaleFactorRef.current,
+      );
+
+      if (!captured) {
+        if (options?.logFailure) {
+          addLog("フレーム寸法が未取得のため、ROI cropをまだ生成できません。", "warn");
+        }
+
+        return false;
+      }
+
+      frameIndexRef.current += 1;
+      const timestampMs = Math.max(0, Math.round(performance.now() - samplingStartMsRef.current));
+      const nextSample: FrameSample = {
+        ...captured,
+        id: `${frameIndexRef.current}-${timestampMs}`,
+        frameIndex: frameIndexRef.current,
+        timestampMs,
+        capturedAt: new Date().toLocaleTimeString("ja-JP", { hour12: false }),
+        roi: roiRef.current,
+        preprocess: preprocessOptionsRef.current,
+        upscaleFactor: upscaleFactorRef.current,
+      };
+
+      setFrameSamples((currentSamples) =>
+        [nextSample, ...currentSamples].slice(0, MAX_FRAME_BUFFER),
+      );
+
+      return true;
+    },
+    [addLog],
+  );
+
+  const handleStartSampling = useCallback(() => {
+    if (samplingTimerRef.current !== null) {
+      return;
+    }
+
+    if (mediaModeRef.current === "idle") {
+      addLog("サンプリングする映像または画像がありません。", "warn");
+      return;
+    }
+
+    frameIndexRef.current = 0;
+    samplingStartMsRef.current = performance.now();
+    setFrameSamples([]);
+    setIsSampling(true);
+    captureCurrentFrame({ logFailure: true });
+    samplingTimerRef.current = window.setInterval(
+      () => captureCurrentFrame(),
+      Math.round(1000 / sampleFps),
+    );
+    addLog(`フレームサンプリングを開始しました (${sampleFps}fps)。`);
+  }, [addLog, captureCurrentFrame, sampleFps]);
+
+  const handleStopSampling = useCallback(() => {
+    stopSampling("フレームサンプリングを停止しました。");
+  }, [stopSampling]);
+
   const handleResetRoi = useCallback(() => {
     setRoi(DEFAULT_ROI);
     addLog("ROIを初期位置へ戻しました。");
@@ -629,6 +894,8 @@ export function App() {
 
     return audioReady ? `${label} (再生中)` : `${label} (未再生)`;
   }, [audioDevices, audioReady, mediaMode, selectedAudioDeviceId]);
+
+  const latestFrameSample = frameSamples[0] ?? null;
 
   return (
     <main className="capture-shell">
@@ -733,6 +1000,7 @@ export function App() {
             <div className="preview-surface">
               {mediaMode === "image-file" && filePreviewUrl ? (
                 <img
+                  ref={imagePreviewRef}
                   className="capture-video"
                   src={filePreviewUrl}
                   alt="読み込んだ検証画像"
@@ -765,6 +1033,161 @@ export function App() {
             </div>
           </section>
 
+          <section className="analysis-panel" aria-label="frame sampling and preprocessing">
+            <div className="analysis-header">
+              <div>
+                <h2>フレームサンプラー</h2>
+                <span>
+                  {isSampling ? `${sampleFps}fps` : "停止中"} / {frameSamples.length}/
+                  {MAX_FRAME_BUFFER}
+                </span>
+              </div>
+              <div className="analysis-actions">
+                <button
+                  type="button"
+                  className="icon-button icon-button--compact"
+                  onClick={handleStartSampling}
+                  disabled={mediaMode === "idle" || isSampling}
+                >
+                  <span aria-hidden="true">▶</span>
+                  <span>サンプル開始</span>
+                </button>
+                <button
+                  type="button"
+                  className="icon-button icon-button--compact"
+                  onClick={handleStopSampling}
+                  disabled={!isSampling}
+                >
+                  <span aria-hidden="true">■</span>
+                  <span>サンプル停止</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="preprocess-controls" aria-label="preprocess controls">
+              <label className="compact-select">
+                <span>fps</span>
+                <select
+                  value={sampleFps}
+                  onChange={(event) => setSampleFps(Number(event.target.value))}
+                  disabled={isSampling}
+                >
+                  <option value={3}>3</option>
+                  <option value={5}>5</option>
+                </select>
+              </label>
+              <label className="range-control">
+                <span>白抽出 {preprocessOptions.whiteThreshold}</span>
+                <input
+                  type="range"
+                  min={120}
+                  max={245}
+                  step={5}
+                  value={preprocessOptions.whiteThreshold}
+                  onChange={(event) =>
+                    setPreprocessOptions((currentOptions) => ({
+                      ...currentOptions,
+                      whiteThreshold: Number(event.target.value),
+                    }))
+                  }
+                />
+              </label>
+              <label className="compact-select">
+                <span>背景</span>
+                <select
+                  value={preprocessOptions.background}
+                  onChange={(event) =>
+                    setPreprocessOptions((currentOptions) => ({
+                      ...currentOptions,
+                      background: event.target.value as MessagePreprocessOptions["background"],
+                    }))
+                  }
+                >
+                  <option value="black">黒地</option>
+                  <option value="white">白地</option>
+                </select>
+              </label>
+              <label className="compact-select">
+                <span>拡大</span>
+                <select
+                  value={upscaleFactor}
+                  onChange={(event) => setUpscaleFactor(Number(event.target.value))}
+                >
+                  <option value={1}>1x</option>
+                  <option value={2}>2x</option>
+                  <option value={3}>3x</option>
+                </select>
+              </label>
+              <label className="toggle-control">
+                <input
+                  type="checkbox"
+                  checked={preprocessOptions.invert}
+                  onChange={(event) =>
+                    setPreprocessOptions((currentOptions) => ({
+                      ...currentOptions,
+                      invert: event.target.checked,
+                    }))
+                  }
+                />
+                <span>反転</span>
+              </label>
+            </div>
+
+            <div className="crop-preview-grid">
+              <figure className="crop-preview">
+                <figcaption>
+                  <span>raw crop</span>
+                  <span>
+                    {latestFrameSample
+                      ? `${latestFrameSample.cropWidth}x${latestFrameSample.cropHeight}`
+                      : "未生成"}
+                  </span>
+                </figcaption>
+                <div className="crop-preview-media">
+                  {latestFrameSample ? (
+                    <img src={latestFrameSample.rawDataUrl} alt="最新のROI crop" />
+                  ) : (
+                    <span>未生成</span>
+                  )}
+                </div>
+              </figure>
+              <figure className="crop-preview">
+                <figcaption>
+                  <span>preprocessed</span>
+                  <span>
+                    {latestFrameSample
+                      ? `${latestFrameSample.upscaleFactor}x / ${latestFrameSample.preprocess.whiteThreshold}`
+                      : "未生成"}
+                  </span>
+                </figcaption>
+                <div className="crop-preview-media">
+                  {latestFrameSample ? (
+                    <img src={latestFrameSample.processedDataUrl} alt="最新の前処理preview" />
+                  ) : (
+                    <span>未生成</span>
+                  )}
+                </div>
+              </figure>
+            </div>
+
+            <ol className="sample-buffer" aria-label="frame sample ring buffer">
+              {frameSamples.length === 0 ? (
+                <li>バッファ空</li>
+              ) : (
+                frameSamples.map((sample) => (
+                  <li key={sample.id}>
+                    <span>#{sample.frameIndex}</span>
+                    <span>{sample.timestampMs}ms</span>
+                    <span>
+                      {sample.cropWidth}x{sample.cropHeight}
+                    </span>
+                    <span>{sample.capturedAt}</span>
+                  </li>
+                ))
+              )}
+            </ol>
+          </section>
+
           <footer className="capture-statusbar" aria-label="media status">
             <span>
               <span className={`status-dot status-dot--${statusTone}`} aria-hidden="true" />
@@ -774,6 +1197,7 @@ export function App() {
             <span>音声: {activeAudioLabel}</span>
             <span>解像度: {formatResolution(metadata)}</span>
             <span>{formatFps(metadata.frameRate)}</span>
+            <span>サンプル: {isSampling ? `${sampleFps}fps` : "停止中"}</span>
             <span>
               ROI: x={roi.x.toFixed(4)} y={roi.y.toFixed(4)} w={roi.w.toFixed(4)} h=
               {roi.h.toFixed(4)}

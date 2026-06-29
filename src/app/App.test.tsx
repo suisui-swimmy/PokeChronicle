@@ -110,20 +110,28 @@ describe("App", () => {
     });
   });
 
-  it("renders the M1 device input workspace shell", async () => {
+  it("renders the M2 frame sampling workspace shell", async () => {
     render(<App />);
 
     expect(await screen.findByRole("combobox", { name: "映像ソース" })).toHaveValue("video-usb");
     expect(screen.getByRole("combobox", { name: "音声ソース" })).toHaveValue("none");
+    expect(screen.getByRole("combobox", { name: "fps" })).toHaveValue("3");
+    expect(screen.getByRole("slider", { name: /白抽出/ })).toHaveValue("180");
+    expect(screen.getByRole("combobox", { name: "背景" })).toHaveValue("black");
+    expect(screen.getByRole("combobox", { name: "拡大" })).toHaveValue("2");
+    expect(screen.getByRole("checkbox", { name: "反転" })).not.toBeChecked();
+    expect(screen.getByRole("button", { name: "サンプル開始" })).toBeDisabled();
     expect(screen.getByRole("option", { name: "OBS Virtual Camera" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "音声なし" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /開始/ })).toBeEnabled();
-    expect(screen.getByRole("button", { name: /停止/ })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /ファイル/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "開始" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "停止" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "ファイル" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "ログ" })).toBeInTheDocument();
     expect(screen.getByLabelText("preview placeholder")).toBeInTheDocument();
+    expect(screen.getByText("バッファ空")).toBeInTheDocument();
     expect(screen.getByText(/ROI: x=0.0600 y=0.7200 w=0.8800 h=0.2000/)).toBeInTheDocument();
-    expect(screen.getByText("M1 進行中")).toBeInTheDocument();
+    expect(screen.getByText("M1 完了")).toBeInTheDocument();
+    expect(screen.getByText("M2 進行中")).toBeInTheDocument();
   });
 
   it("starts selected video input with audio disabled when no audio is selected", async () => {
@@ -131,7 +139,7 @@ describe("App", () => {
 
     expect(await screen.findByRole("combobox", { name: "映像ソース" })).toHaveValue("video-usb");
 
-    fireEvent.click(screen.getByRole("button", { name: /開始/ }));
+    fireEvent.click(screen.getByRole("button", { name: "開始" }));
 
     await waitFor(() => {
       expect(getUserMedia).toHaveBeenCalledWith({
@@ -153,7 +161,7 @@ describe("App", () => {
     fireEvent.change(await screen.findByRole("combobox", { name: "音声ソース" }), {
       target: { value: "audio-usb" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /開始/ }));
+    fireEvent.click(screen.getByRole("button", { name: "開始" }));
 
     await waitFor(() => {
       expect(getUserMedia).toHaveBeenNthCalledWith(1, {

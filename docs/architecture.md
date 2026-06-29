@@ -28,6 +28,16 @@ The primary live input path is browser `MediaDevices` device capture:
 - The selected audio input is opened as a separate audio-only stream and routed through Web Audio playback. The preview video element stays muted, matching the `others/pokemon-SnapCrop` pattern.
 - `getDisplayMedia()` screen sharing is not the M1 main path; keep it as a possible future separate mode.
 
+## M2 Frame Sampling Boundary
+
+M2 keeps processing in the browser UI thread until OCR work begins:
+
+- The sampler reads the active `videoinput`, video file, or image file preview at 3fps or 5fps.
+- ROI coordinates stay normalized, then convert to source pixels only when drawing the crop.
+- The raw ROI crop is generated with Canvas and kept as a debug preview.
+- The preprocessing pass extracts bright low-chroma text candidates, writes them onto a solid black or white background, optionally inverts the output, and upscales without smoothing.
+- Recent frame samples are kept in a small in-memory ring buffer. They are not persisted and do not grow without bounds.
+
 OCR, parser, IndexedDB, and champout import are later milestones.
 
 ## Runtime Constraints
