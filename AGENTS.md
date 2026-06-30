@@ -625,6 +625,32 @@ Stop line:
 
 - この段階ではchampout全文テンプレートの同梱や大量手書きルールをしない。
 
+### M4.5: seed template matcher
+
+Goal:
+
+- 名前・技以外の頻出バトル文言を拾うため、champout import本体の前に、template rule engineの受け皿を作る。
+
+Scope:
+
+- `data/rules/event_rules.ja.yaml` または同等のversion-controlled seed rule定義。
+- `{pokemon}`、`{move}`、自由テキスト、固定文言を扱えるtemplate compilation。
+- OCRノイズを前提に、`normalizedText` / `matchText` / OCR linesを使った安全なtemplate matching。
+- ポケモン名・技名辞書と組み合わせたplaceholder capture。
+- 反動、HP消費、回復、天候、フィールド、能力変化、特性/道具発動など、統計価値が高く頻出する文言の最小seed。
+- unknown fallbackとcandidate evidenceの保持。
+
+Done:
+
+- `相手の イダイトウは 命が 少し削られた` や、OCRノイズを含む近い文言のような、技名が出ない解決後メッセージをseed ruleで分類できる。
+- seed ruleはunit testで検証され、曖昧な文言はunknownまたはneeds_reviewへ落ちる。
+- 後続M7のchampout import結果を、同じtemplate matcherへ流し込めるinterfaceになっている。
+
+Stop line:
+
+- この段階ではchampout JSON/ZIP import UI、IndexedDBへのimport済みtemplate保存、champout由来全文テンプレートの同梱はしない。
+- seed ruleを増やしすぎず、実機OCRで頻出した代表文言に絞る。
+
 ### M5: Event timeline、unknown bucket、レビュー
 
 Goal:
@@ -909,6 +935,7 @@ MVPでの扱い:
 
 - ポケモン名と技名は、一覧リストから小さな辞書を作りやすい。これはMVP初期から使う。
 - ただし、名前と技以外のバトル文言は手書きルールだけではすぐ限界が来る。実用的な分類率を目指すには、`champout` 由来のローカライズ済みバトルテキストをtemplate候補としてimportする機能が必要になる。
+- M4.5では、`champout` import本体の前に、手書きseed ruleと共通template matcherを先に作る。反動、HP消費、回復、天候、フィールド、特性/道具発動のような頻出文言を少量だけ扱い、後続M7のimport結果を同じmatcherへ接続できるようにする。
 - リアルタイムOCRログ自体は、`champout` importなしでも動作すること。未import時はseed ruleと辞書で拾えるものだけ分類し、それ以外はunknownとして流す。
 - `champout` importは、MVPの「分類精度を実用域へ近づけるための早期機能」として扱う。リアルタイムキャプチャ、OCRログ、unknown保存の成立をブロックしないが、event分類の本命データ源として設計する。
 - import済みtemplateはIndexedDBに保存し、次回起動時に再利用できるようにする。再配布可否が確認できない全文テンプレートをリポジトリに同梱しない。
@@ -1370,15 +1397,16 @@ READMEに含めること:
 8. normalizerとparserのunit testを実装する。
 9. 小さなin-repo sample dictionaryでdictionary matchingを実装する。
 10. seed ruleによるtemplate/rule matchingを実装する。
-11. unknown bucket data modelを実装する。
-12. Web WorkerへOCR/解析処理を分離する。
-13. Tesseract.js providerを実装する。
-14. IndexedDB storage adapterを実装する。
-15. review UIを実装する。
-16. stats UIとexportを実装する。
-17. ブラウザ内champout/template importを実装し、分類率を上げる。
-18. 画像/動画ファイル読み込みを同じ解析パイプラインへ接続する。
-19. GitHub Pages向けbuild/deploy設定を整える。
+11. M4.5として、名前・技以外の頻出文言向けseed template matcherを実装する。
+12. unknown bucket data modelを実装する。
+13. Web WorkerへOCR/解析処理を分離する。
+14. Tesseract.js providerを実装する。
+15. IndexedDB storage adapterを実装する。
+16. review UIを実装する。
+17. stats UIとexportを実装する。
+18. ブラウザ内champout/template importを実装し、分類率を上げる。
+19. 画像/動画ファイル読み込みを同じ解析パイプラインへ接続する。
+20. GitHub Pages向けbuild/deploy設定を整える。
 
 interfaceが正しければ、小さなsample dictionaryとseed ruleで先にリアルタイムOCRログを成立させてよい。ただし、名前・技以外の文言を実用的に分類するには `champout` importを早期に接続する。
 

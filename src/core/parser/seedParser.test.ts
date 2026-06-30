@@ -37,6 +37,56 @@ describe("parseBattleMessage", () => {
     });
   });
 
+  it("parses noisy OCR prefixes by exact pokemon and move spans", () => {
+    const result = parseBattleMessage({
+      rawText: "きき\nにーー\nエルフーンの\nムーンフォース/",
+      lines: ["きき", "にーー", "エルフーンの", "ムーンフォース/"],
+      ocrConfidence: 0.74,
+    });
+
+    expect(result.status).toBe("event");
+    expect(result.status === "event" ? result.event : null).toMatchObject({
+      type: "move",
+      actor: { name: "エルフーン", side: null },
+      move: "ムーンフォース",
+      classification: {
+        method: "template_dictionary",
+        templateId: "attack_actor_move_span",
+      },
+    });
+  });
+
+  it("uses the same span extraction for arbitrary generated dictionary names", () => {
+    const result = parseBattleMessage({
+      rawText: "xx\nガブリアスの\nじしん/",
+      lines: ["xx", "ガブリアスの", "じしん/"],
+      ocrConfidence: 0.8,
+    });
+
+    expect(result.status).toBe("event");
+    expect(result.status === "event" ? result.event : null).toMatchObject({
+      type: "move",
+      actor: { name: "ガブリアス" },
+      move: "じしん",
+      classification: { method: "template_dictionary" },
+    });
+  });
+
+  it("keeps opponent side only when 相手の is immediately before the actor span", () => {
+    const result = parseBattleMessage({
+      rawText: "ノイズ\n相手の\nカラマネロの\nばかぢから/",
+      lines: ["ノイズ", "相手の", "カラマネロの", "ばかぢから/"],
+      ocrConfidence: 0.82,
+    });
+
+    expect(result.status).toBe("event");
+    expect(result.status === "event" ? result.event : null).toMatchObject({
+      type: "move",
+      actor: { name: "カラマネロ", side: "opponent" },
+      move: "ばかぢから",
+    });
+  });
+
   it("does not split on の characters inside move names", () => {
     const result = parseBattleMessage("ルカリオの\nいのちがけ！");
 
@@ -95,6 +145,19 @@ describe("parseBattleMessage", () => {
     });
   });
 
+  it("parses noisy context messages before attempting span move matching", () => {
+    expect(
+      parseBattleMessage({
+        rawText: "きき\n効果は バツグンだ/",
+        lines: ["きき", "効果は バツグンだ/"],
+        ocrConfidence: 0.7,
+      }),
+    ).toMatchObject({
+      status: "event",
+      event: { type: "supereffective" },
+    });
+  });
+
   it("parses simple stat boost and drop messages as context events", () => {
     expect(parseBattleMessage("相手の カラマネロの\n記導 習防が ごぐーんと上がった/")).toMatchObject({
       status: "event",
@@ -104,6 +167,19 @@ describe("parseBattleMessage", () => {
       status: "event",
       event: { type: "unboost" },
     });
+  });
+
+  it("keeps unrelated pokemon and move spans as unknown candidates", () => {
+    const result = parseBattleMessage({
+      rawText: "エルフーン\nムーンフォース/",
+      lines: ["エルフーン", "ムーンフォース/"],
+      ocrConfidence: 0.9,
+    });
+
+    expect(result.status).toBe("unknown");
+    expect(result.candidateMatches.join("\n")).toContain("span:pokemon");
+    expect(result.candidateMatches.join("\n")).toContain("span:move");
+    expect(result.candidateMatches.join("\n")).toContain("missing-possessive-no");
   });
 
   it("keeps unsupported messages as reviewable unknowns", () => {

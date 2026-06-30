@@ -516,6 +516,7 @@ export function App() {
         const parseResult = parseBattleMessage({
           rawText: response.result.rawText,
           ocrConfidence: response.result.confidence,
+          lines: response.result.lines.map((line) => line.text),
         });
         const normalizedText = parseResult.normalizedText;
         const hasText = normalizedText.length > 0;
