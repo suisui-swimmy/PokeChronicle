@@ -158,6 +158,57 @@ describe("parseBattleMessage", () => {
     });
   });
 
+  it("parses noisy HP loss messages with seed template rules", () => {
+    const result = parseBattleMessage({
+      rawText: "尼手の イダイトウは\n命が 少し削られた/\nーー 9/",
+      lines: ["尼手の イダイトウは", "命が 少し削られた/", "ーー 9/"],
+      ocrConfidence: 0.67,
+    });
+
+    expect(result.status).toBe("event");
+    expect(result.status === "event" ? result.event : null).toMatchObject({
+      type: "damage",
+      actor: { name: "イダイトウ", side: null },
+      move: null,
+      classification: {
+        method: "template_dictionary",
+        templateId: "hp_loss_life_cost",
+      },
+    });
+  });
+
+  it("parses exact opponent HP loss templates with opponent side", () => {
+    const result = parseBattleMessage({
+      rawText: "相手の イダイトウは\n命が 少し削られた/",
+      lines: ["相手の イダイトウは", "命が 少し削られた/"],
+      ocrConfidence: 0.86,
+    });
+
+    expect(result.status).toBe("event");
+    expect(result.status === "event" ? result.event : null).toMatchObject({
+      type: "damage",
+      actor: { name: "イダイトウ", side: "opponent" },
+      classification: { templateId: "hp_loss_life_cost_opponent" },
+    });
+  });
+
+  it("parses seed weather and terrain templates", () => {
+    expect(parseBattleMessage("雨が 降り始めた！")).toMatchObject({
+      status: "event",
+      event: {
+        type: "weather_start",
+        classification: { templateId: "weather_start" },
+      },
+    });
+    expect(parseBattleMessage("エレキフィールドに なった！")).toMatchObject({
+      status: "event",
+      event: {
+        type: "terrain_start",
+        classification: { templateId: "terrain_start" },
+      },
+    });
+  });
+
   it("parses simple stat boost and drop messages as context events", () => {
     expect(parseBattleMessage("相手の カラマネロの\n記導 習防が ごぐーんと上がった/")).toMatchObject({
       status: "event",

@@ -8,6 +8,10 @@ export type BattleEventType =
   | "battle_start"
   | "battle_end"
   | "turn_marker"
+  | "damage"
+  | "heal"
+  | "status"
+  | "status_cure"
   | "supereffective"
   | "resisted"
   | "immune"
@@ -17,6 +21,17 @@ export type BattleEventType =
   | "protect"
   | "miss"
   | "fail"
+  | "weather_start"
+  | "weather_end"
+  | "terrain_start"
+  | "terrain_end"
+  | "field_start"
+  | "field_end"
+  | "side_start"
+  | "side_end"
+  | "item"
+  | "ability"
+  | "activate"
   | "unknown";
 
 export type ClassificationMethod =

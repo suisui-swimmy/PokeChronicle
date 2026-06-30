@@ -53,12 +53,22 @@ M3 moves recognition behind an OCR provider interface and keeps OCR work off the
 M4 keeps classification as pure browser-side TypeScript:
 
 - `src/core/normalize/ocrText.ts` derives display text and compact `matchText` without overwriting raw OCR text.
-- `scripts/generate-battle-dictionaries.mjs` reads local reference name lists from `others/pokemon-names` and `others/move-names`, then writes runtime-safe generated dictionaries under `src/core/dictionary` and `data/dictionaries`.
+- `scripts/generate-battle-dictionaries.mjs` reads local reference name lists from `others/pokemon-names` and `others/move-names`, then writes runtime-safe generated dictionaries under `src/core/dictionary` and `data/dictionaries`. When source Pokemon names only provide trailing gender markers, the generated dictionary also includes the genderless base label for OCR text that omits the marker.
 - `src/core/dictionary/generatedBattleDictionary.ts` is the parser's default dictionary and contains generated Pokemon and move name entries only. The runtime app does not read `others/`.
 - `src/core/dictionary/seedBattleDictionary.ts` remains a tiny test/support dictionary, not the default parser dictionary.
 - `src/core/dictionary/fuzzyMatch.ts` accepts exact matches and only accepts fuzzy corrections when score, margin, and OCR confidence are high enough.
 - `src/core/parser/seedParser.ts` classifies the first seed rules: observed move messages, effectiveness messages, critical/miss/fail/protect/faint/switch hints, and unknown fallback.
 - OCR log entries display the current parser candidate, but review timeline, persistence, and statistics remain later milestones.
+
+## M4.5 Seed Template Boundary
+
+M4.5 adds the template matcher that later champout import can feed:
+
+- `data/rules/event_rules.ja.json` is the version-controlled seed rule source for frequent non-move messages.
+- `src/core/templates/templateMatcher.ts` compiles seed patterns with placeholders such as `{pokemon}`, `{move}`, and bounded `{text}`.
+- Template matching runs after high-priority context rules and before flexible move span matching.
+- Seed templates can classify damage, healing, weather, terrain, ability, and item activation messages without bundling champout-derived full template dumps.
+- No browser JSON/ZIP import UI, IndexedDB template persistence, or champout-derived full text is included in M4.5.
 
 IndexedDB, review timeline, statistics, and champout import are later milestones.
 

@@ -180,19 +180,34 @@ function formatProgress(progress: number) {
 
 function formatEventType(type: string) {
   const labels: Record<string, string> = {
+    ability: "特性",
+    activate: "発動",
     boost: "能力上昇",
     critical: "急所",
+    damage: "ダメージ",
     fail: "失敗",
     faint: "ひんし",
+    field_end: "場終了",
+    field_start: "場開始",
+    heal: "回復",
     immune: "無効",
+    item: "道具",
     miss: "外れ",
     move: "技",
     protect: "まもる",
     resisted: "半減",
+    side_end: "サイド終了",
+    side_start: "サイド開始",
+    status: "状態異常",
+    status_cure: "状態回復",
     supereffective: "抜群",
     switch_in: "交代in",
     switch_out: "交代out",
+    terrain_end: "フィールド終了",
+    terrain_start: "フィールド開始",
     unboost: "能力下降",
+    weather_end: "天候終了",
+    weather_start: "天候開始",
   };
 
   return labels[type] ?? type;

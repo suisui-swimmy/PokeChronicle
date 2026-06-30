@@ -149,4390 +149,4414 @@ export const POKEMON_NAME_DICTIONARY: readonly DictionaryEntry[] = [
   },
   {
     "id": "pokemon:0037",
-    "label": "ニドラン♀"
+    "label": "ニドラン"
   },
   {
     "id": "pokemon:0038",
-    "label": "ニドリーナ"
+    "label": "ニドラン♀"
   },
   {
     "id": "pokemon:0039",
-    "label": "ニドクイン"
+    "label": "ニドリーナ"
   },
   {
     "id": "pokemon:0040",
-    "label": "ニドラン♂"
+    "label": "ニドクイン"
   },
   {
     "id": "pokemon:0041",
-    "label": "ニドリーノ"
+    "label": "ニドラン♂"
   },
   {
     "id": "pokemon:0042",
-    "label": "ニドキング"
+    "label": "ニドリーノ"
   },
   {
     "id": "pokemon:0043",
-    "label": "ピッピ"
+    "label": "ニドキング"
   },
   {
     "id": "pokemon:0044",
-    "label": "ピクシー"
+    "label": "ピッピ"
   },
   {
     "id": "pokemon:0045",
-    "label": "メガピクシー"
+    "label": "ピクシー"
   },
   {
     "id": "pokemon:0046",
-    "label": "ロコン"
+    "label": "メガピクシー"
   },
   {
     "id": "pokemon:0047",
-    "label": "キュウコン"
+    "label": "ロコン"
   },
   {
     "id": "pokemon:0048",
-    "label": "プリン"
+    "label": "キュウコン"
   },
   {
     "id": "pokemon:0049",
-    "label": "プクリン"
+    "label": "プリン"
   },
   {
     "id": "pokemon:0050",
-    "label": "ズバット"
+    "label": "プクリン"
   },
   {
     "id": "pokemon:0051",
-    "label": "ゴルバット"
+    "label": "ズバット"
   },
   {
     "id": "pokemon:0052",
-    "label": "ナゾノクサ"
+    "label": "ゴルバット"
   },
   {
     "id": "pokemon:0053",
-    "label": "クサイハナ"
+    "label": "ナゾノクサ"
   },
   {
     "id": "pokemon:0054",
-    "label": "ラフレシア"
+    "label": "クサイハナ"
   },
   {
     "id": "pokemon:0055",
-    "label": "パラス"
+    "label": "ラフレシア"
   },
   {
     "id": "pokemon:0056",
-    "label": "パラセクト"
+    "label": "パラス"
   },
   {
     "id": "pokemon:0057",
-    "label": "コンパン"
+    "label": "パラセクト"
   },
   {
     "id": "pokemon:0058",
-    "label": "モルフォン"
+    "label": "コンパン"
   },
   {
     "id": "pokemon:0059",
-    "label": "ディグダ"
+    "label": "モルフォン"
   },
   {
     "id": "pokemon:0060",
-    "label": "ダグトリオ"
+    "label": "ディグダ"
   },
   {
     "id": "pokemon:0061",
-    "label": "ニャース"
+    "label": "ダグトリオ"
   },
   {
     "id": "pokemon:0062",
-    "label": "ペルシアン"
+    "label": "ニャース"
   },
   {
     "id": "pokemon:0063",
-    "label": "コダック"
+    "label": "ペルシアン"
   },
   {
     "id": "pokemon:0064",
-    "label": "ゴルダック"
+    "label": "コダック"
   },
   {
     "id": "pokemon:0065",
-    "label": "マンキー"
+    "label": "ゴルダック"
   },
   {
     "id": "pokemon:0066",
-    "label": "オコリザル"
+    "label": "マンキー"
   },
   {
     "id": "pokemon:0067",
-    "label": "ガーディ"
+    "label": "オコリザル"
   },
   {
     "id": "pokemon:0068",
-    "label": "ウインディ"
+    "label": "ガーディ"
   },
   {
     "id": "pokemon:0069",
-    "label": "ニョロモ"
+    "label": "ウインディ"
   },
   {
     "id": "pokemon:0070",
-    "label": "ニョロゾ"
+    "label": "ニョロモ"
   },
   {
     "id": "pokemon:0071",
-    "label": "ニョロボン"
+    "label": "ニョロゾ"
   },
   {
     "id": "pokemon:0072",
-    "label": "ケーシィ"
+    "label": "ニョロボン"
   },
   {
     "id": "pokemon:0073",
-    "label": "ユンゲラー"
+    "label": "ケーシィ"
   },
   {
     "id": "pokemon:0074",
-    "label": "フーディン"
+    "label": "ユンゲラー"
   },
   {
     "id": "pokemon:0075",
-    "label": "メガフーディン"
+    "label": "フーディン"
   },
   {
     "id": "pokemon:0076",
-    "label": "ワンリキー"
+    "label": "メガフーディン"
   },
   {
     "id": "pokemon:0077",
-    "label": "ゴーリキー"
+    "label": "ワンリキー"
   },
   {
     "id": "pokemon:0078",
-    "label": "カイリキー"
+    "label": "ゴーリキー"
   },
   {
     "id": "pokemon:0079",
-    "label": "マダツボミ"
+    "label": "カイリキー"
   },
   {
     "id": "pokemon:0080",
-    "label": "ウツドン"
+    "label": "マダツボミ"
   },
   {
     "id": "pokemon:0081",
-    "label": "ウツボット"
+    "label": "ウツドン"
   },
   {
     "id": "pokemon:0082",
-    "label": "メガウツボット"
+    "label": "ウツボット"
   },
   {
     "id": "pokemon:0083",
-    "label": "メノクラゲ"
+    "label": "メガウツボット"
   },
   {
     "id": "pokemon:0084",
-    "label": "ドククラゲ"
+    "label": "メノクラゲ"
   },
   {
     "id": "pokemon:0085",
-    "label": "イシツブテ"
+    "label": "ドククラゲ"
   },
   {
     "id": "pokemon:0086",
-    "label": "ゴローン"
+    "label": "イシツブテ"
   },
   {
     "id": "pokemon:0087",
-    "label": "ゴローニャ"
+    "label": "ゴローン"
   },
   {
     "id": "pokemon:0088",
-    "label": "ポニータ"
+    "label": "ゴローニャ"
   },
   {
     "id": "pokemon:0089",
-    "label": "ギャロップ"
+    "label": "ポニータ"
   },
   {
     "id": "pokemon:0090",
-    "label": "ヤドン"
+    "label": "ギャロップ"
   },
   {
     "id": "pokemon:0091",
-    "label": "ヤドラン"
+    "label": "ヤドン"
   },
   {
     "id": "pokemon:0092",
-    "label": "メガヤドラン"
+    "label": "ヤドラン"
   },
   {
     "id": "pokemon:0093",
-    "label": "コイル"
+    "label": "メガヤドラン"
   },
   {
     "id": "pokemon:0094",
-    "label": "レアコイル"
+    "label": "コイル"
   },
   {
     "id": "pokemon:0095",
-    "label": "カモネギ"
+    "label": "レアコイル"
   },
   {
     "id": "pokemon:0096",
-    "label": "ドードー"
+    "label": "カモネギ"
   },
   {
     "id": "pokemon:0097",
-    "label": "ドードリオ"
+    "label": "ドードー"
   },
   {
     "id": "pokemon:0098",
-    "label": "パウワウ"
+    "label": "ドードリオ"
   },
   {
     "id": "pokemon:0099",
-    "label": "ジュゴン"
+    "label": "パウワウ"
   },
   {
     "id": "pokemon:0100",
-    "label": "ベトベター"
+    "label": "ジュゴン"
   },
   {
     "id": "pokemon:0101",
-    "label": "ベトベトン"
+    "label": "ベトベター"
   },
   {
     "id": "pokemon:0102",
-    "label": "シェルダー"
+    "label": "ベトベトン"
   },
   {
     "id": "pokemon:0103",
-    "label": "パルシェン"
+    "label": "シェルダー"
   },
   {
     "id": "pokemon:0104",
-    "label": "ゴース"
+    "label": "パルシェン"
   },
   {
     "id": "pokemon:0105",
-    "label": "ゴースト"
+    "label": "ゴース"
   },
   {
     "id": "pokemon:0106",
-    "label": "ゲンガー"
+    "label": "ゴースト"
   },
   {
     "id": "pokemon:0107",
-    "label": "メガゲンガー"
+    "label": "ゲンガー"
   },
   {
     "id": "pokemon:0108",
-    "label": "イワーク"
+    "label": "メガゲンガー"
   },
   {
     "id": "pokemon:0109",
-    "label": "スリープ"
+    "label": "イワーク"
   },
   {
     "id": "pokemon:0110",
-    "label": "スリーパー"
+    "label": "スリープ"
   },
   {
     "id": "pokemon:0111",
-    "label": "クラブ"
+    "label": "スリーパー"
   },
   {
     "id": "pokemon:0112",
-    "label": "キングラー"
+    "label": "クラブ"
   },
   {
     "id": "pokemon:0113",
-    "label": "ビリリダマ"
+    "label": "キングラー"
   },
   {
     "id": "pokemon:0114",
-    "label": "マルマイン"
+    "label": "ビリリダマ"
   },
   {
     "id": "pokemon:0115",
-    "label": "タマタマ"
+    "label": "マルマイン"
   },
   {
     "id": "pokemon:0116",
-    "label": "ナッシー"
+    "label": "タマタマ"
   },
   {
     "id": "pokemon:0117",
-    "label": "カラカラ"
+    "label": "ナッシー"
   },
   {
     "id": "pokemon:0118",
-    "label": "ガラガラ"
+    "label": "カラカラ"
   },
   {
     "id": "pokemon:0119",
-    "label": "サワムラー"
+    "label": "ガラガラ"
   },
   {
     "id": "pokemon:0120",
-    "label": "エビワラー"
+    "label": "サワムラー"
   },
   {
     "id": "pokemon:0121",
-    "label": "ベロリンガ"
+    "label": "エビワラー"
   },
   {
     "id": "pokemon:0122",
-    "label": "ドガース"
+    "label": "ベロリンガ"
   },
   {
     "id": "pokemon:0123",
-    "label": "マタドガス"
+    "label": "ドガース"
   },
   {
     "id": "pokemon:0124",
-    "label": "サイホーン"
+    "label": "マタドガス"
   },
   {
     "id": "pokemon:0125",
-    "label": "サイドン"
+    "label": "サイホーン"
   },
   {
     "id": "pokemon:0126",
-    "label": "ラッキー"
+    "label": "サイドン"
   },
   {
     "id": "pokemon:0127",
-    "label": "モンジャラ"
+    "label": "ラッキー"
   },
   {
     "id": "pokemon:0128",
-    "label": "ガルーラ"
+    "label": "モンジャラ"
   },
   {
     "id": "pokemon:0129",
-    "label": "メガガルーラ"
+    "label": "ガルーラ"
   },
   {
     "id": "pokemon:0130",
-    "label": "タッツー"
+    "label": "メガガルーラ"
   },
   {
     "id": "pokemon:0131",
-    "label": "シードラ"
+    "label": "タッツー"
   },
   {
     "id": "pokemon:0132",
-    "label": "トサキント"
+    "label": "シードラ"
   },
   {
     "id": "pokemon:0133",
-    "label": "アズマオウ"
+    "label": "トサキント"
   },
   {
     "id": "pokemon:0134",
-    "label": "ヒトデマン"
+    "label": "アズマオウ"
   },
   {
     "id": "pokemon:0135",
-    "label": "スターミー"
+    "label": "ヒトデマン"
   },
   {
     "id": "pokemon:0136",
-    "label": "メガスターミー"
+    "label": "スターミー"
   },
   {
     "id": "pokemon:0137",
-    "label": "バリヤード"
+    "label": "メガスターミー"
   },
   {
     "id": "pokemon:0138",
-    "label": "ストライク"
+    "label": "バリヤード"
   },
   {
     "id": "pokemon:0139",
-    "label": "ルージュラ"
+    "label": "ストライク"
   },
   {
     "id": "pokemon:0140",
-    "label": "エレブー"
+    "label": "ルージュラ"
   },
   {
     "id": "pokemon:0141",
-    "label": "ブーバー"
+    "label": "エレブー"
   },
   {
     "id": "pokemon:0142",
-    "label": "カイロス"
+    "label": "ブーバー"
   },
   {
     "id": "pokemon:0143",
-    "label": "メガカイロス"
+    "label": "カイロス"
   },
   {
     "id": "pokemon:0144",
-    "label": "ケンタロス"
+    "label": "メガカイロス"
   },
   {
     "id": "pokemon:0145",
-    "label": "コイキング"
+    "label": "ケンタロス"
   },
   {
     "id": "pokemon:0146",
-    "label": "ギャラドス"
+    "label": "コイキング"
   },
   {
     "id": "pokemon:0147",
-    "label": "メガギャラドス"
+    "label": "ギャラドス"
   },
   {
     "id": "pokemon:0148",
-    "label": "ラプラス"
+    "label": "メガギャラドス"
   },
   {
     "id": "pokemon:0149",
-    "label": "メタモン"
+    "label": "ラプラス"
   },
   {
     "id": "pokemon:0150",
-    "label": "イーブイ"
+    "label": "メタモン"
   },
   {
     "id": "pokemon:0151",
-    "label": "シャワーズ"
+    "label": "イーブイ"
   },
   {
     "id": "pokemon:0152",
-    "label": "サンダース"
+    "label": "シャワーズ"
   },
   {
     "id": "pokemon:0153",
-    "label": "ブースター"
+    "label": "サンダース"
   },
   {
     "id": "pokemon:0154",
-    "label": "ポリゴン"
+    "label": "ブースター"
   },
   {
     "id": "pokemon:0155",
-    "label": "オムナイト"
+    "label": "ポリゴン"
   },
   {
     "id": "pokemon:0156",
-    "label": "オムスター"
+    "label": "オムナイト"
   },
   {
     "id": "pokemon:0157",
-    "label": "カブト"
+    "label": "オムスター"
   },
   {
     "id": "pokemon:0158",
-    "label": "カブトプス"
+    "label": "カブト"
   },
   {
     "id": "pokemon:0159",
-    "label": "プテラ"
+    "label": "カブトプス"
   },
   {
     "id": "pokemon:0160",
-    "label": "メガプテラ"
+    "label": "プテラ"
   },
   {
     "id": "pokemon:0161",
-    "label": "カビゴン"
+    "label": "メガプテラ"
   },
   {
     "id": "pokemon:0162",
-    "label": "フリーザー"
+    "label": "カビゴン"
   },
   {
     "id": "pokemon:0163",
-    "label": "サンダー"
+    "label": "フリーザー"
   },
   {
     "id": "pokemon:0164",
-    "label": "ファイヤー"
+    "label": "サンダー"
   },
   {
     "id": "pokemon:0165",
-    "label": "ミニリュウ"
+    "label": "ファイヤー"
   },
   {
     "id": "pokemon:0166",
-    "label": "ハクリュー"
+    "label": "ミニリュウ"
   },
   {
     "id": "pokemon:0167",
-    "label": "カイリュー"
+    "label": "ハクリュー"
   },
   {
     "id": "pokemon:0168",
-    "label": "メガカイリュー"
+    "label": "カイリュー"
   },
   {
     "id": "pokemon:0169",
-    "label": "ミュウツー"
+    "label": "メガカイリュー"
   },
   {
     "id": "pokemon:0170",
-    "label": "メガミュウツーX"
+    "label": "ミュウツー"
   },
   {
     "id": "pokemon:0171",
-    "label": "メガミュウツーY"
+    "label": "メガミュウツーX"
   },
   {
     "id": "pokemon:0172",
-    "label": "ミュウ"
+    "label": "メガミュウツーY"
   },
   {
     "id": "pokemon:0173",
-    "label": "チコリータ"
+    "label": "ミュウ"
   },
   {
     "id": "pokemon:0174",
-    "label": "ベイリーフ"
+    "label": "チコリータ"
   },
   {
     "id": "pokemon:0175",
-    "label": "メガニウム"
+    "label": "ベイリーフ"
   },
   {
     "id": "pokemon:0176",
-    "label": "メガメガニウム"
+    "label": "メガニウム"
   },
   {
     "id": "pokemon:0177",
-    "label": "ヒノアラシ"
+    "label": "メガメガニウム"
   },
   {
     "id": "pokemon:0178",
-    "label": "マグマラシ"
+    "label": "ヒノアラシ"
   },
   {
     "id": "pokemon:0179",
-    "label": "バクフーン"
+    "label": "マグマラシ"
   },
   {
     "id": "pokemon:0180",
-    "label": "ワニノコ"
+    "label": "バクフーン"
   },
   {
     "id": "pokemon:0181",
-    "label": "アリゲイツ"
+    "label": "ワニノコ"
   },
   {
     "id": "pokemon:0182",
-    "label": "オーダイル"
+    "label": "アリゲイツ"
   },
   {
     "id": "pokemon:0183",
-    "label": "メガオーダイル"
+    "label": "オーダイル"
   },
   {
     "id": "pokemon:0184",
-    "label": "オタチ"
+    "label": "メガオーダイル"
   },
   {
     "id": "pokemon:0185",
-    "label": "オオタチ"
+    "label": "オタチ"
   },
   {
     "id": "pokemon:0186",
-    "label": "ホーホー"
+    "label": "オオタチ"
   },
   {
     "id": "pokemon:0187",
-    "label": "ヨルノズク"
+    "label": "ホーホー"
   },
   {
     "id": "pokemon:0188",
-    "label": "レディバ"
+    "label": "ヨルノズク"
   },
   {
     "id": "pokemon:0189",
-    "label": "レディアン"
+    "label": "レディバ"
   },
   {
     "id": "pokemon:0190",
-    "label": "イトマル"
+    "label": "レディアン"
   },
   {
     "id": "pokemon:0191",
-    "label": "アリアドス"
+    "label": "イトマル"
   },
   {
     "id": "pokemon:0192",
-    "label": "クロバット"
+    "label": "アリアドス"
   },
   {
     "id": "pokemon:0193",
-    "label": "チョンチー"
+    "label": "クロバット"
   },
   {
     "id": "pokemon:0194",
-    "label": "ランターン"
+    "label": "チョンチー"
   },
   {
     "id": "pokemon:0195",
-    "label": "ピチュー"
+    "label": "ランターン"
   },
   {
     "id": "pokemon:0196",
-    "label": "ピィ"
+    "label": "ピチュー"
   },
   {
     "id": "pokemon:0197",
-    "label": "ププリン"
+    "label": "ピィ"
   },
   {
     "id": "pokemon:0198",
-    "label": "トゲピー"
+    "label": "ププリン"
   },
   {
     "id": "pokemon:0199",
-    "label": "トゲチック"
+    "label": "トゲピー"
   },
   {
     "id": "pokemon:0200",
-    "label": "ネイティ"
+    "label": "トゲチック"
   },
   {
     "id": "pokemon:0201",
-    "label": "ネイティオ"
+    "label": "ネイティ"
   },
   {
     "id": "pokemon:0202",
-    "label": "メリープ"
+    "label": "ネイティオ"
   },
   {
     "id": "pokemon:0203",
-    "label": "モココ"
+    "label": "メリープ"
   },
   {
     "id": "pokemon:0204",
-    "label": "デンリュウ"
+    "label": "モココ"
   },
   {
     "id": "pokemon:0205",
-    "label": "メガデンリュウ"
+    "label": "デンリュウ"
   },
   {
     "id": "pokemon:0206",
-    "label": "キレイハナ"
+    "label": "メガデンリュウ"
   },
   {
     "id": "pokemon:0207",
-    "label": "マリル"
+    "label": "キレイハナ"
   },
   {
     "id": "pokemon:0208",
-    "label": "マリルリ"
+    "label": "マリル"
   },
   {
     "id": "pokemon:0209",
-    "label": "ウソッキー"
+    "label": "マリルリ"
   },
   {
     "id": "pokemon:0210",
-    "label": "ニョロトノ"
+    "label": "ウソッキー"
   },
   {
     "id": "pokemon:0211",
-    "label": "ハネッコ"
+    "label": "ニョロトノ"
   },
   {
     "id": "pokemon:0212",
-    "label": "ポポッコ"
+    "label": "ハネッコ"
   },
   {
     "id": "pokemon:0213",
-    "label": "ワタッコ"
+    "label": "ポポッコ"
   },
   {
     "id": "pokemon:0214",
-    "label": "エイパム"
+    "label": "ワタッコ"
   },
   {
     "id": "pokemon:0215",
-    "label": "ヒマナッツ"
+    "label": "エイパム"
   },
   {
     "id": "pokemon:0216",
-    "label": "キマワリ"
+    "label": "ヒマナッツ"
   },
   {
     "id": "pokemon:0217",
-    "label": "ヤンヤンマ"
+    "label": "キマワリ"
   },
   {
     "id": "pokemon:0218",
-    "label": "ウパー"
+    "label": "ヤンヤンマ"
   },
   {
     "id": "pokemon:0219",
-    "label": "ヌオー"
+    "label": "ウパー"
   },
   {
     "id": "pokemon:0220",
-    "label": "エーフィ"
+    "label": "ヌオー"
   },
   {
     "id": "pokemon:0221",
-    "label": "ブラッキー"
+    "label": "エーフィ"
   },
   {
     "id": "pokemon:0222",
-    "label": "ヤミカラス"
+    "label": "ブラッキー"
   },
   {
     "id": "pokemon:0223",
-    "label": "ヤドキング"
+    "label": "ヤミカラス"
   },
   {
     "id": "pokemon:0224",
-    "label": "ムウマ"
+    "label": "ヤドキング"
   },
   {
     "id": "pokemon:0225",
-    "label": "アンノーン"
+    "label": "ムウマ"
   },
   {
     "id": "pokemon:0226",
-    "label": "ソーナンス"
+    "label": "アンノーン"
   },
   {
     "id": "pokemon:0227",
-    "label": "キリンリキ"
+    "label": "ソーナンス"
   },
   {
     "id": "pokemon:0228",
-    "label": "クヌギダマ"
+    "label": "キリンリキ"
   },
   {
     "id": "pokemon:0229",
-    "label": "フォレトス"
+    "label": "クヌギダマ"
   },
   {
     "id": "pokemon:0230",
-    "label": "ノコッチ"
+    "label": "フォレトス"
   },
   {
     "id": "pokemon:0231",
-    "label": "グライガー"
+    "label": "ノコッチ"
   },
   {
     "id": "pokemon:0232",
-    "label": "ハガネール"
+    "label": "グライガー"
   },
   {
     "id": "pokemon:0233",
-    "label": "メガハガネール"
+    "label": "ハガネール"
   },
   {
     "id": "pokemon:0234",
-    "label": "ブルー"
+    "label": "メガハガネール"
   },
   {
     "id": "pokemon:0235",
-    "label": "グランブル"
+    "label": "ブルー"
   },
   {
     "id": "pokemon:0236",
-    "label": "ハリーセン"
+    "label": "グランブル"
   },
   {
     "id": "pokemon:0237",
-    "label": "ハッサム"
+    "label": "ハリーセン"
   },
   {
     "id": "pokemon:0238",
-    "label": "メガハッサム"
+    "label": "ハッサム"
   },
   {
     "id": "pokemon:0239",
-    "label": "ツボツボ"
+    "label": "メガハッサム"
   },
   {
     "id": "pokemon:0240",
-    "label": "ヘラクロス"
+    "label": "ツボツボ"
   },
   {
     "id": "pokemon:0241",
-    "label": "メガヘラクロス"
+    "label": "ヘラクロス"
   },
   {
     "id": "pokemon:0242",
-    "label": "ニューラ"
+    "label": "メガヘラクロス"
   },
   {
     "id": "pokemon:0243",
-    "label": "ヒメグマ"
+    "label": "ニューラ"
   },
   {
     "id": "pokemon:0244",
-    "label": "リングマ"
+    "label": "ヒメグマ"
   },
   {
     "id": "pokemon:0245",
-    "label": "マグマッグ"
+    "label": "リングマ"
   },
   {
     "id": "pokemon:0246",
-    "label": "マグカルゴ"
+    "label": "マグマッグ"
   },
   {
     "id": "pokemon:0247",
-    "label": "ウリムー"
+    "label": "マグカルゴ"
   },
   {
     "id": "pokemon:0248",
-    "label": "イノムー"
+    "label": "ウリムー"
   },
   {
     "id": "pokemon:0249",
-    "label": "サニーゴ"
+    "label": "イノムー"
   },
   {
     "id": "pokemon:0250",
-    "label": "テッポウオ"
+    "label": "サニーゴ"
   },
   {
     "id": "pokemon:0251",
-    "label": "オクタン"
+    "label": "テッポウオ"
   },
   {
     "id": "pokemon:0252",
-    "label": "デリバード"
+    "label": "オクタン"
   },
   {
     "id": "pokemon:0253",
-    "label": "マンタイン"
+    "label": "デリバード"
   },
   {
     "id": "pokemon:0254",
-    "label": "エアームド"
+    "label": "マンタイン"
   },
   {
     "id": "pokemon:0255",
-    "label": "メガエアームド"
+    "label": "エアームド"
   },
   {
     "id": "pokemon:0256",
-    "label": "デルビル"
+    "label": "メガエアームド"
   },
   {
     "id": "pokemon:0257",
-    "label": "ヘルガー"
+    "label": "デルビル"
   },
   {
     "id": "pokemon:0258",
-    "label": "メガヘルガー"
+    "label": "ヘルガー"
   },
   {
     "id": "pokemon:0259",
-    "label": "キングドラ"
+    "label": "メガヘルガー"
   },
   {
     "id": "pokemon:0260",
-    "label": "ゴマゾウ"
+    "label": "キングドラ"
   },
   {
     "id": "pokemon:0261",
-    "label": "ドンファン"
+    "label": "ゴマゾウ"
   },
   {
     "id": "pokemon:0262",
-    "label": "ポリゴン2"
+    "label": "ドンファン"
   },
   {
     "id": "pokemon:0263",
-    "label": "オドシシ"
+    "label": "ポリゴン2"
   },
   {
     "id": "pokemon:0264",
-    "label": "ドーブル"
+    "label": "オドシシ"
   },
   {
     "id": "pokemon:0265",
-    "label": "バルキー"
+    "label": "ドーブル"
   },
   {
     "id": "pokemon:0266",
-    "label": "カポエラー"
+    "label": "バルキー"
   },
   {
     "id": "pokemon:0267",
-    "label": "ムチュール"
+    "label": "カポエラー"
   },
   {
     "id": "pokemon:0268",
-    "label": "エレキッド"
+    "label": "ムチュール"
   },
   {
     "id": "pokemon:0269",
-    "label": "ブビィ"
+    "label": "エレキッド"
   },
   {
     "id": "pokemon:0270",
-    "label": "ミルタンク"
+    "label": "ブビィ"
   },
   {
     "id": "pokemon:0271",
-    "label": "ハピナス"
+    "label": "ミルタンク"
   },
   {
     "id": "pokemon:0272",
-    "label": "ライコウ"
+    "label": "ハピナス"
   },
   {
     "id": "pokemon:0273",
-    "label": "エンテイ"
+    "label": "ライコウ"
   },
   {
     "id": "pokemon:0274",
-    "label": "スイクン"
+    "label": "エンテイ"
   },
   {
     "id": "pokemon:0275",
-    "label": "ヨーギラス"
+    "label": "スイクン"
   },
   {
     "id": "pokemon:0276",
-    "label": "サナギラス"
+    "label": "ヨーギラス"
   },
   {
     "id": "pokemon:0277",
-    "label": "バンギラス"
+    "label": "サナギラス"
   },
   {
     "id": "pokemon:0278",
-    "label": "メガバンギラス"
+    "label": "バンギラス"
   },
   {
     "id": "pokemon:0279",
-    "label": "ルギア"
+    "label": "メガバンギラス"
   },
   {
     "id": "pokemon:0280",
-    "label": "ホウオウ"
+    "label": "ルギア"
   },
   {
     "id": "pokemon:0281",
-    "label": "セレビィ"
+    "label": "ホウオウ"
   },
   {
     "id": "pokemon:0282",
-    "label": "キモリ"
+    "label": "セレビィ"
   },
   {
     "id": "pokemon:0283",
-    "label": "ジュプトル"
+    "label": "キモリ"
   },
   {
     "id": "pokemon:0284",
-    "label": "ジュカイン"
+    "label": "ジュプトル"
   },
   {
     "id": "pokemon:0285",
-    "label": "メガジュカイン"
+    "label": "ジュカイン"
   },
   {
     "id": "pokemon:0286",
-    "label": "アチャモ"
+    "label": "メガジュカイン"
   },
   {
     "id": "pokemon:0287",
-    "label": "ワカシャモ"
+    "label": "アチャモ"
   },
   {
     "id": "pokemon:0288",
-    "label": "バシャーモ"
+    "label": "ワカシャモ"
   },
   {
     "id": "pokemon:0289",
-    "label": "メガバシャーモ"
+    "label": "バシャーモ"
   },
   {
     "id": "pokemon:0290",
-    "label": "ミズゴロウ"
+    "label": "メガバシャーモ"
   },
   {
     "id": "pokemon:0291",
-    "label": "ヌマクロー"
+    "label": "ミズゴロウ"
   },
   {
     "id": "pokemon:0292",
-    "label": "ラグラージ"
+    "label": "ヌマクロー"
   },
   {
     "id": "pokemon:0293",
-    "label": "メガラグラージ"
+    "label": "ラグラージ"
   },
   {
     "id": "pokemon:0294",
-    "label": "ポチエナ"
+    "label": "メガラグラージ"
   },
   {
     "id": "pokemon:0295",
-    "label": "グラエナ"
+    "label": "ポチエナ"
   },
   {
     "id": "pokemon:0296",
-    "label": "ジグザグマ"
+    "label": "グラエナ"
   },
   {
     "id": "pokemon:0297",
-    "label": "マッスグマ"
+    "label": "ジグザグマ"
   },
   {
     "id": "pokemon:0298",
-    "label": "ケムッソ"
+    "label": "マッスグマ"
   },
   {
     "id": "pokemon:0299",
-    "label": "カラサリス"
+    "label": "ケムッソ"
   },
   {
     "id": "pokemon:0300",
-    "label": "アゲハント"
+    "label": "カラサリス"
   },
   {
     "id": "pokemon:0301",
-    "label": "マユルド"
+    "label": "アゲハント"
   },
   {
     "id": "pokemon:0302",
-    "label": "ドクケイル"
+    "label": "マユルド"
   },
   {
     "id": "pokemon:0303",
-    "label": "ハスボー"
+    "label": "ドクケイル"
   },
   {
     "id": "pokemon:0304",
-    "label": "ハスブレロ"
+    "label": "ハスボー"
   },
   {
     "id": "pokemon:0305",
-    "label": "ルンパッパ"
+    "label": "ハスブレロ"
   },
   {
     "id": "pokemon:0306",
-    "label": "タネボー"
+    "label": "ルンパッパ"
   },
   {
     "id": "pokemon:0307",
-    "label": "コノハナ"
+    "label": "タネボー"
   },
   {
     "id": "pokemon:0308",
-    "label": "ダーテング"
+    "label": "コノハナ"
   },
   {
     "id": "pokemon:0309",
-    "label": "スバメ"
+    "label": "ダーテング"
   },
   {
     "id": "pokemon:0310",
-    "label": "オオスバメ"
+    "label": "スバメ"
   },
   {
     "id": "pokemon:0311",
-    "label": "キャモメ"
+    "label": "オオスバメ"
   },
   {
     "id": "pokemon:0312",
-    "label": "ペリッパー"
+    "label": "キャモメ"
   },
   {
     "id": "pokemon:0313",
-    "label": "ラルトス"
+    "label": "ペリッパー"
   },
   {
     "id": "pokemon:0314",
-    "label": "キルリア"
+    "label": "ラルトス"
   },
   {
     "id": "pokemon:0315",
-    "label": "サーナイト"
+    "label": "キルリア"
   },
   {
     "id": "pokemon:0316",
-    "label": "メガサーナイト"
+    "label": "サーナイト"
   },
   {
     "id": "pokemon:0317",
-    "label": "アメタマ"
+    "label": "メガサーナイト"
   },
   {
     "id": "pokemon:0318",
-    "label": "アメモース"
+    "label": "アメタマ"
   },
   {
     "id": "pokemon:0319",
-    "label": "キノココ"
+    "label": "アメモース"
   },
   {
     "id": "pokemon:0320",
-    "label": "キノガッサ"
+    "label": "キノココ"
   },
   {
     "id": "pokemon:0321",
-    "label": "ナマケロ"
+    "label": "キノガッサ"
   },
   {
     "id": "pokemon:0322",
-    "label": "ヤルキモノ"
+    "label": "ナマケロ"
   },
   {
     "id": "pokemon:0323",
-    "label": "ケッキング"
+    "label": "ヤルキモノ"
   },
   {
     "id": "pokemon:0324",
-    "label": "ツチニン"
+    "label": "ケッキング"
   },
   {
     "id": "pokemon:0325",
-    "label": "テッカニン"
+    "label": "ツチニン"
   },
   {
     "id": "pokemon:0326",
-    "label": "ヌケニン"
+    "label": "テッカニン"
   },
   {
     "id": "pokemon:0327",
-    "label": "ゴニョニョ"
+    "label": "ヌケニン"
   },
   {
     "id": "pokemon:0328",
-    "label": "ドゴーム"
+    "label": "ゴニョニョ"
   },
   {
     "id": "pokemon:0329",
-    "label": "バクオング"
+    "label": "ドゴーム"
   },
   {
     "id": "pokemon:0330",
-    "label": "マクノシタ"
+    "label": "バクオング"
   },
   {
     "id": "pokemon:0331",
-    "label": "ハリテヤマ"
+    "label": "マクノシタ"
   },
   {
     "id": "pokemon:0332",
-    "label": "ルリリ"
+    "label": "ハリテヤマ"
   },
   {
     "id": "pokemon:0333",
-    "label": "ノズパス"
+    "label": "ルリリ"
   },
   {
     "id": "pokemon:0334",
-    "label": "エネコ"
+    "label": "ノズパス"
   },
   {
     "id": "pokemon:0335",
-    "label": "エネコロロ"
+    "label": "エネコ"
   },
   {
     "id": "pokemon:0336",
-    "label": "ヤミラミ"
+    "label": "エネコロロ"
   },
   {
     "id": "pokemon:0337",
-    "label": "メガヤミラミ"
+    "label": "ヤミラミ"
   },
   {
     "id": "pokemon:0338",
-    "label": "クチート"
+    "label": "メガヤミラミ"
   },
   {
     "id": "pokemon:0339",
-    "label": "メガクチート"
+    "label": "クチート"
   },
   {
     "id": "pokemon:0340",
-    "label": "ココドラ"
+    "label": "メガクチート"
   },
   {
     "id": "pokemon:0341",
-    "label": "コドラ"
+    "label": "ココドラ"
   },
   {
     "id": "pokemon:0342",
-    "label": "ボスゴドラ"
+    "label": "コドラ"
   },
   {
     "id": "pokemon:0343",
-    "label": "メガボスゴドラ"
+    "label": "ボスゴドラ"
   },
   {
     "id": "pokemon:0344",
-    "label": "アサナン"
+    "label": "メガボスゴドラ"
   },
   {
     "id": "pokemon:0345",
-    "label": "チャーレム"
+    "label": "アサナン"
   },
   {
     "id": "pokemon:0346",
-    "label": "メガチャーレム"
+    "label": "チャーレム"
   },
   {
     "id": "pokemon:0347",
-    "label": "ラクライ"
+    "label": "メガチャーレム"
   },
   {
     "id": "pokemon:0348",
-    "label": "ライボルト"
+    "label": "ラクライ"
   },
   {
     "id": "pokemon:0349",
-    "label": "メガライボルト"
+    "label": "ライボルト"
   },
   {
     "id": "pokemon:0350",
-    "label": "プラスル"
+    "label": "メガライボルト"
   },
   {
     "id": "pokemon:0351",
-    "label": "マイナン"
+    "label": "プラスル"
   },
   {
     "id": "pokemon:0352",
-    "label": "バルビート"
+    "label": "マイナン"
   },
   {
     "id": "pokemon:0353",
-    "label": "イルミーゼ"
+    "label": "バルビート"
   },
   {
     "id": "pokemon:0354",
-    "label": "ロゼリア"
+    "label": "イルミーゼ"
   },
   {
     "id": "pokemon:0355",
-    "label": "ゴクリン"
+    "label": "ロゼリア"
   },
   {
     "id": "pokemon:0356",
-    "label": "マルノーム"
+    "label": "ゴクリン"
   },
   {
     "id": "pokemon:0357",
-    "label": "キバニア"
+    "label": "マルノーム"
   },
   {
     "id": "pokemon:0358",
-    "label": "サメハダー"
+    "label": "キバニア"
   },
   {
     "id": "pokemon:0359",
-    "label": "メガサメハダー"
+    "label": "サメハダー"
   },
   {
     "id": "pokemon:0360",
-    "label": "ホエルコ"
+    "label": "メガサメハダー"
   },
   {
     "id": "pokemon:0361",
-    "label": "ホエルオー"
+    "label": "ホエルコ"
   },
   {
     "id": "pokemon:0362",
-    "label": "ドンメル"
+    "label": "ホエルオー"
   },
   {
     "id": "pokemon:0363",
-    "label": "バクーダ"
+    "label": "ドンメル"
   },
   {
     "id": "pokemon:0364",
-    "label": "メガバクーダ"
+    "label": "バクーダ"
   },
   {
     "id": "pokemon:0365",
-    "label": "コータス"
+    "label": "メガバクーダ"
   },
   {
     "id": "pokemon:0366",
-    "label": "バネブー"
+    "label": "コータス"
   },
   {
     "id": "pokemon:0367",
-    "label": "ブーピッグ"
+    "label": "バネブー"
   },
   {
     "id": "pokemon:0368",
-    "label": "パッチール"
+    "label": "ブーピッグ"
   },
   {
     "id": "pokemon:0369",
-    "label": "ナックラー"
+    "label": "パッチール"
   },
   {
     "id": "pokemon:0370",
-    "label": "ビブラーバ"
+    "label": "ナックラー"
   },
   {
     "id": "pokemon:0371",
-    "label": "フライゴン"
+    "label": "ビブラーバ"
   },
   {
     "id": "pokemon:0372",
-    "label": "サボネア"
+    "label": "フライゴン"
   },
   {
     "id": "pokemon:0373",
-    "label": "ノクタス"
+    "label": "サボネア"
   },
   {
     "id": "pokemon:0374",
-    "label": "チルット"
+    "label": "ノクタス"
   },
   {
     "id": "pokemon:0375",
-    "label": "チルタリス"
+    "label": "チルット"
   },
   {
     "id": "pokemon:0376",
-    "label": "メガチルタリス"
+    "label": "チルタリス"
   },
   {
     "id": "pokemon:0377",
-    "label": "ザングース"
+    "label": "メガチルタリス"
   },
   {
     "id": "pokemon:0378",
-    "label": "ハブネーク"
+    "label": "ザングース"
   },
   {
     "id": "pokemon:0379",
-    "label": "ルナトーン"
+    "label": "ハブネーク"
   },
   {
     "id": "pokemon:0380",
-    "label": "ソルロック"
+    "label": "ルナトーン"
   },
   {
     "id": "pokemon:0381",
-    "label": "ドジョッチ"
+    "label": "ソルロック"
   },
   {
     "id": "pokemon:0382",
-    "label": "ナマズン"
+    "label": "ドジョッチ"
   },
   {
     "id": "pokemon:0383",
-    "label": "ヘイガニ"
+    "label": "ナマズン"
   },
   {
     "id": "pokemon:0384",
-    "label": "シザリガー"
+    "label": "ヘイガニ"
   },
   {
     "id": "pokemon:0385",
-    "label": "ヤジロン"
+    "label": "シザリガー"
   },
   {
     "id": "pokemon:0386",
-    "label": "ネンドール"
+    "label": "ヤジロン"
   },
   {
     "id": "pokemon:0387",
-    "label": "リリーラ"
+    "label": "ネンドール"
   },
   {
     "id": "pokemon:0388",
-    "label": "ユレイドル"
+    "label": "リリーラ"
   },
   {
     "id": "pokemon:0389",
-    "label": "アノプス"
+    "label": "ユレイドル"
   },
   {
     "id": "pokemon:0390",
-    "label": "アーマルド"
+    "label": "アノプス"
   },
   {
     "id": "pokemon:0391",
-    "label": "ヒンバス"
+    "label": "アーマルド"
   },
   {
     "id": "pokemon:0392",
-    "label": "ミロカロス"
+    "label": "ヒンバス"
   },
   {
     "id": "pokemon:0393",
-    "label": "ポワルン"
+    "label": "ミロカロス"
   },
   {
     "id": "pokemon:0394",
-    "label": "カクレオン"
+    "label": "ポワルン"
   },
   {
     "id": "pokemon:0395",
-    "label": "カゲボウズ"
+    "label": "カクレオン"
   },
   {
     "id": "pokemon:0396",
-    "label": "ジュペッタ"
+    "label": "カゲボウズ"
   },
   {
     "id": "pokemon:0397",
-    "label": "メガジュペッタ"
+    "label": "ジュペッタ"
   },
   {
     "id": "pokemon:0398",
-    "label": "ヨマワル"
+    "label": "メガジュペッタ"
   },
   {
     "id": "pokemon:0399",
-    "label": "サマヨール"
+    "label": "ヨマワル"
   },
   {
     "id": "pokemon:0400",
-    "label": "トロピウス"
+    "label": "サマヨール"
   },
   {
     "id": "pokemon:0401",
-    "label": "チリーン"
+    "label": "トロピウス"
   },
   {
     "id": "pokemon:0402",
-    "label": "メガチリーン"
+    "label": "チリーン"
   },
   {
     "id": "pokemon:0403",
-    "label": "アブソル"
+    "label": "メガチリーン"
   },
   {
     "id": "pokemon:0404",
-    "label": "メガアブソル"
+    "label": "アブソル"
   },
   {
     "id": "pokemon:0405",
-    "label": "メガアブソルZ"
+    "label": "メガアブソル"
   },
   {
     "id": "pokemon:0406",
-    "label": "ソーナノ"
+    "label": "メガアブソルZ"
   },
   {
     "id": "pokemon:0407",
-    "label": "ユキワラシ"
+    "label": "ソーナノ"
   },
   {
     "id": "pokemon:0408",
-    "label": "オニゴーリ"
+    "label": "ユキワラシ"
   },
   {
     "id": "pokemon:0409",
-    "label": "メガオニゴーリ"
+    "label": "オニゴーリ"
   },
   {
     "id": "pokemon:0410",
-    "label": "タマザラシ"
+    "label": "メガオニゴーリ"
   },
   {
     "id": "pokemon:0411",
-    "label": "トドグラー"
+    "label": "タマザラシ"
   },
   {
     "id": "pokemon:0412",
-    "label": "トドゼルガ"
+    "label": "トドグラー"
   },
   {
     "id": "pokemon:0413",
-    "label": "パールル"
+    "label": "トドゼルガ"
   },
   {
     "id": "pokemon:0414",
-    "label": "ハンテール"
+    "label": "パールル"
   },
   {
     "id": "pokemon:0415",
-    "label": "サクラビス"
+    "label": "ハンテール"
   },
   {
     "id": "pokemon:0416",
-    "label": "ジーランス"
+    "label": "サクラビス"
   },
   {
     "id": "pokemon:0417",
-    "label": "ラブカス"
+    "label": "ジーランス"
   },
   {
     "id": "pokemon:0418",
-    "label": "タツベイ"
+    "label": "ラブカス"
   },
   {
     "id": "pokemon:0419",
-    "label": "コモルー"
+    "label": "タツベイ"
   },
   {
     "id": "pokemon:0420",
-    "label": "ボーマンダ"
+    "label": "コモルー"
   },
   {
     "id": "pokemon:0421",
-    "label": "メガボーマンダ"
+    "label": "ボーマンダ"
   },
   {
     "id": "pokemon:0422",
-    "label": "ダンバル"
+    "label": "メガボーマンダ"
   },
   {
     "id": "pokemon:0423",
-    "label": "メタング"
+    "label": "ダンバル"
   },
   {
     "id": "pokemon:0424",
-    "label": "メタグロス"
+    "label": "メタング"
   },
   {
     "id": "pokemon:0425",
-    "label": "メガメタグロス"
+    "label": "メタグロス"
   },
   {
     "id": "pokemon:0426",
-    "label": "レジロック"
+    "label": "メガメタグロス"
   },
   {
     "id": "pokemon:0427",
-    "label": "レジアイス"
+    "label": "レジロック"
   },
   {
     "id": "pokemon:0428",
-    "label": "レジスチル"
+    "label": "レジアイス"
   },
   {
     "id": "pokemon:0429",
-    "label": "ラティアス"
+    "label": "レジスチル"
   },
   {
     "id": "pokemon:0430",
-    "label": "メガラティアス"
+    "label": "ラティアス"
   },
   {
     "id": "pokemon:0431",
-    "label": "ラティオス"
+    "label": "メガラティアス"
   },
   {
     "id": "pokemon:0432",
-    "label": "メガラティオス"
+    "label": "ラティオス"
   },
   {
     "id": "pokemon:0433",
-    "label": "カイオーガ"
+    "label": "メガラティオス"
   },
   {
     "id": "pokemon:0434",
-    "label": "ゲンシカイオーガ"
+    "label": "カイオーガ"
   },
   {
     "id": "pokemon:0435",
-    "label": "グラードン"
+    "label": "ゲンシカイオーガ"
   },
   {
     "id": "pokemon:0436",
-    "label": "ゲンシグラードン"
+    "label": "グラードン"
   },
   {
     "id": "pokemon:0437",
-    "label": "レックウザ"
+    "label": "ゲンシグラードン"
   },
   {
     "id": "pokemon:0438",
-    "label": "メガレックウザ"
+    "label": "レックウザ"
   },
   {
     "id": "pokemon:0439",
-    "label": "ジラーチ"
+    "label": "メガレックウザ"
   },
   {
     "id": "pokemon:0440",
-    "label": "デオキシス"
+    "label": "ジラーチ"
   },
   {
     "id": "pokemon:0441",
-    "label": "ナエトル"
+    "label": "デオキシス"
   },
   {
     "id": "pokemon:0442",
-    "label": "ハヤシガメ"
+    "label": "ナエトル"
   },
   {
     "id": "pokemon:0443",
-    "label": "ドダイトス"
+    "label": "ハヤシガメ"
   },
   {
     "id": "pokemon:0444",
-    "label": "ヒコザル"
+    "label": "ドダイトス"
   },
   {
     "id": "pokemon:0445",
-    "label": "モウカザル"
+    "label": "ヒコザル"
   },
   {
     "id": "pokemon:0446",
-    "label": "ゴウカザル"
+    "label": "モウカザル"
   },
   {
     "id": "pokemon:0447",
-    "label": "ポッチャマ"
+    "label": "ゴウカザル"
   },
   {
     "id": "pokemon:0448",
-    "label": "ポッタイシ"
+    "label": "ポッチャマ"
   },
   {
     "id": "pokemon:0449",
-    "label": "エンペルト"
+    "label": "ポッタイシ"
   },
   {
     "id": "pokemon:0450",
-    "label": "ムックル"
+    "label": "エンペルト"
   },
   {
     "id": "pokemon:0451",
-    "label": "ムクバード"
+    "label": "ムックル"
   },
   {
     "id": "pokemon:0452",
-    "label": "ムクホーク"
+    "label": "ムクバード"
   },
   {
     "id": "pokemon:0453",
-    "label": "メガムクホーク"
+    "label": "ムクホーク"
   },
   {
     "id": "pokemon:0454",
-    "label": "ビッパ"
+    "label": "メガムクホーク"
   },
   {
     "id": "pokemon:0455",
-    "label": "ビーダル"
+    "label": "ビッパ"
   },
   {
     "id": "pokemon:0456",
-    "label": "コロボーシ"
+    "label": "ビーダル"
   },
   {
     "id": "pokemon:0457",
-    "label": "コロトック"
+    "label": "コロボーシ"
   },
   {
     "id": "pokemon:0458",
-    "label": "コリンク"
+    "label": "コロトック"
   },
   {
     "id": "pokemon:0459",
-    "label": "ルクシオ"
+    "label": "コリンク"
   },
   {
     "id": "pokemon:0460",
-    "label": "レントラー"
+    "label": "ルクシオ"
   },
   {
     "id": "pokemon:0461",
-    "label": "スボミー"
+    "label": "レントラー"
   },
   {
     "id": "pokemon:0462",
-    "label": "ロズレイド"
+    "label": "スボミー"
   },
   {
     "id": "pokemon:0463",
-    "label": "ズガイドス"
+    "label": "ロズレイド"
   },
   {
     "id": "pokemon:0464",
-    "label": "ラムパルド"
+    "label": "ズガイドス"
   },
   {
     "id": "pokemon:0465",
-    "label": "タテトプス"
+    "label": "ラムパルド"
   },
   {
     "id": "pokemon:0466",
-    "label": "トリデプス"
+    "label": "タテトプス"
   },
   {
     "id": "pokemon:0467",
-    "label": "ミノムッチ"
+    "label": "トリデプス"
   },
   {
     "id": "pokemon:0468",
-    "label": "ミノマダム"
+    "label": "ミノムッチ"
   },
   {
     "id": "pokemon:0469",
-    "label": "ガーメイル"
+    "label": "ミノマダム"
   },
   {
     "id": "pokemon:0470",
-    "label": "ミツハニー"
+    "label": "ガーメイル"
   },
   {
     "id": "pokemon:0471",
-    "label": "ビークイン"
+    "label": "ミツハニー"
   },
   {
     "id": "pokemon:0472",
-    "label": "パチリス"
+    "label": "ビークイン"
   },
   {
     "id": "pokemon:0473",
-    "label": "ブイゼル"
+    "label": "パチリス"
   },
   {
     "id": "pokemon:0474",
-    "label": "フローゼル"
+    "label": "ブイゼル"
   },
   {
     "id": "pokemon:0475",
-    "label": "チェリンボ"
+    "label": "フローゼル"
   },
   {
     "id": "pokemon:0476",
-    "label": "チェリム"
+    "label": "チェリンボ"
   },
   {
     "id": "pokemon:0477",
-    "label": "カラナクシ"
+    "label": "チェリム"
   },
   {
     "id": "pokemon:0478",
-    "label": "トリトドン"
+    "label": "カラナクシ"
   },
   {
     "id": "pokemon:0479",
-    "label": "エテボース"
+    "label": "トリトドン"
   },
   {
     "id": "pokemon:0480",
-    "label": "フワンテ"
+    "label": "エテボース"
   },
   {
     "id": "pokemon:0481",
-    "label": "フワライド"
+    "label": "フワンテ"
   },
   {
     "id": "pokemon:0482",
-    "label": "ミミロル"
+    "label": "フワライド"
   },
   {
     "id": "pokemon:0483",
-    "label": "ミミロップ"
+    "label": "ミミロル"
   },
   {
     "id": "pokemon:0484",
-    "label": "メガミミロップ"
+    "label": "ミミロップ"
   },
   {
     "id": "pokemon:0485",
-    "label": "ムウマージ"
+    "label": "メガミミロップ"
   },
   {
     "id": "pokemon:0486",
-    "label": "ドンカラス"
+    "label": "ムウマージ"
   },
   {
     "id": "pokemon:0487",
-    "label": "ニャルマー"
+    "label": "ドンカラス"
   },
   {
     "id": "pokemon:0488",
-    "label": "ブニャット"
+    "label": "ニャルマー"
   },
   {
     "id": "pokemon:0489",
-    "label": "リーシャン"
+    "label": "ブニャット"
   },
   {
     "id": "pokemon:0490",
-    "label": "スカンプー"
+    "label": "リーシャン"
   },
   {
     "id": "pokemon:0491",
-    "label": "スカタンク"
+    "label": "スカンプー"
   },
   {
     "id": "pokemon:0492",
-    "label": "ドーミラー"
+    "label": "スカタンク"
   },
   {
     "id": "pokemon:0493",
-    "label": "ドータクン"
+    "label": "ドーミラー"
   },
   {
     "id": "pokemon:0494",
-    "label": "ウソハチ"
+    "label": "ドータクン"
   },
   {
     "id": "pokemon:0495",
-    "label": "マネネ"
+    "label": "ウソハチ"
   },
   {
     "id": "pokemon:0496",
-    "label": "ピンプク"
+    "label": "マネネ"
   },
   {
     "id": "pokemon:0497",
-    "label": "ペラップ"
+    "label": "ピンプク"
   },
   {
     "id": "pokemon:0498",
-    "label": "ミカルゲ"
+    "label": "ペラップ"
   },
   {
     "id": "pokemon:0499",
-    "label": "フカマル"
+    "label": "ミカルゲ"
   },
   {
     "id": "pokemon:0500",
-    "label": "ガバイト"
+    "label": "フカマル"
   },
   {
     "id": "pokemon:0501",
-    "label": "ガブリアス"
+    "label": "ガバイト"
   },
   {
     "id": "pokemon:0502",
-    "label": "メガガブリアス"
+    "label": "ガブリアス"
   },
   {
     "id": "pokemon:0503",
-    "label": "メガガブリアスZ"
+    "label": "メガガブリアス"
   },
   {
     "id": "pokemon:0504",
-    "label": "ゴンベ"
+    "label": "メガガブリアスZ"
   },
   {
     "id": "pokemon:0505",
-    "label": "リオル"
+    "label": "ゴンベ"
   },
   {
     "id": "pokemon:0506",
-    "label": "ルカリオ"
+    "label": "リオル"
   },
   {
     "id": "pokemon:0507",
-    "label": "メガルカリオ"
+    "label": "ルカリオ"
   },
   {
     "id": "pokemon:0508",
-    "label": "メガルカリオZ"
+    "label": "メガルカリオ"
   },
   {
     "id": "pokemon:0509",
-    "label": "ヒポポタス"
+    "label": "メガルカリオZ"
   },
   {
     "id": "pokemon:0510",
-    "label": "カバルドン"
+    "label": "ヒポポタス"
   },
   {
     "id": "pokemon:0511",
-    "label": "スコルピ"
+    "label": "カバルドン"
   },
   {
     "id": "pokemon:0512",
-    "label": "ドラピオン"
+    "label": "スコルピ"
   },
   {
     "id": "pokemon:0513",
-    "label": "グレッグル"
+    "label": "ドラピオン"
   },
   {
     "id": "pokemon:0514",
-    "label": "ドクロッグ"
+    "label": "グレッグル"
   },
   {
     "id": "pokemon:0515",
-    "label": "マスキッパ"
+    "label": "ドクロッグ"
   },
   {
     "id": "pokemon:0516",
-    "label": "ケイコウオ"
+    "label": "マスキッパ"
   },
   {
     "id": "pokemon:0517",
-    "label": "ネオラント"
+    "label": "ケイコウオ"
   },
   {
     "id": "pokemon:0518",
-    "label": "タマンタ"
+    "label": "ネオラント"
   },
   {
     "id": "pokemon:0519",
-    "label": "ユキカブリ"
+    "label": "タマンタ"
   },
   {
     "id": "pokemon:0520",
-    "label": "ユキノオー"
+    "label": "ユキカブリ"
   },
   {
     "id": "pokemon:0521",
-    "label": "メガユキノオー"
+    "label": "ユキノオー"
   },
   {
     "id": "pokemon:0522",
-    "label": "マニューラ"
+    "label": "メガユキノオー"
   },
   {
     "id": "pokemon:0523",
-    "label": "ジバコイル"
+    "label": "マニューラ"
   },
   {
     "id": "pokemon:0524",
-    "label": "ベロベルト"
+    "label": "ジバコイル"
   },
   {
     "id": "pokemon:0525",
-    "label": "ドサイドン"
+    "label": "ベロベルト"
   },
   {
     "id": "pokemon:0526",
-    "label": "モジャンボ"
+    "label": "ドサイドン"
   },
   {
     "id": "pokemon:0527",
-    "label": "エレキブル"
+    "label": "モジャンボ"
   },
   {
     "id": "pokemon:0528",
-    "label": "ブーバーン"
+    "label": "エレキブル"
   },
   {
     "id": "pokemon:0529",
-    "label": "トゲキッス"
+    "label": "ブーバーン"
   },
   {
     "id": "pokemon:0530",
-    "label": "メガヤンマ"
+    "label": "トゲキッス"
   },
   {
     "id": "pokemon:0531",
-    "label": "リーフィア"
+    "label": "メガヤンマ"
   },
   {
     "id": "pokemon:0532",
-    "label": "グレイシア"
+    "label": "リーフィア"
   },
   {
     "id": "pokemon:0533",
-    "label": "グライオン"
+    "label": "グレイシア"
   },
   {
     "id": "pokemon:0534",
-    "label": "マンムー"
+    "label": "グライオン"
   },
   {
     "id": "pokemon:0535",
-    "label": "ポリゴンZ"
+    "label": "マンムー"
   },
   {
     "id": "pokemon:0536",
-    "label": "エルレイド"
+    "label": "ポリゴンZ"
   },
   {
     "id": "pokemon:0537",
-    "label": "メガエルレイド"
+    "label": "エルレイド"
   },
   {
     "id": "pokemon:0538",
-    "label": "ダイノーズ"
+    "label": "メガエルレイド"
   },
   {
     "id": "pokemon:0539",
-    "label": "ヨノワール"
+    "label": "ダイノーズ"
   },
   {
     "id": "pokemon:0540",
-    "label": "ユキメノコ"
+    "label": "ヨノワール"
   },
   {
     "id": "pokemon:0541",
-    "label": "メガユキメノコ"
+    "label": "ユキメノコ"
   },
   {
     "id": "pokemon:0542",
-    "label": "ロトム"
+    "label": "メガユキメノコ"
   },
   {
     "id": "pokemon:0543",
-    "label": "ヒートロトム"
+    "label": "ロトム"
   },
   {
     "id": "pokemon:0544",
-    "label": "ウォッシュロトム"
+    "label": "ヒートロトム"
   },
   {
     "id": "pokemon:0545",
-    "label": "フロストロトム"
+    "label": "ウォッシュロトム"
   },
   {
     "id": "pokemon:0546",
-    "label": "スピンロトム"
+    "label": "フロストロトム"
   },
   {
     "id": "pokemon:0547",
-    "label": "カットロトム"
+    "label": "スピンロトム"
   },
   {
     "id": "pokemon:0548",
-    "label": "ユクシー"
+    "label": "カットロトム"
   },
   {
     "id": "pokemon:0549",
-    "label": "エムリット"
+    "label": "ユクシー"
   },
   {
     "id": "pokemon:0550",
-    "label": "アグノム"
+    "label": "エムリット"
   },
   {
     "id": "pokemon:0551",
-    "label": "ディアルガ"
+    "label": "アグノム"
   },
   {
     "id": "pokemon:0552",
-    "label": "パルキア"
+    "label": "ディアルガ"
   },
   {
     "id": "pokemon:0553",
-    "label": "ヒードラン"
+    "label": "パルキア"
   },
   {
     "id": "pokemon:0554",
-    "label": "メガヒードラン"
+    "label": "ヒードラン"
   },
   {
     "id": "pokemon:0555",
-    "label": "レジギガス"
+    "label": "メガヒードラン"
   },
   {
     "id": "pokemon:0556",
-    "label": "ギラティナ"
+    "label": "レジギガス"
   },
   {
     "id": "pokemon:0557",
-    "label": "クレセリア"
+    "label": "ギラティナ"
   },
   {
     "id": "pokemon:0558",
-    "label": "フィオネ"
+    "label": "クレセリア"
   },
   {
     "id": "pokemon:0559",
-    "label": "マナフィ"
+    "label": "フィオネ"
   },
   {
     "id": "pokemon:0560",
-    "label": "ダークライ"
+    "label": "マナフィ"
   },
   {
     "id": "pokemon:0561",
-    "label": "メガダークライ"
+    "label": "ダークライ"
   },
   {
     "id": "pokemon:0562",
-    "label": "シェイミ"
+    "label": "メガダークライ"
   },
   {
     "id": "pokemon:0563",
-    "label": "アルセウス"
+    "label": "シェイミ"
   },
   {
     "id": "pokemon:0564",
-    "label": "ビクティニ"
+    "label": "アルセウス"
   },
   {
     "id": "pokemon:0565",
-    "label": "ツタージャ"
+    "label": "ビクティニ"
   },
   {
     "id": "pokemon:0566",
-    "label": "ジャノビー"
+    "label": "ツタージャ"
   },
   {
     "id": "pokemon:0567",
-    "label": "ジャローダ"
+    "label": "ジャノビー"
   },
   {
     "id": "pokemon:0568",
-    "label": "ポカブ"
+    "label": "ジャローダ"
   },
   {
     "id": "pokemon:0569",
-    "label": "チャオブー"
+    "label": "ポカブ"
   },
   {
     "id": "pokemon:0570",
-    "label": "エンブオー"
+    "label": "チャオブー"
   },
   {
     "id": "pokemon:0571",
-    "label": "メガエンブオー"
+    "label": "エンブオー"
   },
   {
     "id": "pokemon:0572",
-    "label": "ミジュマル"
+    "label": "メガエンブオー"
   },
   {
     "id": "pokemon:0573",
-    "label": "フタチマル"
+    "label": "ミジュマル"
   },
   {
     "id": "pokemon:0574",
-    "label": "ダイケンキ"
+    "label": "フタチマル"
   },
   {
     "id": "pokemon:0575",
-    "label": "ミネズミ"
+    "label": "ダイケンキ"
   },
   {
     "id": "pokemon:0576",
-    "label": "ミルホッグ"
+    "label": "ミネズミ"
   },
   {
     "id": "pokemon:0577",
-    "label": "ヨーテリー"
+    "label": "ミルホッグ"
   },
   {
     "id": "pokemon:0578",
-    "label": "ハーデリア"
+    "label": "ヨーテリー"
   },
   {
     "id": "pokemon:0579",
-    "label": "ムーランド"
+    "label": "ハーデリア"
   },
   {
     "id": "pokemon:0580",
-    "label": "チョロネコ"
+    "label": "ムーランド"
   },
   {
     "id": "pokemon:0581",
-    "label": "レパルダス"
+    "label": "チョロネコ"
   },
   {
     "id": "pokemon:0582",
-    "label": "ヤナップ"
+    "label": "レパルダス"
   },
   {
     "id": "pokemon:0583",
-    "label": "ヤナッキー"
+    "label": "ヤナップ"
   },
   {
     "id": "pokemon:0584",
-    "label": "バオップ"
+    "label": "ヤナッキー"
   },
   {
     "id": "pokemon:0585",
-    "label": "バオッキー"
+    "label": "バオップ"
   },
   {
     "id": "pokemon:0586",
-    "label": "ヒヤップ"
+    "label": "バオッキー"
   },
   {
     "id": "pokemon:0587",
-    "label": "ヒヤッキー"
+    "label": "ヒヤップ"
   },
   {
     "id": "pokemon:0588",
-    "label": "ムンナ"
+    "label": "ヒヤッキー"
   },
   {
     "id": "pokemon:0589",
-    "label": "ムシャーナ"
+    "label": "ムンナ"
   },
   {
     "id": "pokemon:0590",
-    "label": "マメパト"
+    "label": "ムシャーナ"
   },
   {
     "id": "pokemon:0591",
-    "label": "ハトーボー"
+    "label": "マメパト"
   },
   {
     "id": "pokemon:0592",
-    "label": "ケンホロウ"
+    "label": "ハトーボー"
   },
   {
     "id": "pokemon:0593",
-    "label": "シママ"
+    "label": "ケンホロウ"
   },
   {
     "id": "pokemon:0594",
-    "label": "ゼブライカ"
+    "label": "シママ"
   },
   {
     "id": "pokemon:0595",
-    "label": "ダンゴロ"
+    "label": "ゼブライカ"
   },
   {
     "id": "pokemon:0596",
-    "label": "ガントル"
+    "label": "ダンゴロ"
   },
   {
     "id": "pokemon:0597",
-    "label": "ギガイアス"
+    "label": "ガントル"
   },
   {
     "id": "pokemon:0598",
-    "label": "コロモリ"
+    "label": "ギガイアス"
   },
   {
     "id": "pokemon:0599",
-    "label": "ココロモリ"
+    "label": "コロモリ"
   },
   {
     "id": "pokemon:0600",
-    "label": "モグリュー"
+    "label": "ココロモリ"
   },
   {
     "id": "pokemon:0601",
-    "label": "ドリュウズ"
+    "label": "モグリュー"
   },
   {
     "id": "pokemon:0602",
-    "label": "メガドリュウズ"
+    "label": "ドリュウズ"
   },
   {
     "id": "pokemon:0603",
-    "label": "タブンネ"
+    "label": "メガドリュウズ"
   },
   {
     "id": "pokemon:0604",
-    "label": "メガタブンネ"
+    "label": "タブンネ"
   },
   {
     "id": "pokemon:0605",
-    "label": "ドッコラー"
+    "label": "メガタブンネ"
   },
   {
     "id": "pokemon:0606",
-    "label": "ドテッコツ"
+    "label": "ドッコラー"
   },
   {
     "id": "pokemon:0607",
-    "label": "ローブシン"
+    "label": "ドテッコツ"
   },
   {
     "id": "pokemon:0608",
-    "label": "オタマロ"
+    "label": "ローブシン"
   },
   {
     "id": "pokemon:0609",
-    "label": "ガマガル"
+    "label": "オタマロ"
   },
   {
     "id": "pokemon:0610",
-    "label": "ガマゲロゲ"
+    "label": "ガマガル"
   },
   {
     "id": "pokemon:0611",
-    "label": "ナゲキ"
+    "label": "ガマゲロゲ"
   },
   {
     "id": "pokemon:0612",
-    "label": "ダゲキ"
+    "label": "ナゲキ"
   },
   {
     "id": "pokemon:0613",
-    "label": "クルミル"
+    "label": "ダゲキ"
   },
   {
     "id": "pokemon:0614",
-    "label": "クルマユ"
+    "label": "クルミル"
   },
   {
     "id": "pokemon:0615",
-    "label": "ハハコモリ"
+    "label": "クルマユ"
   },
   {
     "id": "pokemon:0616",
-    "label": "フシデ"
+    "label": "ハハコモリ"
   },
   {
     "id": "pokemon:0617",
-    "label": "ホイーガ"
+    "label": "フシデ"
   },
   {
     "id": "pokemon:0618",
-    "label": "ペンドラー"
+    "label": "ホイーガ"
   },
   {
     "id": "pokemon:0619",
-    "label": "メガペンドラー"
+    "label": "ペンドラー"
   },
   {
     "id": "pokemon:0620",
-    "label": "モンメン"
+    "label": "メガペンドラー"
   },
   {
     "id": "pokemon:0621",
-    "label": "エルフーン"
+    "label": "モンメン"
   },
   {
     "id": "pokemon:0622",
-    "label": "チュリネ"
+    "label": "エルフーン"
   },
   {
     "id": "pokemon:0623",
-    "label": "ドレディア"
+    "label": "チュリネ"
   },
   {
     "id": "pokemon:0624",
-    "label": "バスラオ"
+    "label": "ドレディア"
   },
   {
     "id": "pokemon:0625",
-    "label": "メグロコ"
+    "label": "バスラオ"
   },
   {
     "id": "pokemon:0626",
-    "label": "ワルビル"
+    "label": "メグロコ"
   },
   {
     "id": "pokemon:0627",
-    "label": "ワルビアル"
+    "label": "ワルビル"
   },
   {
     "id": "pokemon:0628",
-    "label": "ダルマッカ"
+    "label": "ワルビアル"
   },
   {
     "id": "pokemon:0629",
-    "label": "ヒヒダルマ"
+    "label": "ダルマッカ"
   },
   {
     "id": "pokemon:0630",
-    "label": "マラカッチ"
+    "label": "ヒヒダルマ"
   },
   {
     "id": "pokemon:0631",
-    "label": "イシズマイ"
+    "label": "マラカッチ"
   },
   {
     "id": "pokemon:0632",
-    "label": "イワパレス"
+    "label": "イシズマイ"
   },
   {
     "id": "pokemon:0633",
-    "label": "ズルッグ"
+    "label": "イワパレス"
   },
   {
     "id": "pokemon:0634",
-    "label": "ズルズキン"
+    "label": "ズルッグ"
   },
   {
     "id": "pokemon:0635",
-    "label": "メガズルズキン"
+    "label": "ズルズキン"
   },
   {
     "id": "pokemon:0636",
-    "label": "シンボラー"
+    "label": "メガズルズキン"
   },
   {
     "id": "pokemon:0637",
-    "label": "デスマス"
+    "label": "シンボラー"
   },
   {
     "id": "pokemon:0638",
-    "label": "デスカーン"
+    "label": "デスマス"
   },
   {
     "id": "pokemon:0639",
-    "label": "プロトーガ"
+    "label": "デスカーン"
   },
   {
     "id": "pokemon:0640",
-    "label": "アバゴーラ"
+    "label": "プロトーガ"
   },
   {
     "id": "pokemon:0641",
-    "label": "アーケン"
+    "label": "アバゴーラ"
   },
   {
     "id": "pokemon:0642",
-    "label": "アーケオス"
+    "label": "アーケン"
   },
   {
     "id": "pokemon:0643",
-    "label": "ヤブクロン"
+    "label": "アーケオス"
   },
   {
     "id": "pokemon:0644",
-    "label": "ダストダス"
+    "label": "ヤブクロン"
   },
   {
     "id": "pokemon:0645",
-    "label": "ゾロア"
+    "label": "ダストダス"
   },
   {
     "id": "pokemon:0646",
-    "label": "ゾロアーク"
+    "label": "ゾロア"
   },
   {
     "id": "pokemon:0647",
-    "label": "チラーミィ"
+    "label": "ゾロアーク"
   },
   {
     "id": "pokemon:0648",
-    "label": "チラチーノ"
+    "label": "チラーミィ"
   },
   {
     "id": "pokemon:0649",
-    "label": "ゴチム"
+    "label": "チラチーノ"
   },
   {
     "id": "pokemon:0650",
-    "label": "ゴチミル"
+    "label": "ゴチム"
   },
   {
     "id": "pokemon:0651",
-    "label": "ゴチルゼル"
+    "label": "ゴチミル"
   },
   {
     "id": "pokemon:0652",
-    "label": "ユニラン"
+    "label": "ゴチルゼル"
   },
   {
     "id": "pokemon:0653",
-    "label": "ダブラン"
+    "label": "ユニラン"
   },
   {
     "id": "pokemon:0654",
-    "label": "ランクルス"
+    "label": "ダブラン"
   },
   {
     "id": "pokemon:0655",
-    "label": "コアルヒー"
+    "label": "ランクルス"
   },
   {
     "id": "pokemon:0656",
-    "label": "スワンナ"
+    "label": "コアルヒー"
   },
   {
     "id": "pokemon:0657",
-    "label": "バニプッチ"
+    "label": "スワンナ"
   },
   {
     "id": "pokemon:0658",
-    "label": "バニリッチ"
+    "label": "バニプッチ"
   },
   {
     "id": "pokemon:0659",
-    "label": "バイバニラ"
+    "label": "バニリッチ"
   },
   {
     "id": "pokemon:0660",
-    "label": "シキジカ"
+    "label": "バイバニラ"
   },
   {
     "id": "pokemon:0661",
-    "label": "メブキジカ"
+    "label": "シキジカ"
   },
   {
     "id": "pokemon:0662",
-    "label": "エモンガ"
+    "label": "メブキジカ"
   },
   {
     "id": "pokemon:0663",
-    "label": "カブルモ"
+    "label": "エモンガ"
   },
   {
     "id": "pokemon:0664",
-    "label": "シュバルゴ"
+    "label": "カブルモ"
   },
   {
     "id": "pokemon:0665",
-    "label": "タマゲタケ"
+    "label": "シュバルゴ"
   },
   {
     "id": "pokemon:0666",
-    "label": "モロバレル"
+    "label": "タマゲタケ"
   },
   {
     "id": "pokemon:0667",
-    "label": "プルリル"
+    "label": "モロバレル"
   },
   {
     "id": "pokemon:0668",
-    "label": "ブルンゲル"
+    "label": "プルリル"
   },
   {
     "id": "pokemon:0669",
-    "label": "ママンボウ"
+    "label": "ブルンゲル"
   },
   {
     "id": "pokemon:0670",
-    "label": "バチュル"
+    "label": "ママンボウ"
   },
   {
     "id": "pokemon:0671",
-    "label": "デンチュラ"
+    "label": "バチュル"
   },
   {
     "id": "pokemon:0672",
-    "label": "テッシード"
+    "label": "デンチュラ"
   },
   {
     "id": "pokemon:0673",
-    "label": "ナットレイ"
+    "label": "テッシード"
   },
   {
     "id": "pokemon:0674",
-    "label": "ギアル"
+    "label": "ナットレイ"
   },
   {
     "id": "pokemon:0675",
-    "label": "ギギアル"
+    "label": "ギアル"
   },
   {
     "id": "pokemon:0676",
-    "label": "ギギギアル"
+    "label": "ギギアル"
   },
   {
     "id": "pokemon:0677",
-    "label": "シビシラス"
+    "label": "ギギギアル"
   },
   {
     "id": "pokemon:0678",
-    "label": "シビビール"
+    "label": "シビシラス"
   },
   {
     "id": "pokemon:0679",
-    "label": "シビルドン"
+    "label": "シビビール"
   },
   {
     "id": "pokemon:0680",
-    "label": "メガシビルドン"
+    "label": "シビルドン"
   },
   {
     "id": "pokemon:0681",
-    "label": "リグレー"
+    "label": "メガシビルドン"
   },
   {
     "id": "pokemon:0682",
-    "label": "オーベム"
+    "label": "リグレー"
   },
   {
     "id": "pokemon:0683",
-    "label": "ヒトモシ"
+    "label": "オーベム"
   },
   {
     "id": "pokemon:0684",
-    "label": "ランプラー"
+    "label": "ヒトモシ"
   },
   {
     "id": "pokemon:0685",
-    "label": "シャンデラ"
+    "label": "ランプラー"
   },
   {
     "id": "pokemon:0686",
-    "label": "メガシャンデラ"
+    "label": "シャンデラ"
   },
   {
     "id": "pokemon:0687",
-    "label": "キバゴ"
+    "label": "メガシャンデラ"
   },
   {
     "id": "pokemon:0688",
-    "label": "オノンド"
+    "label": "キバゴ"
   },
   {
     "id": "pokemon:0689",
-    "label": "オノノクス"
+    "label": "オノンド"
   },
   {
     "id": "pokemon:0690",
-    "label": "クマシュン"
+    "label": "オノノクス"
   },
   {
     "id": "pokemon:0691",
-    "label": "ツンベアー"
+    "label": "クマシュン"
   },
   {
     "id": "pokemon:0692",
-    "label": "フリージオ"
+    "label": "ツンベアー"
   },
   {
     "id": "pokemon:0693",
-    "label": "チョボマキ"
+    "label": "フリージオ"
   },
   {
     "id": "pokemon:0694",
-    "label": "アギルダー"
+    "label": "チョボマキ"
   },
   {
     "id": "pokemon:0695",
-    "label": "マッギョ"
+    "label": "アギルダー"
   },
   {
     "id": "pokemon:0696",
-    "label": "コジョフー"
+    "label": "マッギョ"
   },
   {
     "id": "pokemon:0697",
-    "label": "コジョンド"
+    "label": "コジョフー"
   },
   {
     "id": "pokemon:0698",
-    "label": "クリムガン"
+    "label": "コジョンド"
   },
   {
     "id": "pokemon:0699",
-    "label": "ゴビット"
+    "label": "クリムガン"
   },
   {
     "id": "pokemon:0700",
-    "label": "ゴルーグ"
+    "label": "ゴビット"
   },
   {
     "id": "pokemon:0701",
-    "label": "メガゴルーグ"
+    "label": "ゴルーグ"
   },
   {
     "id": "pokemon:0702",
-    "label": "コマタナ"
+    "label": "メガゴルーグ"
   },
   {
     "id": "pokemon:0703",
-    "label": "キリキザン"
+    "label": "コマタナ"
   },
   {
     "id": "pokemon:0704",
-    "label": "バッフロン"
+    "label": "キリキザン"
   },
   {
     "id": "pokemon:0705",
-    "label": "ワシボン"
+    "label": "バッフロン"
   },
   {
     "id": "pokemon:0706",
-    "label": "ウォーグル"
+    "label": "ワシボン"
   },
   {
     "id": "pokemon:0707",
-    "label": "バルチャイ"
+    "label": "ウォーグル"
   },
   {
     "id": "pokemon:0708",
-    "label": "バルジーナ"
+    "label": "バルチャイ"
   },
   {
     "id": "pokemon:0709",
-    "label": "クイタラン"
+    "label": "バルジーナ"
   },
   {
     "id": "pokemon:0710",
-    "label": "アイアント"
+    "label": "クイタラン"
   },
   {
     "id": "pokemon:0711",
-    "label": "モノズ"
+    "label": "アイアント"
   },
   {
     "id": "pokemon:0712",
-    "label": "ジヘッド"
+    "label": "モノズ"
   },
   {
     "id": "pokemon:0713",
-    "label": "サザンドラ"
+    "label": "ジヘッド"
   },
   {
     "id": "pokemon:0714",
-    "label": "メラルバ"
+    "label": "サザンドラ"
   },
   {
     "id": "pokemon:0715",
-    "label": "ウルガモス"
+    "label": "メラルバ"
   },
   {
     "id": "pokemon:0716",
-    "label": "コバルオン"
+    "label": "ウルガモス"
   },
   {
     "id": "pokemon:0717",
-    "label": "テラキオン"
+    "label": "コバルオン"
   },
   {
     "id": "pokemon:0718",
-    "label": "ビリジオン"
+    "label": "テラキオン"
   },
   {
     "id": "pokemon:0719",
-    "label": "トルネロス"
+    "label": "ビリジオン"
   },
   {
     "id": "pokemon:0720",
-    "label": "ボルトロス"
+    "label": "トルネロス"
   },
   {
     "id": "pokemon:0721",
-    "label": "レシラム"
+    "label": "ボルトロス"
   },
   {
     "id": "pokemon:0722",
-    "label": "ゼクロム"
+    "label": "レシラム"
   },
   {
     "id": "pokemon:0723",
-    "label": "ランドロス"
+    "label": "ゼクロム"
   },
   {
     "id": "pokemon:0724",
-    "label": "キュレム"
+    "label": "ランドロス"
   },
   {
     "id": "pokemon:0725",
-    "label": "ホワイトキュレム"
+    "label": "キュレム"
   },
   {
     "id": "pokemon:0726",
-    "label": "ブラックキュレム"
+    "label": "ホワイトキュレム"
   },
   {
     "id": "pokemon:0727",
-    "label": "ケルディオ"
+    "label": "ブラックキュレム"
   },
   {
     "id": "pokemon:0728",
-    "label": "メロエッタ"
+    "label": "ケルディオ"
   },
   {
     "id": "pokemon:0729",
-    "label": "ゲノセクト"
+    "label": "メロエッタ"
   },
   {
     "id": "pokemon:0730",
-    "label": "ハリマロン"
+    "label": "ゲノセクト"
   },
   {
     "id": "pokemon:0731",
-    "label": "ハリボーグ"
+    "label": "ハリマロン"
   },
   {
     "id": "pokemon:0732",
-    "label": "ブリガロン"
+    "label": "ハリボーグ"
   },
   {
     "id": "pokemon:0733",
-    "label": "メガブリガロン"
+    "label": "ブリガロン"
   },
   {
     "id": "pokemon:0734",
-    "label": "フォッコ"
+    "label": "メガブリガロン"
   },
   {
     "id": "pokemon:0735",
-    "label": "テールナー"
+    "label": "フォッコ"
   },
   {
     "id": "pokemon:0736",
-    "label": "マフォクシー"
+    "label": "テールナー"
   },
   {
     "id": "pokemon:0737",
-    "label": "メガマフォクシー"
+    "label": "マフォクシー"
   },
   {
     "id": "pokemon:0738",
-    "label": "ケロマツ"
+    "label": "メガマフォクシー"
   },
   {
     "id": "pokemon:0739",
-    "label": "ゲコガシラ"
+    "label": "ケロマツ"
   },
   {
     "id": "pokemon:0740",
-    "label": "ゲッコウガ"
+    "label": "ゲコガシラ"
   },
   {
     "id": "pokemon:0741",
-    "label": "メガゲッコウガ"
+    "label": "ゲッコウガ"
   },
   {
     "id": "pokemon:0742",
-    "label": "ホルビー"
+    "label": "メガゲッコウガ"
   },
   {
     "id": "pokemon:0743",
-    "label": "ホルード"
+    "label": "ホルビー"
   },
   {
     "id": "pokemon:0744",
-    "label": "ヤヤコマ"
+    "label": "ホルード"
   },
   {
     "id": "pokemon:0745",
-    "label": "ヒノヤコマ"
+    "label": "ヤヤコマ"
   },
   {
     "id": "pokemon:0746",
-    "label": "ファイアロー"
+    "label": "ヒノヤコマ"
   },
   {
     "id": "pokemon:0747",
-    "label": "コフキムシ"
+    "label": "ファイアロー"
   },
   {
     "id": "pokemon:0748",
-    "label": "コフーライ"
+    "label": "コフキムシ"
   },
   {
     "id": "pokemon:0749",
-    "label": "ビビヨン"
+    "label": "コフーライ"
   },
   {
     "id": "pokemon:0750",
-    "label": "シシコ"
+    "label": "ビビヨン"
   },
   {
     "id": "pokemon:0751",
-    "label": "カエンジシ"
+    "label": "シシコ"
   },
   {
     "id": "pokemon:0752",
-    "label": "メガカエンジシ"
+    "label": "カエンジシ"
   },
   {
     "id": "pokemon:0753",
-    "label": "フラベベ"
+    "label": "メガカエンジシ"
   },
   {
     "id": "pokemon:0754",
-    "label": "フラエッテ"
+    "label": "フラベベ"
   },
   {
     "id": "pokemon:0755",
-    "label": "メガフラエッテ"
+    "label": "フラエッテ"
   },
   {
     "id": "pokemon:0756",
-    "label": "フラージェス"
+    "label": "メガフラエッテ"
   },
   {
     "id": "pokemon:0757",
-    "label": "メェークル"
+    "label": "フラージェス"
   },
   {
     "id": "pokemon:0758",
-    "label": "ゴーゴート"
+    "label": "メェークル"
   },
   {
     "id": "pokemon:0759",
-    "label": "ヤンチャム"
+    "label": "ゴーゴート"
   },
   {
     "id": "pokemon:0760",
-    "label": "ゴロンダ"
+    "label": "ヤンチャム"
   },
   {
     "id": "pokemon:0761",
-    "label": "トリミアン"
+    "label": "ゴロンダ"
   },
   {
     "id": "pokemon:0762",
-    "label": "ニャスパー"
+    "label": "トリミアン"
   },
   {
     "id": "pokemon:0763",
-    "label": "ニャオニクス♂"
+    "label": "ニャスパー"
   },
   {
     "id": "pokemon:0764",
-    "label": "ニャオニクス♀"
+    "label": "ニャオニクス"
   },
   {
     "id": "pokemon:0765",
-    "label": "メガニャオニクス♂"
+    "label": "ニャオニクス♂"
   },
   {
     "id": "pokemon:0766",
-    "label": "メガニャオニクス♀"
+    "label": "ニャオニクス♀"
   },
   {
     "id": "pokemon:0767",
-    "label": "ヒトツキ"
+    "label": "メガニャオニクス"
   },
   {
     "id": "pokemon:0768",
-    "label": "ニダンギル"
+    "label": "メガニャオニクス♂"
   },
   {
     "id": "pokemon:0769",
-    "label": "ギルガルド"
+    "label": "メガニャオニクス♀"
   },
   {
     "id": "pokemon:0770",
-    "label": "シュシュプ"
+    "label": "ヒトツキ"
   },
   {
     "id": "pokemon:0771",
-    "label": "フレフワン"
+    "label": "ニダンギル"
   },
   {
     "id": "pokemon:0772",
-    "label": "ペロッパフ"
+    "label": "ギルガルド"
   },
   {
     "id": "pokemon:0773",
-    "label": "ペロリーム"
+    "label": "シュシュプ"
   },
   {
     "id": "pokemon:0774",
-    "label": "マーイーカ"
+    "label": "フレフワン"
   },
   {
     "id": "pokemon:0775",
-    "label": "カラマネロ"
+    "label": "ペロッパフ"
   },
   {
     "id": "pokemon:0776",
-    "label": "メガカラマネロ"
+    "label": "ペロリーム"
   },
   {
     "id": "pokemon:0777",
-    "label": "カメテテ"
+    "label": "マーイーカ"
   },
   {
     "id": "pokemon:0778",
-    "label": "ガメノデス"
+    "label": "カラマネロ"
   },
   {
     "id": "pokemon:0779",
-    "label": "メガガメノデス"
+    "label": "メガカラマネロ"
   },
   {
     "id": "pokemon:0780",
-    "label": "クズモー"
+    "label": "カメテテ"
   },
   {
     "id": "pokemon:0781",
-    "label": "ドラミドロ"
+    "label": "ガメノデス"
   },
   {
     "id": "pokemon:0782",
-    "label": "メガドラミドロ"
+    "label": "メガガメノデス"
   },
   {
     "id": "pokemon:0783",
-    "label": "ウデッポウ"
+    "label": "クズモー"
   },
   {
     "id": "pokemon:0784",
-    "label": "ブロスター"
+    "label": "ドラミドロ"
   },
   {
     "id": "pokemon:0785",
-    "label": "エリキテル"
+    "label": "メガドラミドロ"
   },
   {
     "id": "pokemon:0786",
-    "label": "エレザード"
+    "label": "ウデッポウ"
   },
   {
     "id": "pokemon:0787",
-    "label": "チゴラス"
+    "label": "ブロスター"
   },
   {
     "id": "pokemon:0788",
-    "label": "ガチゴラス"
+    "label": "エリキテル"
   },
   {
     "id": "pokemon:0789",
-    "label": "アマルス"
+    "label": "エレザード"
   },
   {
     "id": "pokemon:0790",
-    "label": "アマルルガ"
+    "label": "チゴラス"
   },
   {
     "id": "pokemon:0791",
-    "label": "ニンフィア"
+    "label": "ガチゴラス"
   },
   {
     "id": "pokemon:0792",
-    "label": "ルチャブル"
+    "label": "アマルス"
   },
   {
     "id": "pokemon:0793",
-    "label": "メガルチャブル"
+    "label": "アマルルガ"
   },
   {
     "id": "pokemon:0794",
-    "label": "デデンネ"
+    "label": "ニンフィア"
   },
   {
     "id": "pokemon:0795",
-    "label": "メレシー"
+    "label": "ルチャブル"
   },
   {
     "id": "pokemon:0796",
-    "label": "ヌメラ"
+    "label": "メガルチャブル"
   },
   {
     "id": "pokemon:0797",
-    "label": "ヌメイル"
+    "label": "デデンネ"
   },
   {
     "id": "pokemon:0798",
-    "label": "ヌメルゴン"
+    "label": "メレシー"
   },
   {
     "id": "pokemon:0799",
-    "label": "クレッフィ"
+    "label": "ヌメラ"
   },
   {
     "id": "pokemon:0800",
-    "label": "ボクレー"
+    "label": "ヌメイル"
   },
   {
     "id": "pokemon:0801",
-    "label": "オーロット"
+    "label": "ヌメルゴン"
   },
   {
     "id": "pokemon:0802",
-    "label": "バケッチャ"
+    "label": "クレッフィ"
   },
   {
     "id": "pokemon:0803",
-    "label": "パンプジン"
+    "label": "ボクレー"
   },
   {
     "id": "pokemon:0804",
-    "label": "カチコール"
+    "label": "オーロット"
   },
   {
     "id": "pokemon:0805",
-    "label": "クレベース"
+    "label": "バケッチャ"
   },
   {
     "id": "pokemon:0806",
-    "label": "オンバット"
+    "label": "パンプジン"
   },
   {
     "id": "pokemon:0807",
-    "label": "オンバーン"
+    "label": "カチコール"
   },
   {
     "id": "pokemon:0808",
-    "label": "ゼルネアス"
+    "label": "クレベース"
   },
   {
     "id": "pokemon:0809",
-    "label": "イベルタル"
+    "label": "オンバット"
   },
   {
     "id": "pokemon:0810",
-    "label": "ジガルデ"
+    "label": "オンバーン"
   },
   {
     "id": "pokemon:0811",
-    "label": "メガジガルデ"
+    "label": "ゼルネアス"
   },
   {
     "id": "pokemon:0812",
-    "label": "ディアンシー"
+    "label": "イベルタル"
   },
   {
     "id": "pokemon:0813",
-    "label": "メガディアンシー"
+    "label": "ジガルデ"
   },
   {
     "id": "pokemon:0814",
-    "label": "フーパ"
+    "label": "メガジガルデ"
   },
   {
     "id": "pokemon:0815",
-    "label": "ボルケニオン"
+    "label": "ディアンシー"
   },
   {
     "id": "pokemon:0816",
-    "label": "モクロー"
+    "label": "メガディアンシー"
   },
   {
     "id": "pokemon:0817",
-    "label": "フクスロー"
+    "label": "フーパ"
   },
   {
     "id": "pokemon:0818",
-    "label": "ジュナイパー"
+    "label": "ボルケニオン"
   },
   {
     "id": "pokemon:0819",
-    "label": "ニャビー"
+    "label": "モクロー"
   },
   {
     "id": "pokemon:0820",
-    "label": "ニャヒート"
+    "label": "フクスロー"
   },
   {
     "id": "pokemon:0821",
-    "label": "ガオガエン"
+    "label": "ジュナイパー"
   },
   {
     "id": "pokemon:0822",
-    "label": "アシマリ"
+    "label": "ニャビー"
   },
   {
     "id": "pokemon:0823",
-    "label": "オシャマリ"
+    "label": "ニャヒート"
   },
   {
     "id": "pokemon:0824",
-    "label": "アシレーヌ"
+    "label": "ガオガエン"
   },
   {
     "id": "pokemon:0825",
-    "label": "ツツケラ"
+    "label": "アシマリ"
   },
   {
     "id": "pokemon:0826",
-    "label": "ケララッパ"
+    "label": "オシャマリ"
   },
   {
     "id": "pokemon:0827",
-    "label": "ドデカバシ"
+    "label": "アシレーヌ"
   },
   {
     "id": "pokemon:0828",
-    "label": "ヤングース"
+    "label": "ツツケラ"
   },
   {
     "id": "pokemon:0829",
-    "label": "デカグース"
+    "label": "ケララッパ"
   },
   {
     "id": "pokemon:0830",
-    "label": "アゴジムシ"
+    "label": "ドデカバシ"
   },
   {
     "id": "pokemon:0831",
-    "label": "デンヂムシ"
+    "label": "ヤングース"
   },
   {
     "id": "pokemon:0832",
-    "label": "クワガノン"
+    "label": "デカグース"
   },
   {
     "id": "pokemon:0833",
-    "label": "マケンカニ"
+    "label": "アゴジムシ"
   },
   {
     "id": "pokemon:0834",
-    "label": "ケケンカニ"
+    "label": "デンヂムシ"
   },
   {
     "id": "pokemon:0835",
-    "label": "メガケケンカニ"
+    "label": "クワガノン"
   },
   {
     "id": "pokemon:0836",
-    "label": "オドリドリ"
+    "label": "マケンカニ"
   },
   {
     "id": "pokemon:0837",
-    "label": "アブリー"
+    "label": "ケケンカニ"
   },
   {
     "id": "pokemon:0838",
-    "label": "アブリボン"
+    "label": "メガケケンカニ"
   },
   {
     "id": "pokemon:0839",
-    "label": "イワンコ"
+    "label": "オドリドリ"
   },
   {
     "id": "pokemon:0840",
-    "label": "ルガルガン"
+    "label": "アブリー"
   },
   {
     "id": "pokemon:0841",
-    "label": "ヨワシ"
+    "label": "アブリボン"
   },
   {
     "id": "pokemon:0842",
-    "label": "ヒドイデ"
+    "label": "イワンコ"
   },
   {
     "id": "pokemon:0843",
-    "label": "ドヒドイデ"
+    "label": "ルガルガン"
   },
   {
     "id": "pokemon:0844",
-    "label": "ドロバンコ"
+    "label": "ヨワシ"
   },
   {
     "id": "pokemon:0845",
-    "label": "バンバドロ"
+    "label": "ヒドイデ"
   },
   {
     "id": "pokemon:0846",
-    "label": "シズクモ"
+    "label": "ドヒドイデ"
   },
   {
     "id": "pokemon:0847",
-    "label": "オニシズクモ"
+    "label": "ドロバンコ"
   },
   {
     "id": "pokemon:0848",
-    "label": "カリキリ"
+    "label": "バンバドロ"
   },
   {
     "id": "pokemon:0849",
-    "label": "ラランテス"
+    "label": "シズクモ"
   },
   {
     "id": "pokemon:0850",
-    "label": "ネマシュ"
+    "label": "オニシズクモ"
   },
   {
     "id": "pokemon:0851",
-    "label": "マシェード"
+    "label": "カリキリ"
   },
   {
     "id": "pokemon:0852",
-    "label": "ヤトウモリ"
+    "label": "ラランテス"
   },
   {
     "id": "pokemon:0853",
-    "label": "エンニュート"
+    "label": "ネマシュ"
   },
   {
     "id": "pokemon:0854",
-    "label": "ヌイコグマ"
+    "label": "マシェード"
   },
   {
     "id": "pokemon:0855",
-    "label": "キテルグマ"
+    "label": "ヤトウモリ"
   },
   {
     "id": "pokemon:0856",
-    "label": "アマカジ"
+    "label": "エンニュート"
   },
   {
     "id": "pokemon:0857",
-    "label": "アママイコ"
+    "label": "ヌイコグマ"
   },
   {
     "id": "pokemon:0858",
-    "label": "アマージョ"
+    "label": "キテルグマ"
   },
   {
     "id": "pokemon:0859",
-    "label": "キュワワー"
+    "label": "アマカジ"
   },
   {
     "id": "pokemon:0860",
-    "label": "ヤレユータン"
+    "label": "アママイコ"
   },
   {
     "id": "pokemon:0861",
-    "label": "ナゲツケサル"
+    "label": "アマージョ"
   },
   {
     "id": "pokemon:0862",
-    "label": "コソクムシ"
+    "label": "キュワワー"
   },
   {
     "id": "pokemon:0863",
-    "label": "グソクムシャ"
+    "label": "ヤレユータン"
   },
   {
     "id": "pokemon:0864",
-    "label": "メガグソクムシャ"
+    "label": "ナゲツケサル"
   },
   {
     "id": "pokemon:0865",
-    "label": "スナバァ"
+    "label": "コソクムシ"
   },
   {
     "id": "pokemon:0866",
-    "label": "シロデスナ"
+    "label": "グソクムシャ"
   },
   {
     "id": "pokemon:0867",
-    "label": "ナマコブシ"
+    "label": "メガグソクムシャ"
   },
   {
     "id": "pokemon:0868",
-    "label": "タイプ:ヌル"
+    "label": "スナバァ"
   },
   {
     "id": "pokemon:0869",
-    "label": "シルヴァディ"
+    "label": "シロデスナ"
   },
   {
     "id": "pokemon:0870",
-    "label": "メテノ"
+    "label": "ナマコブシ"
   },
   {
     "id": "pokemon:0871",
-    "label": "ネッコアラ"
+    "label": "タイプ:ヌル"
   },
   {
     "id": "pokemon:0872",
-    "label": "バクガメス"
+    "label": "シルヴァディ"
   },
   {
     "id": "pokemon:0873",
-    "label": "トゲデマル"
+    "label": "メテノ"
   },
   {
     "id": "pokemon:0874",
-    "label": "ミミッキュ"
+    "label": "ネッコアラ"
   },
   {
     "id": "pokemon:0875",
-    "label": "ハギギシリ"
+    "label": "バクガメス"
   },
   {
     "id": "pokemon:0876",
-    "label": "ジジーロン"
+    "label": "トゲデマル"
   },
   {
     "id": "pokemon:0877",
-    "label": "メガジジーロン"
+    "label": "ミミッキュ"
   },
   {
     "id": "pokemon:0878",
-    "label": "ダダリン"
+    "label": "ハギギシリ"
   },
   {
     "id": "pokemon:0879",
-    "label": "ジャラコ"
+    "label": "ジジーロン"
   },
   {
     "id": "pokemon:0880",
-    "label": "ジャランゴ"
+    "label": "メガジジーロン"
   },
   {
     "id": "pokemon:0881",
-    "label": "ジャラランガ"
+    "label": "ダダリン"
   },
   {
     "id": "pokemon:0882",
-    "label": "カプ・コケコ"
+    "label": "ジャラコ"
   },
   {
     "id": "pokemon:0883",
-    "label": "カプ・テテフ"
+    "label": "ジャランゴ"
   },
   {
     "id": "pokemon:0884",
-    "label": "カプ・ブルル"
+    "label": "ジャラランガ"
   },
   {
     "id": "pokemon:0885",
-    "label": "カプ・レヒレ"
+    "label": "カプ・コケコ"
   },
   {
     "id": "pokemon:0886",
-    "label": "コスモッグ"
+    "label": "カプ・テテフ"
   },
   {
     "id": "pokemon:0887",
-    "label": "コスモウム"
+    "label": "カプ・ブルル"
   },
   {
     "id": "pokemon:0888",
-    "label": "ソルガレオ"
+    "label": "カプ・レヒレ"
   },
   {
     "id": "pokemon:0889",
-    "label": "ルナアーラ"
+    "label": "コスモッグ"
   },
   {
     "id": "pokemon:0890",
-    "label": "ウツロイド"
+    "label": "コスモウム"
   },
   {
     "id": "pokemon:0891",
-    "label": "マッシブーン"
+    "label": "ソルガレオ"
   },
   {
     "id": "pokemon:0892",
-    "label": "フェローチェ"
+    "label": "ルナアーラ"
   },
   {
     "id": "pokemon:0893",
-    "label": "デンジュモク"
+    "label": "ウツロイド"
   },
   {
     "id": "pokemon:0894",
-    "label": "テッカグヤ"
+    "label": "マッシブーン"
   },
   {
     "id": "pokemon:0895",
-    "label": "カミツルギ"
+    "label": "フェローチェ"
   },
   {
     "id": "pokemon:0896",
-    "label": "アクジキング"
+    "label": "デンジュモク"
   },
   {
     "id": "pokemon:0897",
-    "label": "ネクロズマ"
+    "label": "テッカグヤ"
   },
   {
     "id": "pokemon:0898",
-    "label": "ウルトラネクロズマ"
+    "label": "カミツルギ"
   },
   {
     "id": "pokemon:0899",
-    "label": "マギアナ"
+    "label": "アクジキング"
   },
   {
     "id": "pokemon:0900",
-    "label": "メガマギアナ"
+    "label": "ネクロズマ"
   },
   {
     "id": "pokemon:0901",
-    "label": "マーシャドー"
+    "label": "ウルトラネクロズマ"
   },
   {
     "id": "pokemon:0902",
-    "label": "ベベノム"
+    "label": "マギアナ"
   },
   {
     "id": "pokemon:0903",
-    "label": "アーゴヨン"
+    "label": "メガマギアナ"
   },
   {
     "id": "pokemon:0904",
-    "label": "ツンデツンデ"
+    "label": "マーシャドー"
   },
   {
     "id": "pokemon:0905",
-    "label": "ズガドーン"
+    "label": "ベベノム"
   },
   {
     "id": "pokemon:0906",
-    "label": "ゼラオラ"
+    "label": "アーゴヨン"
   },
   {
     "id": "pokemon:0907",
-    "label": "メガゼラオラ"
+    "label": "ツンデツンデ"
   },
   {
     "id": "pokemon:0908",
-    "label": "メルタン"
+    "label": "ズガドーン"
   },
   {
     "id": "pokemon:0909",
-    "label": "メルメタル"
+    "label": "ゼラオラ"
   },
   {
     "id": "pokemon:0910",
-    "label": "サルノリ"
+    "label": "メガゼラオラ"
   },
   {
     "id": "pokemon:0911",
-    "label": "バチンキー"
+    "label": "メルタン"
   },
   {
     "id": "pokemon:0912",
-    "label": "ゴリランダー"
+    "label": "メルメタル"
   },
   {
     "id": "pokemon:0913",
-    "label": "ヒバニー"
+    "label": "サルノリ"
   },
   {
     "id": "pokemon:0914",
-    "label": "ラビフット"
+    "label": "バチンキー"
   },
   {
     "id": "pokemon:0915",
-    "label": "エースバーン"
+    "label": "ゴリランダー"
   },
   {
     "id": "pokemon:0916",
-    "label": "メッソン"
+    "label": "ヒバニー"
   },
   {
     "id": "pokemon:0917",
-    "label": "ジメレオン"
+    "label": "ラビフット"
   },
   {
     "id": "pokemon:0918",
-    "label": "インテレオン"
+    "label": "エースバーン"
   },
   {
     "id": "pokemon:0919",
-    "label": "ホシガリス"
+    "label": "メッソン"
   },
   {
     "id": "pokemon:0920",
-    "label": "ヨクバリス"
+    "label": "ジメレオン"
   },
   {
     "id": "pokemon:0921",
-    "label": "ココガラ"
+    "label": "インテレオン"
   },
   {
     "id": "pokemon:0922",
-    "label": "アオガラス"
+    "label": "ホシガリス"
   },
   {
     "id": "pokemon:0923",
-    "label": "アーマーガア"
+    "label": "ヨクバリス"
   },
   {
     "id": "pokemon:0924",
-    "label": "サッチムシ"
+    "label": "ココガラ"
   },
   {
     "id": "pokemon:0925",
-    "label": "レドームシ"
+    "label": "アオガラス"
   },
   {
     "id": "pokemon:0926",
-    "label": "イオルブ"
+    "label": "アーマーガア"
   },
   {
     "id": "pokemon:0927",
-    "label": "クスネ"
+    "label": "サッチムシ"
   },
   {
     "id": "pokemon:0928",
-    "label": "フォクスライ"
+    "label": "レドームシ"
   },
   {
     "id": "pokemon:0929",
-    "label": "ヒメンカ"
+    "label": "イオルブ"
   },
   {
     "id": "pokemon:0930",
-    "label": "ワタシラガ"
+    "label": "クスネ"
   },
   {
     "id": "pokemon:0931",
-    "label": "ウールー"
+    "label": "フォクスライ"
   },
   {
     "id": "pokemon:0932",
-    "label": "バイウールー"
+    "label": "ヒメンカ"
   },
   {
     "id": "pokemon:0933",
-    "label": "カムカメ"
+    "label": "ワタシラガ"
   },
   {
     "id": "pokemon:0934",
-    "label": "カジリガメ"
+    "label": "ウールー"
   },
   {
     "id": "pokemon:0935",
-    "label": "ワンパチ"
+    "label": "バイウールー"
   },
   {
     "id": "pokemon:0936",
-    "label": "パルスワン"
+    "label": "カムカメ"
   },
   {
     "id": "pokemon:0937",
-    "label": "タンドン"
+    "label": "カジリガメ"
   },
   {
     "id": "pokemon:0938",
-    "label": "トロッゴン"
+    "label": "ワンパチ"
   },
   {
     "id": "pokemon:0939",
-    "label": "セキタンザン"
+    "label": "パルスワン"
   },
   {
     "id": "pokemon:0940",
-    "label": "カジッチュ"
+    "label": "タンドン"
   },
   {
     "id": "pokemon:0941",
-    "label": "アップリュー"
+    "label": "トロッゴン"
   },
   {
     "id": "pokemon:0942",
-    "label": "タルップル"
+    "label": "セキタンザン"
   },
   {
     "id": "pokemon:0943",
-    "label": "スナヘビ"
+    "label": "カジッチュ"
   },
   {
     "id": "pokemon:0944",
-    "label": "サダイジャ"
+    "label": "アップリュー"
   },
   {
     "id": "pokemon:0945",
-    "label": "ウッウ"
+    "label": "タルップル"
   },
   {
     "id": "pokemon:0946",
-    "label": "サシカマス"
+    "label": "スナヘビ"
   },
   {
     "id": "pokemon:0947",
-    "label": "カマスジョー"
+    "label": "サダイジャ"
   },
   {
     "id": "pokemon:0948",
-    "label": "エレズン"
+    "label": "ウッウ"
   },
   {
     "id": "pokemon:0949",
-    "label": "ストリンダー"
+    "label": "サシカマス"
   },
   {
     "id": "pokemon:0950",
-    "label": "ヤクデ"
+    "label": "カマスジョー"
   },
   {
     "id": "pokemon:0951",
-    "label": "マルヤクデ"
+    "label": "エレズン"
   },
   {
     "id": "pokemon:0952",
-    "label": "タタッコ"
+    "label": "ストリンダー"
   },
   {
     "id": "pokemon:0953",
-    "label": "オトスパス"
+    "label": "ヤクデ"
   },
   {
     "id": "pokemon:0954",
-    "label": "ヤバチャ"
+    "label": "マルヤクデ"
   },
   {
     "id": "pokemon:0955",
-    "label": "ポットデス"
+    "label": "タタッコ"
   },
   {
     "id": "pokemon:0956",
-    "label": "ミブリム"
+    "label": "オトスパス"
   },
   {
     "id": "pokemon:0957",
-    "label": "テブリム"
+    "label": "ヤバチャ"
   },
   {
     "id": "pokemon:0958",
-    "label": "ブリムオン"
+    "label": "ポットデス"
   },
   {
     "id": "pokemon:0959",
-    "label": "ベロバー"
+    "label": "ミブリム"
   },
   {
     "id": "pokemon:0960",
-    "label": "ギモー"
+    "label": "テブリム"
   },
   {
     "id": "pokemon:0961",
-    "label": "オーロンゲ"
+    "label": "ブリムオン"
   },
   {
     "id": "pokemon:0962",
-    "label": "タチフサグマ"
+    "label": "ベロバー"
   },
   {
     "id": "pokemon:0963",
-    "label": "ニャイキング"
+    "label": "ギモー"
   },
   {
     "id": "pokemon:0964",
-    "label": "サニゴーン"
+    "label": "オーロンゲ"
   },
   {
     "id": "pokemon:0965",
-    "label": "ネギガナイト"
+    "label": "タチフサグマ"
   },
   {
     "id": "pokemon:0966",
-    "label": "バリコオル"
+    "label": "ニャイキング"
   },
   {
     "id": "pokemon:0967",
-    "label": "デスバーン"
+    "label": "サニゴーン"
   },
   {
     "id": "pokemon:0968",
-    "label": "マホミル"
+    "label": "ネギガナイト"
   },
   {
     "id": "pokemon:0969",
-    "label": "マホイップ"
+    "label": "バリコオル"
   },
   {
     "id": "pokemon:0970",
-    "label": "タイレーツ"
+    "label": "デスバーン"
   },
   {
     "id": "pokemon:0971",
-    "label": "メガタイレーツ"
+    "label": "マホミル"
   },
   {
     "id": "pokemon:0972",
-    "label": "バチンウニ"
+    "label": "マホイップ"
   },
   {
     "id": "pokemon:0973",
-    "label": "ユキハミ"
+    "label": "タイレーツ"
   },
   {
     "id": "pokemon:0974",
-    "label": "モスノウ"
+    "label": "メガタイレーツ"
   },
   {
     "id": "pokemon:0975",
-    "label": "イシヘンジン"
+    "label": "バチンウニ"
   },
   {
     "id": "pokemon:0976",
-    "label": "コオリッポ"
+    "label": "ユキハミ"
   },
   {
     "id": "pokemon:0977",
-    "label": "イエッサン♂"
+    "label": "モスノウ"
   },
   {
     "id": "pokemon:0978",
-    "label": "イエッサン♀"
+    "label": "イシヘンジン"
   },
   {
     "id": "pokemon:0979",
-    "label": "モルペコ"
+    "label": "コオリッポ"
   },
   {
     "id": "pokemon:0980",
-    "label": "ゾウドウ"
+    "label": "イエッサン"
   },
   {
     "id": "pokemon:0981",
-    "label": "ダイオウドウ"
+    "label": "イエッサン♂"
   },
   {
     "id": "pokemon:0982",
-    "label": "パッチラゴン"
+    "label": "イエッサン♀"
   },
   {
     "id": "pokemon:0983",
-    "label": "パッチルドン"
+    "label": "モルペコ"
   },
   {
     "id": "pokemon:0984",
-    "label": "ウオノラゴン"
+    "label": "ゾウドウ"
   },
   {
     "id": "pokemon:0985",
-    "label": "ウオチルドン"
+    "label": "ダイオウドウ"
   },
   {
     "id": "pokemon:0986",
-    "label": "ジュラルドン"
+    "label": "パッチラゴン"
   },
   {
     "id": "pokemon:0987",
-    "label": "ドラメシヤ"
+    "label": "パッチルドン"
   },
   {
     "id": "pokemon:0988",
-    "label": "ドロンチ"
+    "label": "ウオノラゴン"
   },
   {
     "id": "pokemon:0989",
-    "label": "ドラパルト"
+    "label": "ウオチルドン"
   },
   {
     "id": "pokemon:0990",
-    "label": "ザシアン"
+    "label": "ジュラルドン"
   },
   {
     "id": "pokemon:0991",
-    "label": "ザマゼンタ"
+    "label": "ドラメシヤ"
   },
   {
     "id": "pokemon:0992",
-    "label": "ムゲンダイナ"
+    "label": "ドロンチ"
   },
   {
     "id": "pokemon:0993",
-    "label": "ダクマ"
+    "label": "ドラパルト"
   },
   {
     "id": "pokemon:0994",
-    "label": "ウーラオス"
+    "label": "ザシアン"
   },
   {
     "id": "pokemon:0995",
-    "label": "ザルード"
+    "label": "ザマゼンタ"
   },
   {
     "id": "pokemon:0996",
-    "label": "レジエレキ"
+    "label": "ムゲンダイナ"
   },
   {
     "id": "pokemon:0997",
-    "label": "レジドラゴ"
+    "label": "ダクマ"
   },
   {
     "id": "pokemon:0998",
-    "label": "ブリザポス"
+    "label": "ウーラオス"
   },
   {
     "id": "pokemon:0999",
-    "label": "レイスポス"
+    "label": "ザルード"
   },
   {
     "id": "pokemon:1000",
-    "label": "バドレックス"
+    "label": "レジエレキ"
   },
   {
     "id": "pokemon:1001",
-    "label": "アヤシシ"
+    "label": "レジドラゴ"
   },
   {
     "id": "pokemon:1002",
-    "label": "バサギリ"
+    "label": "ブリザポス"
   },
   {
     "id": "pokemon:1003",
-    "label": "ガチグマ"
+    "label": "レイスポス"
   },
   {
     "id": "pokemon:1004",
-    "label": "イダイトウ♂"
+    "label": "バドレックス"
   },
   {
     "id": "pokemon:1005",
-    "label": "イダイトウ♀"
+    "label": "アヤシシ"
   },
   {
     "id": "pokemon:1006",
-    "label": "オオニューラ"
+    "label": "バサギリ"
   },
   {
     "id": "pokemon:1007",
-    "label": "ハリーマン"
+    "label": "ガチグマ"
   },
   {
     "id": "pokemon:1008",
-    "label": "ラブトロス"
+    "label": "イダイトウ"
   },
   {
     "id": "pokemon:1009",
-    "label": "ニャオハ"
+    "label": "イダイトウ♂"
   },
   {
     "id": "pokemon:1010",
-    "label": "ニャローテ"
+    "label": "イダイトウ♀"
   },
   {
     "id": "pokemon:1011",
-    "label": "マスカーニャ"
+    "label": "オオニューラ"
   },
   {
     "id": "pokemon:1012",
-    "label": "ホゲータ"
+    "label": "ハリーマン"
   },
   {
     "id": "pokemon:1013",
-    "label": "アチゲータ"
+    "label": "ラブトロス"
   },
   {
     "id": "pokemon:1014",
-    "label": "ラウドボーン"
+    "label": "ニャオハ"
   },
   {
     "id": "pokemon:1015",
-    "label": "クワッス"
+    "label": "ニャローテ"
   },
   {
     "id": "pokemon:1016",
-    "label": "ウェルカモ"
+    "label": "マスカーニャ"
   },
   {
     "id": "pokemon:1017",
-    "label": "ウェーニバル"
+    "label": "ホゲータ"
   },
   {
     "id": "pokemon:1018",
-    "label": "グルトン"
+    "label": "アチゲータ"
   },
   {
     "id": "pokemon:1019",
-    "label": "パフュートン♂"
+    "label": "ラウドボーン"
   },
   {
     "id": "pokemon:1020",
-    "label": "パフュートン♀"
+    "label": "クワッス"
   },
   {
     "id": "pokemon:1021",
-    "label": "タマンチュラ"
+    "label": "ウェルカモ"
   },
   {
     "id": "pokemon:1022",
-    "label": "ワナイダー"
+    "label": "ウェーニバル"
   },
   {
     "id": "pokemon:1023",
-    "label": "マメバッタ"
+    "label": "グルトン"
   },
   {
     "id": "pokemon:1024",
-    "label": "エクスレッグ"
+    "label": "パフュートン"
   },
   {
     "id": "pokemon:1025",
-    "label": "パモ"
+    "label": "パフュートン♂"
   },
   {
     "id": "pokemon:1026",
-    "label": "パモット"
+    "label": "パフュートン♀"
   },
   {
     "id": "pokemon:1027",
-    "label": "パーモット"
+    "label": "タマンチュラ"
   },
   {
     "id": "pokemon:1028",
-    "label": "ワッカネズミ"
+    "label": "ワナイダー"
   },
   {
     "id": "pokemon:1029",
-    "label": "イッカネズミ"
+    "label": "マメバッタ"
   },
   {
     "id": "pokemon:1030",
-    "label": "パピモッチ"
+    "label": "エクスレッグ"
   },
   {
     "id": "pokemon:1031",
-    "label": "バウッツェル"
+    "label": "パモ"
   },
   {
     "id": "pokemon:1032",
-    "label": "ミニーブ"
+    "label": "パモット"
   },
   {
     "id": "pokemon:1033",
-    "label": "オリーニョ"
+    "label": "パーモット"
   },
   {
     "id": "pokemon:1034",
-    "label": "オリーヴァ"
+    "label": "ワッカネズミ"
   },
   {
     "id": "pokemon:1035",
-    "label": "イキリンコ"
+    "label": "イッカネズミ"
   },
   {
     "id": "pokemon:1036",
-    "label": "コジオ"
+    "label": "パピモッチ"
   },
   {
     "id": "pokemon:1037",
-    "label": "ジオヅム"
+    "label": "バウッツェル"
   },
   {
     "id": "pokemon:1038",
-    "label": "キョジオーン"
+    "label": "ミニーブ"
   },
   {
     "id": "pokemon:1039",
-    "label": "カルボウ"
+    "label": "オリーニョ"
   },
   {
     "id": "pokemon:1040",
-    "label": "グレンアルマ"
+    "label": "オリーヴァ"
   },
   {
     "id": "pokemon:1041",
-    "label": "ソウブレイズ"
+    "label": "イキリンコ"
   },
   {
     "id": "pokemon:1042",
-    "label": "ズピカ"
+    "label": "コジオ"
   },
   {
     "id": "pokemon:1043",
-    "label": "ハラバリー"
+    "label": "ジオヅム"
   },
   {
     "id": "pokemon:1044",
-    "label": "カイデン"
+    "label": "キョジオーン"
   },
   {
     "id": "pokemon:1045",
-    "label": "タイカイデン"
+    "label": "カルボウ"
   },
   {
     "id": "pokemon:1046",
-    "label": "オラチフ"
+    "label": "グレンアルマ"
   },
   {
     "id": "pokemon:1047",
-    "label": "マフィティフ"
+    "label": "ソウブレイズ"
   },
   {
     "id": "pokemon:1048",
-    "label": "シルシュルー"
+    "label": "ズピカ"
   },
   {
     "id": "pokemon:1049",
-    "label": "タギングル"
+    "label": "ハラバリー"
   },
   {
     "id": "pokemon:1050",
-    "label": "アノクサ"
+    "label": "カイデン"
   },
   {
     "id": "pokemon:1051",
-    "label": "アノホラグサ"
+    "label": "タイカイデン"
   },
   {
     "id": "pokemon:1052",
-    "label": "ノノクラゲ"
+    "label": "オラチフ"
   },
   {
     "id": "pokemon:1053",
-    "label": "リククラゲ"
+    "label": "マフィティフ"
   },
   {
     "id": "pokemon:1054",
-    "label": "ガケガニ"
+    "label": "シルシュルー"
   },
   {
     "id": "pokemon:1055",
-    "label": "カプサイジ"
+    "label": "タギングル"
   },
   {
     "id": "pokemon:1056",
-    "label": "スコヴィラン"
+    "label": "アノクサ"
   },
   {
     "id": "pokemon:1057",
-    "label": "メガスコヴィラン"
+    "label": "アノホラグサ"
   },
   {
     "id": "pokemon:1058",
-    "label": "シガロコ"
+    "label": "ノノクラゲ"
   },
   {
     "id": "pokemon:1059",
-    "label": "ベラカス"
+    "label": "リククラゲ"
   },
   {
     "id": "pokemon:1060",
-    "label": "ヒラヒナ"
+    "label": "ガケガニ"
   },
   {
     "id": "pokemon:1061",
-    "label": "クエスパトラ"
+    "label": "カプサイジ"
   },
   {
     "id": "pokemon:1062",
-    "label": "カヌチャン"
+    "label": "スコヴィラン"
   },
   {
     "id": "pokemon:1063",
-    "label": "ナカヌチャン"
+    "label": "メガスコヴィラン"
   },
   {
     "id": "pokemon:1064",
-    "label": "デカヌチャン"
+    "label": "シガロコ"
   },
   {
     "id": "pokemon:1065",
-    "label": "ウミディグダ"
+    "label": "ベラカス"
   },
   {
     "id": "pokemon:1066",
-    "label": "ウミトリオ"
+    "label": "ヒラヒナ"
   },
   {
     "id": "pokemon:1067",
-    "label": "オトシドリ"
+    "label": "クエスパトラ"
   },
   {
     "id": "pokemon:1068",
-    "label": "ナミイルカ"
+    "label": "カヌチャン"
   },
   {
     "id": "pokemon:1069",
-    "label": "イルカマン"
+    "label": "ナカヌチャン"
   },
   {
     "id": "pokemon:1070",
-    "label": "ブロロン"
+    "label": "デカヌチャン"
   },
   {
     "id": "pokemon:1071",
-    "label": "ブロロローム"
+    "label": "ウミディグダ"
   },
   {
     "id": "pokemon:1072",
-    "label": "モトトカゲ"
+    "label": "ウミトリオ"
   },
   {
     "id": "pokemon:1073",
-    "label": "ミミズズ"
+    "label": "オトシドリ"
   },
   {
     "id": "pokemon:1074",
-    "label": "キラーメ"
+    "label": "ナミイルカ"
   },
   {
     "id": "pokemon:1075",
-    "label": "キラフロル"
+    "label": "イルカマン"
   },
   {
     "id": "pokemon:1076",
-    "label": "メガキラフロル"
+    "label": "ブロロン"
   },
   {
     "id": "pokemon:1077",
-    "label": "ボチ"
+    "label": "ブロロローム"
   },
   {
     "id": "pokemon:1078",
-    "label": "ハカドッグ"
+    "label": "モトトカゲ"
   },
   {
     "id": "pokemon:1079",
-    "label": "カラミンゴ"
+    "label": "ミミズズ"
   },
   {
     "id": "pokemon:1080",
-    "label": "アルクジラ"
+    "label": "キラーメ"
   },
   {
     "id": "pokemon:1081",
-    "label": "ハルクジラ"
+    "label": "キラフロル"
   },
   {
     "id": "pokemon:1082",
-    "label": "ミガルーサ"
+    "label": "メガキラフロル"
   },
   {
     "id": "pokemon:1083",
-    "label": "ヘイラッシャ"
+    "label": "ボチ"
   },
   {
     "id": "pokemon:1084",
-    "label": "シャリタツ"
+    "label": "ハカドッグ"
   },
   {
     "id": "pokemon:1085",
-    "label": "メガシャリタツ"
+    "label": "カラミンゴ"
   },
   {
     "id": "pokemon:1086",
-    "label": "コノヨザル"
+    "label": "アルクジラ"
   },
   {
     "id": "pokemon:1087",
-    "label": "ドオー"
+    "label": "ハルクジラ"
   },
   {
     "id": "pokemon:1088",
-    "label": "リキキリン"
+    "label": "ミガルーサ"
   },
   {
     "id": "pokemon:1089",
-    "label": "ノココッチ"
+    "label": "ヘイラッシャ"
   },
   {
     "id": "pokemon:1090",
-    "label": "ドドゲザン"
+    "label": "シャリタツ"
   },
   {
     "id": "pokemon:1091",
-    "label": "イダイナキバ"
+    "label": "メガシャリタツ"
   },
   {
     "id": "pokemon:1092",
-    "label": "サケブシッポ"
+    "label": "コノヨザル"
   },
   {
     "id": "pokemon:1093",
-    "label": "アラブルタケ"
+    "label": "ドオー"
   },
   {
     "id": "pokemon:1094",
-    "label": "ハバタクカミ"
+    "label": "リキキリン"
   },
   {
     "id": "pokemon:1095",
-    "label": "チヲハウハネ"
+    "label": "ノココッチ"
   },
   {
     "id": "pokemon:1096",
-    "label": "スナノケガワ"
+    "label": "ドドゲザン"
   },
   {
     "id": "pokemon:1097",
-    "label": "テツノワダチ"
+    "label": "イダイナキバ"
   },
   {
     "id": "pokemon:1098",
-    "label": "テツノツツミ"
+    "label": "サケブシッポ"
   },
   {
     "id": "pokemon:1099",
-    "label": "テツノカイナ"
+    "label": "アラブルタケ"
   },
   {
     "id": "pokemon:1100",
-    "label": "テツノコウベ"
+    "label": "ハバタクカミ"
   },
   {
     "id": "pokemon:1101",
-    "label": "テツノドクガ"
+    "label": "チヲハウハネ"
   },
   {
     "id": "pokemon:1102",
-    "label": "テツノイバラ"
+    "label": "スナノケガワ"
   },
   {
     "id": "pokemon:1103",
-    "label": "セビエ"
+    "label": "テツノワダチ"
   },
   {
     "id": "pokemon:1104",
-    "label": "セゴール"
+    "label": "テツノツツミ"
   },
   {
     "id": "pokemon:1105",
-    "label": "セグレイブ"
+    "label": "テツノカイナ"
   },
   {
     "id": "pokemon:1106",
-    "label": "メガセグレイブ"
+    "label": "テツノコウベ"
   },
   {
     "id": "pokemon:1107",
-    "label": "コレクレー"
+    "label": "テツノドクガ"
   },
   {
     "id": "pokemon:1108",
-    "label": "サーフゴー"
+    "label": "テツノイバラ"
   },
   {
     "id": "pokemon:1109",
-    "label": "チオンジェン"
+    "label": "セビエ"
   },
   {
     "id": "pokemon:1110",
-    "label": "パオジアン"
+    "label": "セゴール"
   },
   {
     "id": "pokemon:1111",
-    "label": "ディンルー"
+    "label": "セグレイブ"
   },
   {
     "id": "pokemon:1112",
-    "label": "イーユイ"
+    "label": "メガセグレイブ"
   },
   {
     "id": "pokemon:1113",
-    "label": "トドロクツキ"
+    "label": "コレクレー"
   },
   {
     "id": "pokemon:1114",
-    "label": "テツノブジン"
+    "label": "サーフゴー"
   },
   {
     "id": "pokemon:1115",
-    "label": "コライドン"
+    "label": "チオンジェン"
   },
   {
     "id": "pokemon:1116",
-    "label": "ミライドン"
+    "label": "パオジアン"
   },
   {
     "id": "pokemon:1117",
-    "label": "ウネルミナモ"
+    "label": "ディンルー"
   },
   {
     "id": "pokemon:1118",
-    "label": "テツノイサハ"
+    "label": "イーユイ"
   },
   {
     "id": "pokemon:1119",
-    "label": "カミッチュ"
+    "label": "トドロクツキ"
   },
   {
     "id": "pokemon:1120",
-    "label": "チャデス"
+    "label": "テツノブジン"
   },
   {
     "id": "pokemon:1121",
-    "label": "ヤバソチャ"
+    "label": "コライドン"
   },
   {
     "id": "pokemon:1122",
-    "label": "イイネイヌ"
+    "label": "ミライドン"
   },
   {
     "id": "pokemon:1123",
-    "label": "マシマシラ"
+    "label": "ウネルミナモ"
   },
   {
     "id": "pokemon:1124",
-    "label": "キチキギス"
+    "label": "テツノイサハ"
   },
   {
     "id": "pokemon:1125",
-    "label": "オーガポン"
+    "label": "カミッチュ"
   },
   {
     "id": "pokemon:1126",
-    "label": "ブリジュラス"
+    "label": "チャデス"
   },
   {
     "id": "pokemon:1127",
-    "label": "カミツオロチ"
+    "label": "ヤバソチャ"
   },
   {
     "id": "pokemon:1128",
-    "label": "ウガツホムラ"
+    "label": "イイネイヌ"
   },
   {
     "id": "pokemon:1129",
-    "label": "タケルライコ"
+    "label": "マシマシラ"
   },
   {
     "id": "pokemon:1130",
-    "label": "テツノイワオ"
+    "label": "キチキギス"
   },
   {
     "id": "pokemon:1131",
-    "label": "テツノカシラ"
+    "label": "オーガポン"
   },
   {
     "id": "pokemon:1132",
-    "label": "テラパゴス"
+    "label": "ブリジュラス"
   },
   {
     "id": "pokemon:1133",
+    "label": "カミツオロチ"
+  },
+  {
+    "id": "pokemon:1134",
+    "label": "ウガツホムラ"
+  },
+  {
+    "id": "pokemon:1135",
+    "label": "タケルライコ"
+  },
+  {
+    "id": "pokemon:1136",
+    "label": "テツノイワオ"
+  },
+  {
+    "id": "pokemon:1137",
+    "label": "テツノカシラ"
+  },
+  {
+    "id": "pokemon:1138",
+    "label": "テラパゴス"
+  },
+  {
+    "id": "pokemon:1139",
     "label": "モモワロウ"
   }
 ];

@@ -1,0 +1,146 @@
+[
+  {
+    "id": "hp_loss_life_cost_opponent",
+    "eventType": "damage",
+    "priority": 120,
+    "patterns": [
+      "相手の{pokemon}は命が少し削られた"
+    ],
+    "constants": {
+      "actor.side": "opponent"
+    }
+  },
+  {
+    "id": "hp_loss_life_cost",
+    "eventType": "damage",
+    "priority": 100,
+    "patterns": [
+      "{pokemon}は命が少し削られた"
+    ]
+  },
+  {
+    "id": "damage_recoil_opponent",
+    "eventType": "damage",
+    "priority": 110,
+    "patterns": [
+      "相手の{pokemon}は反動でダメージを受けた"
+    ],
+    "constants": {
+      "actor.side": "opponent"
+    }
+  },
+  {
+    "id": "damage_recoil",
+    "eventType": "damage",
+    "priority": 90,
+    "patterns": [
+      "{pokemon}は反動でダメージを受けた"
+    ]
+  },
+  {
+    "id": "heal_hp_opponent",
+    "eventType": "heal",
+    "priority": 110,
+    "patterns": [
+      "相手の{pokemon}はHPを回復した",
+      "相手の{pokemon}のHPが回復した",
+      "相手の{pokemon}は体力を回復した"
+    ],
+    "constants": {
+      "actor.side": "opponent"
+    }
+  },
+  {
+    "id": "heal_hp",
+    "eventType": "heal",
+    "priority": 90,
+    "patterns": [
+      "{pokemon}はHPを回復した",
+      "{pokemon}のHPが回復した",
+      "{pokemon}は体力を回復した"
+    ]
+  },
+  {
+    "id": "weather_start",
+    "eventType": "weather_start",
+    "priority": 80,
+    "patterns": [
+      "雨が降り始めた",
+      "雨が降ってきた",
+      "日差しが強くなった",
+      "砂あらしが吹き始めた",
+      "雪が降り始めた",
+      "ゆきが降り始めた"
+    ]
+  },
+  {
+    "id": "weather_end",
+    "eventType": "weather_end",
+    "priority": 80,
+    "patterns": [
+      "天気は普通に戻った",
+      "雨が上がった",
+      "砂あらしが止んだ",
+      "雪が止んだ",
+      "ゆきが止んだ"
+    ]
+  },
+  {
+    "id": "terrain_start",
+    "eventType": "terrain_start",
+    "priority": 80,
+    "patterns": [
+      "エレキフィールドになった",
+      "グラスフィールドになった",
+      "ミストフィールドになった",
+      "サイコフィールドになった"
+    ]
+  },
+  {
+    "id": "terrain_end",
+    "eventType": "terrain_end",
+    "priority": 80,
+    "patterns": [
+      "フィールドの効果がなくなった",
+      "フィールドが消えた"
+    ]
+  },
+  {
+    "id": "ability_activate_opponent",
+    "eventType": "ability",
+    "priority": 75,
+    "patterns": [
+      "相手の{pokemon}の特性{text}が発動した"
+    ],
+    "constants": {
+      "actor.side": "opponent"
+    }
+  },
+  {
+    "id": "ability_activate",
+    "eventType": "ability",
+    "priority": 65,
+    "patterns": [
+      "{pokemon}の特性{text}が発動した"
+    ]
+  },
+  {
+    "id": "item_boost_energy_opponent",
+    "eventType": "item",
+    "priority": 70,
+    "patterns": [
+      "相手の{pokemon}のブーストエナジーが発動した"
+    ],
+    "constants": {
+      "actor.side": "opponent"
+    }
+  },
+  {
+    "id": "item_boost_energy",
+    "eventType": "item",
+    "priority": 60,
+    "patterns": [
+      "{pokemon}のブーストエナジーが発動した"
+    ]
+  }
+]

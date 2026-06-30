@@ -8,6 +8,9 @@ import { matchDictionaryEntry } from "../dictionary/fuzzyMatch";
 import { BATTLE_DICTIONARY } from "../dictionary/generatedBattleDictionary";
 import { findDictionarySpans, type DictionarySpan } from "../dictionary/spanMatch";
 import type { DictionaryEntry, DictionaryMatch } from "../dictionary/types";
+import { SEED_TEMPLATE_RULES } from "../templates/seedTemplateRules";
+import { matchTemplateRules } from "../templates/templateMatcher";
+import type { BattleTemplateRule } from "../templates/types";
 
 export interface BattleMessageParseInput {
   rawText: string;
@@ -18,6 +21,10 @@ export interface BattleMessageParseInput {
 export interface BattleMessageDictionary {
   pokemon: readonly DictionaryEntry[];
   moves: readonly DictionaryEntry[];
+}
+
+export interface BattleMessageParserOptions {
+  templateRules?: readonly BattleTemplateRule[];
 }
 
 export interface ParsedBattleEvent {
@@ -574,6 +581,42 @@ function parseMoveEvent(
   return { candidateMatches: [...candidateMatches, ...spanMoveEvent.candidateMatches] };
 }
 
+function parseTemplateEvent(
+  rawText: string,
+  normalizedText: string,
+  matchText: string,
+  ocrConfidence: number | null | undefined,
+  dictionary: BattleMessageDictionary,
+  surfaces: readonly MatchSurface[],
+  templateRules: readonly BattleTemplateRule[],
+) {
+  const templateMatch = matchTemplateRules(surfaces, dictionary, templateRules);
+
+  if (!templateMatch) {
+    return null;
+  }
+
+  return {
+    status: "event",
+    rawText,
+    normalizedText,
+    matchText,
+    event: {
+      type: templateMatch.rule.eventType,
+      actor: templateMatch.actor,
+      move: templateMatch.move,
+      target: templateMatch.target,
+      confidence: combineConfidence(ocrConfidence, [templateMatch.confidenceScore]),
+      classification: createClassification(
+        "template_dictionary",
+        templateMatch.rule.id,
+        [templateMatch.evidence],
+      ),
+    },
+    candidateMatches: [templateMatch.evidence],
+  } satisfies EventParseResult;
+}
+
 function createUnknownResult(
   rawText: string,
   normalizedText: string,
@@ -594,6 +637,7 @@ function createUnknownResult(
 export function parseBattleMessage(
   input: string | BattleMessageParseInput,
   dictionary: BattleMessageDictionary = BATTLE_DICTIONARY,
+  options: BattleMessageParserOptions = {},
 ): BattleMessageParseResult {
   const rawText = typeof input === "string" ? input : input.rawText;
   const ocrConfidence = typeof input === "string" ? null : input.ocrConfidence;
@@ -616,6 +660,20 @@ export function parseBattleMessage(
 
   if (contextEvent) {
     return contextEvent;
+  }
+
+  const templateEvent = parseTemplateEvent(
+    rawText,
+    normalizedText,
+    matchText,
+    ocrConfidence,
+    dictionary,
+    surfaces,
+    options.templateRules ?? SEED_TEMPLATE_RULES,
+  );
+
+  if (templateEvent) {
+    return templateEvent;
   }
 
   const moveEvent = parseMoveEvent(
