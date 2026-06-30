@@ -8,7 +8,19 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { APP_ROUTES } from "./routes";
-import { BATTLE_LOG_SCHEMA_VERSION, type NormalizedRoi } from "../core/events/schema";
+import {
+  BATTLE_LOG_SCHEMA_VERSION,
+  type BattleEvent,
+  type NormalizedRoi,
+  type OCRMessage,
+  type UnknownEvent,
+} from "../core/events/schema";
+import {
+  createSourceFrameRef,
+  createTimelineObservation,
+  shouldSuppressTimelineObservation,
+  type TimelineDeduplicationRecord,
+} from "../core/events/timeline";
 import {
   preprocessMessageImageData,
   type MessagePreprocessOptions,
@@ -26,16 +38,25 @@ const MILESTONES = [
   { id: "M1", label: "キャプチャ表示とROI調整", status: "完了" },
   { id: "M2", label: "フレームサンプリングと前処理preview", status: "完了" },
   { id: "M3", label: "OCR providerとリアルタイムOCRログ", status: "完了" },
-  { id: "M4", label: "正規化、辞書、seed parser", status: "進行中" },
+  { id: "M4", label: "正規化、辞書、seed parser", status: "完了" },
+  { id: "M4.5", label: "seed template matcher", status: "完了" },
+  { id: "M5", label: "Event timeline、unknown bucket、レビュー", status: "進行中" },
 ];
 
+const LIVE_BATTLE_ID = "battle_live";
 const DEFAULT_ROI: NormalizedRoi = { x: 0.06, y: 0.72, w: 0.88, h: 0.2 };
 const MIN_ROI_SIZE = 0.08;
 const NO_AUDIO_DEVICE_ID = "none";
 const DEFAULT_SAMPLE_FPS = 3;
 const MAX_FRAME_BUFFER = 8;
-const MAX_OCR_LOGS = 24;
+const MAX_OCR_LOGS = 30;
+const MAX_OCR_MESSAGES = 80;
+const MAX_TIMELINE_ITEMS = 48;
+const MAX_UNKNOWN_EVENTS = 48;
+const MAX_CROP_EVIDENCE = 80;
+const OCR_RAW_GROUP_LIMIT = 30;
 const MAX_PENDING_OCR_JOBS = 1;
+const TIMELINE_DUPLICATE_WINDOW_MS = 2500;
 const DEFAULT_PREPROCESS_OPTIONS: MessagePreprocessOptions = {
   whiteThreshold: 180,
   background: "black",
@@ -123,6 +144,32 @@ type OCRLogEntry = {
   status: "recognized" | "empty" | "error";
   errorMessage?: string;
 };
+
+type CropEvidence = {
+  sourceFrameRef: string;
+  rawDataUrl: string;
+  processedDataUrl: string;
+  cropWidth: number;
+  cropHeight: number;
+};
+
+type TimelineItem =
+  | { kind: "event"; event: BattleEvent }
+  | { kind: "unknown"; unknown: UnknownEvent };
+type ReviewTab = "timeline" | "resolved" | "unknown" | "ocr" | "system";
+type OCRLogGroup = {
+  key: string;
+  entry: OCRLogEntry;
+  count: number;
+};
+
+const REVIEW_TABS: Array<{ id: ReviewTab; label: string }> = [
+  { id: "timeline", label: "Timeline" },
+  { id: "resolved", label: "解決済み" },
+  { id: "unknown", label: "Unknown" },
+  { id: "ocr", label: "OCR Raw" },
+  { id: "system", label: "System" },
+];
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -224,6 +271,99 @@ function formatParseSummary(result: BattleMessageParseResult) {
   const move = result.event.move ? ` / ${result.event.move}` : "";
 
   return `${formatEventType(result.event.type)} / ${result.event.classification.method}${actor}${move}`;
+}
+
+function formatSide(side: BattleEvent["actor"]["side"]) {
+  if (side === "opponent") {
+    return "相手";
+  }
+
+  if (side === "player") {
+    return "自分";
+  }
+
+  return "side未判定";
+}
+
+function formatEventSummary(event: BattleEvent) {
+  const actor = event.actor.name ? ` / ${formatSide(event.actor.side)} ${event.actor.name}` : "";
+  const move = event.move ? ` / ${event.move}` : "";
+
+  return `${formatEventType(event.type)}${actor}${move}`;
+}
+
+function formatResolvedEventChip(event: BattleEvent) {
+  const actor = event.actor.name ? ` / ${event.actor.name}` : "";
+  const move = event.move ? ` / ${event.move}` : "";
+
+  return `${formatEventType(event.type)} / ${event.classification.method}${actor}${move}`;
+}
+
+function formatReviewStatus(status: UnknownEvent["reviewStatus"]) {
+  return status === "reviewed" ? "reviewed" : "unreviewed";
+}
+
+function getTimelineItemTimestamp(item: TimelineItem) {
+  return item.kind === "event" ? item.event.timestampMs : item.unknown.timestampMs;
+}
+
+function getTimelineItemId(item: TimelineItem) {
+  return item.kind === "event" ? item.event.id : item.unknown.id;
+}
+
+function getTimelineItemSourceFrameRef(item: TimelineItem) {
+  if (item.kind === "event") {
+    return createSourceFrameRef(item.event.source.frameIndex, item.event.source.timestampMs);
+  }
+
+  return item.unknown.sourceFrameRef;
+}
+
+function createOcrLogGroupKey(entry: OCRLogEntry) {
+  if (entry.status === "error") {
+    return `error:${entry.errorMessage ?? ""}`;
+  }
+
+  return [
+    entry.status,
+    entry.matchText,
+    entry.parseResult?.status ?? "",
+    entry.parseResult && entry.parseResult.status === "event" ? entry.parseResult.event.type : "",
+  ].join("|");
+}
+
+function groupOcrLogs(entries: readonly OCRLogEntry[], limit: number) {
+  const groups: OCRLogGroup[] = [];
+
+  for (const entry of entries) {
+    const key = createOcrLogGroupKey(entry);
+    const latestGroup = groups[groups.length - 1];
+
+    if (latestGroup?.key === key) {
+      latestGroup.count += 1;
+      continue;
+    }
+
+    groups.push({ key, entry, count: 1 });
+
+    if (groups.length >= limit) {
+      break;
+    }
+  }
+
+  return groups;
+}
+
+function pruneOldestMapEntries<TKey, TValue>(map: Map<TKey, TValue>, maxSize: number) {
+  while (map.size > maxSize) {
+    const firstKey = map.keys().next().value as TKey | undefined;
+
+    if (firstKey === undefined) {
+      return;
+    }
+
+    map.delete(firstKey);
+  }
 }
 
 function createLog(message: string, level: LogLevel = "info"): SystemLog {
@@ -467,6 +607,9 @@ export function App() {
   const audioSourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const samplingTimerRef = useRef<number | null>(null);
   const ocrWorkerRef = useRef<Worker | null>(null);
+  const cropEvidenceBySourceRef = useRef<Map<string, CropEvidence>>(new Map());
+  const lastTimelineDeduplicationRef = useRef<TimelineDeduplicationRecord | null>(null);
+  const lastAcceptedEventIdRef = useRef<string | null>(null);
   const frameIndexRef = useRef(0);
   const ocrJobCounterRef = useRef(0);
   const pendingOcrJobsRef = useRef(0);
@@ -498,8 +641,14 @@ export function App() {
   const [ocrProgress, setOcrProgress] = useState(0);
   const [pendingOcrJobs, setPendingOcrJobs] = useState(0);
   const [ocrLogs, setOcrLogs] = useState<OCRLogEntry[]>([]);
+  const [ocrMessages, setOcrMessages] = useState<OCRMessage[]>([]);
+  const [battleEvents, setBattleEvents] = useState<BattleEvent[]>([]);
+  const [unknownEvents, setUnknownEvents] = useState<UnknownEvent[]>([]);
+  const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
+  const [suppressedTimelineCount, setSuppressedTimelineCount] = useState(0);
+  const [activeReviewTab, setActiveReviewTab] = useState<ReviewTab>("timeline");
   const [logs, setLogs] = useState<SystemLog[]>(() => [
-    createLog("M4 parser workspace initialized."),
+    createLog("M5 review timeline workspace initialized."),
   ]);
   const roiRef = useRef(roi);
   const mediaModeRef = useRef(mediaMode);
@@ -547,8 +696,57 @@ export function App() {
           lineCount: response.result.lines.length,
           status: hasText ? "recognized" : "empty",
         };
+        const observation = createTimelineObservation({
+          id: response.jobId,
+          battleId: LIVE_BATTLE_ID,
+          rawText: response.result.rawText,
+          parseResult,
+          ocrConfidence: response.result.confidence,
+          lines: response.result.lines,
+          frameIndex: response.meta.frameIndex,
+          timestampMs: response.meta.timestampMs,
+          roi: response.meta.roi,
+          afterEventId: lastAcceptedEventIdRef.current,
+        });
+        const suppressTimelineItem = shouldSuppressTimelineObservation(
+          lastTimelineDeduplicationRef.current,
+          observation.dedupe,
+          TIMELINE_DUPLICATE_WINDOW_MS,
+        );
 
         setOcrLogs((currentLogs) => [nextEntry, ...currentLogs].slice(0, MAX_OCR_LOGS));
+        setOcrMessages((currentMessages) =>
+          [observation.ocrMessage, ...currentMessages].slice(0, MAX_OCR_MESSAGES),
+        );
+
+        if (suppressTimelineItem) {
+          setSuppressedTimelineCount((currentCount) => currentCount + 1);
+
+          if (observation.dedupe) {
+            lastTimelineDeduplicationRef.current = observation.dedupe;
+          }
+        } else {
+          if (observation.event) {
+            lastAcceptedEventIdRef.current = observation.event.id;
+            setBattleEvents((currentEvents) =>
+              [observation.event as BattleEvent, ...currentEvents].slice(0, MAX_TIMELINE_ITEMS),
+            );
+          }
+
+          if (observation.unknown) {
+            setUnknownEvents((currentUnknowns) =>
+              [observation.unknown as UnknownEvent, ...currentUnknowns].slice(
+                0,
+                MAX_UNKNOWN_EVENTS,
+              ),
+            );
+          }
+
+          if (observation.dedupe) {
+            lastTimelineDeduplicationRef.current = observation.dedupe;
+          }
+        }
+
         setOcrProgress(0);
         setOcrStatusLabel(hasText ? "認識済み" : "空候補");
         return;
@@ -652,6 +850,7 @@ export function App() {
       const worker = ensureOcrWorker();
       const nextPendingCount = pendingOcrJobsRef.current + 1;
       const jobId = `ocr-${ocrJobCounterRef.current + 1}`;
+      const sourceFrameRef = createSourceFrameRef(sample.frameIndex, sample.timestampMs);
       const message: OCRWorkerRequest = {
         type: "recognize",
         jobId,
@@ -667,6 +866,14 @@ export function App() {
       };
 
       ocrJobCounterRef.current += 1;
+      cropEvidenceBySourceRef.current.set(sourceFrameRef, {
+        sourceFrameRef,
+        rawDataUrl: sample.rawDataUrl,
+        processedDataUrl: sample.processedDataUrl,
+        cropWidth: sample.cropWidth,
+        cropHeight: sample.cropHeight,
+      });
+      pruneOldestMapEntries(cropEvidenceBySourceRef.current, MAX_CROP_EVIDENCE);
       setPendingOcrJobCount(nextPendingCount);
       setOcrStatusLabel("認識リクエスト送信");
       worker.postMessage(message);
@@ -1127,6 +1334,14 @@ export function App() {
     isOcrEnabledRef.current = true;
     setIsOcrEnabled(true);
     setOcrLogs([]);
+    setOcrMessages([]);
+    setBattleEvents([]);
+    setUnknownEvents([]);
+    setReviewNotes({});
+    setSuppressedTimelineCount(0);
+    cropEvidenceBySourceRef.current.clear();
+    lastTimelineDeduplicationRef.current = null;
+    lastAcceptedEventIdRef.current = null;
     setOcrProgress(0);
     setOcrStatusLabel("OCR準備中");
     addLog("リアルタイムOCRログを開始しました。");
@@ -1181,6 +1396,54 @@ export function App() {
 
   const latestFrameSample = frameSamples[0] ?? null;
   const latestOcrLog = ocrLogs[0] ?? null;
+  const reviewedUnknownCount = useMemo(
+    () => unknownEvents.filter((unknown) => unknown.reviewStatus === "reviewed").length,
+    [unknownEvents],
+  );
+  const timelineItems = useMemo<TimelineItem[]>(
+    () =>
+      [
+        ...battleEvents.map((event) => ({ kind: "event" as const, event })),
+        ...unknownEvents.map((unknown) => ({ kind: "unknown" as const, unknown })),
+      ]
+        .sort(
+          (left, right) =>
+            getTimelineItemTimestamp(right) - getTimelineItemTimestamp(left) ||
+            getTimelineItemId(right).localeCompare(getTimelineItemId(left)),
+        )
+        .slice(0, MAX_TIMELINE_ITEMS),
+    [battleEvents, unknownEvents],
+  );
+  const ocrLogGroups = useMemo(
+    () => groupOcrLogs(ocrLogs, OCR_RAW_GROUP_LIMIT),
+    [ocrLogs],
+  );
+
+  const handleUnknownReview = useCallback(
+    (unknownId: string) => {
+      setUnknownEvents((currentUnknowns) =>
+        currentUnknowns.map((unknown) =>
+          unknown.id === unknownId ? { ...unknown, reviewStatus: "reviewed" } : unknown,
+        ),
+      );
+      addLog(`unknown ${unknownId} をreviewedにしました。`);
+    },
+    [addLog],
+  );
+
+  const handleReviewNoteChange = useCallback((unknownId: string, note: string) => {
+    setReviewNotes((currentNotes) => {
+      const nextNotes = { ...currentNotes };
+
+      if (note.trim().length === 0) {
+        delete nextNotes[unknownId];
+      } else {
+        nextNotes[unknownId] = note;
+      }
+
+      return nextNotes;
+    });
+  }, []);
 
   return (
     <main className="capture-shell">
@@ -1563,19 +1826,287 @@ export function App() {
           </footer>
         </div>
 
-        <aside className="log-panel" aria-labelledby="log-title">
+        <aside className="log-panel review-panel" aria-labelledby="review-title">
           <div className="panel-heading">
-            <h1 id="log-title">ログ</h1>
-            <span>M4</span>
+            <h1 id="review-title">レビュー</h1>
+            <span>M5</span>
           </div>
-          <ol className="log-list" aria-label="system log">
-            {logs.map((log) => (
-              <li key={log.id} className={`log-entry log-entry--${log.level}`}>
-                <time>{log.timestamp}</time>
-                <span>{log.message}</span>
-              </li>
+
+          <div className="review-tabs" role="tablist" aria-label="review views">
+            {REVIEW_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                id={`review-tab-${tab.id}`}
+                aria-controls={`review-panel-${tab.id}`}
+                aria-selected={activeReviewTab === tab.id}
+                className="review-tab"
+                onClick={() => setActiveReviewTab(tab.id)}
+              >
+                <span>{tab.label}</span>
+                {tab.id === "timeline" ? <strong>{timelineItems.length}</strong> : null}
+                {tab.id === "resolved" ? <strong>{battleEvents.length}</strong> : null}
+                {tab.id === "unknown" ? <strong>{unknownEvents.length}</strong> : null}
+                {tab.id === "ocr" ? <strong>{ocrLogGroups.length}</strong> : null}
+                {tab.id === "system" ? <strong>{logs.length}</strong> : null}
+              </button>
             ))}
-          </ol>
+          </div>
+
+          <div className="review-tabpanels">
+            {activeReviewTab === "timeline" ? (
+              <section
+                id="review-panel-timeline"
+                role="tabpanel"
+                aria-labelledby="review-tab-timeline"
+                className="review-section"
+              >
+                <div className="review-section-heading">
+                  <h2>イベントタイムライン</h2>
+                  <span>
+                    {battleEvents.length} events / {unknownEvents.length} unknown /{" "}
+                    {suppressedTimelineCount} dup
+                  </span>
+                </div>
+                <ol className="timeline-list">
+                  {timelineItems.length === 0 ? (
+                    <li className="timeline-empty">タイムライン空</li>
+                  ) : (
+                    timelineItems.map((item) => {
+                      const sourceFrameRef = getTimelineItemSourceFrameRef(item);
+                      const cropEvidence = sourceFrameRef
+                        ? cropEvidenceBySourceRef.current.get(sourceFrameRef)
+                        : null;
+
+                      if (item.kind === "event") {
+                        return (
+                          <li key={item.event.id} className="timeline-entry timeline-entry--event">
+                            <div className="timeline-meta">
+                              <span>#{item.event.source.frameIndex ?? "--"}</span>
+                              <span>{item.event.timestampMs}ms</span>
+                              <span>{item.event.classification.method}</span>
+                            </div>
+                            <p>{formatEventSummary(item.event)}</p>
+                            <div className="timeline-evidence">
+                              {cropEvidence ? (
+                                <img src={cropEvidence.processedDataUrl} alt="イベント元crop" />
+                              ) : null}
+                              <code>{item.event.rawText || "raw empty"}</code>
+                            </div>
+                          </li>
+                        );
+                      }
+
+                      return (
+                        <li
+                          key={item.unknown.id}
+                          className="timeline-entry timeline-entry--unknown"
+                        >
+                          <div className="timeline-meta">
+                            <span>{item.unknown.sourceFrameRef ?? "frame未保存"}</span>
+                            <span>{item.unknown.timestampMs}ms</span>
+                            <span>{formatReviewStatus(item.unknown.reviewStatus)}</span>
+                          </div>
+                          <p>{item.unknown.normalizedText || "unknown text empty"}</p>
+                          <div className="timeline-evidence">
+                            {cropEvidence ? (
+                              <img src={cropEvidence.processedDataUrl} alt="unknown元crop" />
+                            ) : null}
+                            <code>{item.unknown.rawText || "raw empty"}</code>
+                          </div>
+                        </li>
+                      );
+                    })
+                  )}
+                </ol>
+              </section>
+            ) : null}
+
+            {activeReviewTab === "resolved" ? (
+              <section
+                id="review-panel-resolved"
+                role="tabpanel"
+                aria-labelledby="review-tab-resolved"
+                className="review-section"
+              >
+                <div className="review-section-heading">
+                  <h2>解決ログ</h2>
+                  <span>{battleEvents.length} resolved</span>
+                </div>
+                <ol className="resolved-list">
+                  {battleEvents.length === 0 ? (
+                    <li className="timeline-empty">解決ログ空</li>
+                  ) : (
+                    battleEvents.map((event) => {
+                      const sourceFrameRef = createSourceFrameRef(
+                        event.source.frameIndex,
+                        event.source.timestampMs,
+                      );
+                      const cropEvidence = cropEvidenceBySourceRef.current.get(sourceFrameRef);
+
+                      return (
+                        <li key={event.id} className="resolved-entry">
+                          <div className="timeline-meta">
+                            <span>#{event.source.frameIndex ?? "--"}</span>
+                            <span>{event.timestampMs}ms</span>
+                            <span>{formatConfidence(event.confidence)}</span>
+                          </div>
+                          <h3>{event.normalizedText || formatEventSummary(event)}</h3>
+                          <div className="resolved-summary">
+                            <span className="parse-chip parse-chip--event">
+                              {formatResolvedEventChip(event)}
+                            </span>
+                            <span>{event.normalizedText || "normalized empty"}</span>
+                          </div>
+                          <div className="timeline-evidence">
+                            {cropEvidence ? (
+                              <img src={cropEvidence.processedDataUrl} alt="resolved元crop" />
+                            ) : null}
+                            <code>{event.rawText || "raw empty"}</code>
+                          </div>
+                        </li>
+                      );
+                    })
+                  )}
+                </ol>
+              </section>
+            ) : null}
+
+            {activeReviewTab === "unknown" ? (
+              <section
+                id="review-panel-unknown"
+                role="tabpanel"
+                aria-labelledby="review-tab-unknown"
+                className="review-section"
+              >
+                <div className="review-section-heading">
+                  <h2>Unknown bucket</h2>
+                  <span>
+                    {reviewedUnknownCount}/{unknownEvents.length} reviewed
+                  </span>
+                </div>
+                <ol className="unknown-list">
+                  {unknownEvents.length === 0 ? (
+                    <li className="timeline-empty">unknown空</li>
+                  ) : (
+                    unknownEvents.map((unknown) => (
+                      <li key={unknown.id} className="unknown-entry">
+                        <div className="timeline-meta">
+                          <span>{unknown.id}</span>
+                          <span>{formatConfidence(unknown.ocrConfidence)}</span>
+                          <span>{formatReviewStatus(unknown.reviewStatus)}</span>
+                        </div>
+                        <p>{unknown.normalizedText}</p>
+                        <label className="review-note">
+                          <span>修正メモ</span>
+                          <textarea
+                            value={reviewNotes[unknown.id] ?? ""}
+                            aria-label={`修正メモ ${unknown.id}`}
+                            rows={2}
+                            onChange={(event) =>
+                              handleReviewNoteChange(unknown.id, event.target.value)
+                            }
+                          />
+                        </label>
+                        <details className="candidate-details">
+                          <summary>{unknown.candidateMatches.length} candidates</summary>
+                          <code>
+                            {unknown.candidateMatches.length > 0
+                              ? unknown.candidateMatches.join("\n")
+                              : "候補なし"}
+                          </code>
+                        </details>
+                        <button
+                          type="button"
+                          className="review-button"
+                          onClick={() => handleUnknownReview(unknown.id)}
+                          disabled={unknown.reviewStatus === "reviewed"}
+                        >
+                          reviewedにする
+                        </button>
+                      </li>
+                    ))
+                  )}
+                </ol>
+              </section>
+            ) : null}
+
+            {activeReviewTab === "ocr" ? (
+              <section
+                id="review-panel-ocr"
+                role="tabpanel"
+                aria-labelledby="review-tab-ocr"
+                className="review-section"
+              >
+                <div className="review-section-heading">
+                  <h2>OCR Raw</h2>
+                  <span>
+                    {ocrLogGroups.length} groups / {ocrMessages.length} messages
+                  </span>
+                </div>
+                <ol className="ocr-raw-list">
+                  {ocrLogGroups.length === 0 ? (
+                    <li className="timeline-empty">OCR raw空</li>
+                  ) : (
+                    ocrLogGroups.map((group) => (
+                      <li
+                        key={`${group.entry.id}-${group.key}`}
+                        className={`ocr-raw-entry ocr-log-entry--${group.entry.status}`}
+                      >
+                        <div className="timeline-meta">
+                          <span>#{group.entry.frameIndex}</span>
+                          <span>{group.entry.timestampMs}ms</span>
+                          <span>{formatConfidence(group.entry.confidence)}</span>
+                          {group.count > 1 ? <span>x{group.count}</span> : null}
+                        </div>
+                        {group.entry.status === "error" ? (
+                          <p>{group.entry.errorMessage}</p>
+                        ) : (
+                          <>
+                            <p>{group.entry.normalizedText || "テキストなし"}</p>
+                            {group.entry.parseResult ? (
+                              <div className="parse-summary">
+                                <span
+                                  className={`parse-chip parse-chip--${group.entry.parseResult.status}`}
+                                >
+                                  {formatParseSummary(group.entry.parseResult)}
+                                </span>
+                                <span>{group.entry.matchText || "match empty"}</span>
+                              </div>
+                            ) : null}
+                            <code>{group.entry.rawText || "raw empty"}</code>
+                          </>
+                        )}
+                      </li>
+                    ))
+                  )}
+                </ol>
+              </section>
+            ) : null}
+
+            {activeReviewTab === "system" ? (
+              <section
+                id="review-panel-system"
+                role="tabpanel"
+                aria-labelledby="review-tab-system"
+                className="review-section"
+              >
+                <div className="review-section-heading">
+                  <h2>システムログ</h2>
+                  <span>{ocrMessages.length} OCR messages</span>
+                </div>
+                <ol className="log-list">
+                  {logs.map((log) => (
+                    <li key={log.id} className={`log-entry log-entry--${log.level}`}>
+                      <time>{log.timestamp}</time>
+                      <span>{log.message}</span>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            ) : null}
+          </div>
         </aside>
       </section>
 

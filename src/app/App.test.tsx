@@ -110,7 +110,7 @@ describe("App", () => {
     });
   });
 
-  it("renders the M4 parser workspace shell", async () => {
+  it("renders the M5 review timeline workspace shell", async () => {
     render(<App />);
 
     expect(await screen.findByRole("combobox", { name: "映像ソース" })).toHaveValue("video-usb");
@@ -128,16 +128,85 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "開始" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "停止" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "ファイル" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "ログ" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "レビュー" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Timeline/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByRole("tab", { name: /解決済み/ })).toHaveAttribute(
+      "aria-selected",
+      "false",
+    );
+    expect(screen.getByRole("tab", { name: /Unknown/ })).toHaveAttribute(
+      "aria-selected",
+      "false",
+    );
+    expect(screen.getByRole("tab", { name: /OCR Raw/ })).toHaveAttribute(
+      "aria-selected",
+      "false",
+    );
+    expect(screen.getByRole("tab", { name: /System/ })).toHaveAttribute(
+      "aria-selected",
+      "false",
+    );
+    expect(screen.getByRole("heading", { name: "イベントタイムライン" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "リアルタイムOCR" })).toBeInTheDocument();
     expect(screen.getByLabelText("preview placeholder")).toBeInTheDocument();
     expect(screen.getByText("バッファ空")).toBeInTheDocument();
     expect(screen.getByText("OCRログ空")).toBeInTheDocument();
+    expect(screen.getByText("タイムライン空")).toBeInTheDocument();
     expect(screen.getByText(/ROI: x=0.0600 y=0.7200 w=0.8800 h=0.2000/)).toBeInTheDocument();
     expect(screen.getByText("M1 完了")).toBeInTheDocument();
     expect(screen.getByText("M2 完了")).toBeInTheDocument();
     expect(screen.getByText("M3 完了")).toBeInTheDocument();
-    expect(screen.getByText("M4 進行中")).toBeInTheDocument();
+    expect(screen.getByText("M4 完了")).toBeInTheDocument();
+    expect(screen.getByText("M4.5 完了")).toBeInTheDocument();
+    expect(screen.getByText("M5 進行中")).toBeInTheDocument();
+  });
+
+  it("switches review tabs without rendering every log category at once", async () => {
+    render(<App />);
+
+    expect(await screen.findByRole("tab", { name: /Timeline/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.queryByRole("heading", { name: "解決ログ" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Unknown bucket" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "OCR Raw" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "システムログ" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: /解決済み/ }));
+
+    expect(screen.getByRole("tab", { name: /解決済み/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByRole("heading", { name: "解決ログ" })).toBeInTheDocument();
+    expect(screen.getByText("解決ログ空")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "イベントタイムライン" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: /Unknown/ }));
+
+    expect(screen.getByRole("tab", { name: /Unknown/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByRole("heading", { name: "Unknown bucket" })).toBeInTheDocument();
+    expect(screen.getByText("unknown空")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "イベントタイムライン" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: /OCR Raw/ }));
+
+    expect(screen.getByRole("heading", { name: "OCR Raw" })).toBeInTheDocument();
+    expect(screen.getByText("OCR raw空")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Unknown bucket" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: /System/ }));
+
+    expect(screen.getByRole("heading", { name: "システムログ" })).toBeInTheDocument();
+    expect(screen.getByText("M5 review timeline workspace initialized.")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "OCR Raw" })).not.toBeInTheDocument();
   });
 
   it("starts selected video input with audio disabled when no audio is selected", async () => {
@@ -158,6 +227,7 @@ describe("App", () => {
       });
     });
     expect(await screen.findByText("入力(16:9)")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: /System/ }));
     expect(await screen.findByText(/入力を開始しました/)).toBeInTheDocument();
   });
 
@@ -198,6 +268,7 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "ROIを初期位置へ戻す" }));
 
+    fireEvent.click(screen.getByRole("tab", { name: /System/ }));
     expect(screen.getByText("ROIを初期位置へ戻しました。")).toBeInTheDocument();
   });
 });

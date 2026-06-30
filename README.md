@@ -6,7 +6,7 @@ The MVP is intentionally browser-only: capture or loaded media stays local, OCR 
 
 ## Current Status
 
-M4 is in progress on top of the static app foundation:
+M5 is in progress on top of the static app foundation:
 
 - React + TypeScript + Vite
 - Vitest + React Testing Library
@@ -26,9 +26,15 @@ M4 is in progress on top of the static app foundation:
 - Generated Pokemon and move name dictionaries from local `others/` reference lists
 - Safe fuzzy dictionary matching that keeps low-confidence corrections reviewable
 - Seed parser coverage for observed move messages, effectiveness messages, and unknown fallback
-- OCR log entries now show the current parser classification candidate
+- Seed template matcher coverage for frequent damage, heal, weather, terrain, ability, and item messages
+- OCR log entries show the current parser classification candidate
+- Event timeline and unknown bucket views fed by the real-time OCR stream
+- Review tabs for timeline, resolved events, unknowns, raw OCR, and system logs so the live page does not grow with every log category
+- Near-frame duplicate suppression for repeated timeline messages
+- Consecutive same raw OCR messages are grouped in the raw OCR tab
+- Minimal unknown review UI with reviewed status and correction notes
 
-Storage, review timeline, statistics, and champout import are later milestones described in `AGENTS.md`.
+IndexedDB storage, full-log search/export/import, statistics, and champout import are later milestones described in `AGENTS.md`.
 
 ## Commands
 

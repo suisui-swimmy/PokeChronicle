@@ -58,7 +58,7 @@ M4 keeps classification as pure browser-side TypeScript:
 - `src/core/dictionary/seedBattleDictionary.ts` remains a tiny test/support dictionary, not the default parser dictionary.
 - `src/core/dictionary/fuzzyMatch.ts` accepts exact matches and only accepts fuzzy corrections when score, margin, and OCR confidence are high enough.
 - `src/core/parser/seedParser.ts` classifies the first seed rules: observed move messages, effectiveness messages, critical/miss/fail/protect/faint/switch hints, and unknown fallback.
-- OCR log entries display the current parser candidate, but review timeline, persistence, and statistics remain later milestones.
+- OCR log entries display the current parser candidate, while review timeline state is handled in M5.
 
 ## M4.5 Seed Template Boundary
 
@@ -70,7 +70,19 @@ M4.5 adds the template matcher that later champout import can feed:
 - Seed templates can classify damage, healing, weather, terrain, ability, and item activation messages without bundling champout-derived full template dumps.
 - No browser JSON/ZIP import UI, IndexedDB template persistence, or champout-derived full text is included in M4.5.
 
-IndexedDB, review timeline, statistics, and champout import are later milestones.
+## M5 Review Timeline Boundary
+
+M5 turns OCR/parser output into reviewable in-memory evidence:
+
+- `src/core/events/timeline.ts` converts parser results into `OCRMessage`, `BattleEvent`, or `UnknownEvent` records without depending on React.
+- Raw OCR text is kept on every OCR message and timeline item; normalized text remains derived display data.
+- Repeated same-message timeline items within a short near-frame window are suppressed, while raw OCR log entries remain visible.
+- The live review panel is viewport-bounded and tabbed across timeline, resolved events, unknowns, raw OCR, and system logs. It is for monitoring and triage, not for dumping every log category into the page body.
+- Raw OCR display groups consecutive same-message entries in the UI; raw records remain available in memory for later persistence/export work.
+- The app shows source crop preview, parser evidence, and a minimal unknown review state for the active tab.
+- Review notes and reviewed state are in-memory only in M5. IndexedDB persistence, full-log search/export/import, and durable manual corrections remain M6 work.
+
+IndexedDB, statistics, and champout import are later milestones.
 
 ## Runtime Constraints
 
