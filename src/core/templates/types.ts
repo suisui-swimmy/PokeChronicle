@@ -12,6 +12,13 @@ export interface BattleTemplateRule {
   maxGap?: number;
   maxTextCaptureLength?: number;
   confidence?: number;
+  source?: {
+    fileName: string;
+    keyPath: string;
+    labelName: string | null;
+    originalText: string;
+    sourceCommit: string | null;
+  };
 }
 
 export interface TemplateMatchSurface {

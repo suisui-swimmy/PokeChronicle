@@ -40,6 +40,14 @@ import {
   type BattleMessageParseResult,
 } from "../core/parser/seedParser";
 import {
+  createImportedTemplateCollectionFromJsonFiles,
+  parseImportedTemplateCollectionJson,
+  serializeImportedTemplateCollection,
+  type ImportedTemplateCollection,
+} from "../core/templates/importedTemplates";
+import { SEED_TEMPLATE_RULES } from "../core/templates/seedTemplateRules";
+import type { BattleTemplateRule } from "../core/templates/types";
+import {
   createBattleLogDocument,
   createEventsCsv,
   createUnknownsCsv,
@@ -47,8 +55,12 @@ import {
   serializeBattleLogDocument,
 } from "../storage/export";
 import {
+  clearImportedTemplateCollections,
+  isIndexedDbSupported,
   loadLatestBattleLogDocument,
+  loadLatestImportedTemplateCollection,
   saveBattleLogDocument,
+  saveImportedTemplateCollection,
 } from "../storage/indexedDb";
 
 const MILESTONES = [
@@ -60,6 +72,7 @@ const MILESTONES = [
   { id: "M4.5", label: "seed template matcher", status: "完了" },
   { id: "M5", label: "Event timeline、unknown bucket、レビュー", status: "完了" },
   { id: "M6", label: "IndexedDB保存とexport/import基盤", status: "完了" },
+  { id: "M7", label: "champout/template import", status: "完了" },
 ];
 
 const LIVE_BATTLE_ID = "battle_live";
@@ -656,6 +669,7 @@ export function App() {
   const imagePreviewRef = useRef<HTMLImageElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const battleLogImportInputRef = useRef<HTMLInputElement | null>(null);
+  const templateImportInputRef = useRef<HTMLInputElement | null>(null);
   const previewColumnRef = useRef<HTMLDivElement | null>(null);
   const objectUrlRef = useRef<string | null>(null);
   const audioInputStreamRef = useRef<MediaStream | null>(null);
@@ -671,6 +685,7 @@ export function App() {
   const ocrJobCounterRef = useRef(0);
   const pendingOcrJobsRef = useRef(0);
   const activeOcrJobRef = useRef<ActiveOcrJob | null>(null);
+  const templateRulesRef = useRef<readonly BattleTemplateRule[]>(SEED_TEMPLATE_RULES);
   const samplingStartMsRef = useRef(0);
   const isOcrEnabledRef = useRef(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -706,8 +721,11 @@ export function App() {
   const [suppressedTimelineCount, setSuppressedTimelineCount] = useState(0);
   const [activeReviewTab, setActiveReviewTab] = useState<ReviewTab>("timeline");
   const [storageStatusLabel, setStorageStatusLabel] = useState("未保存");
+  const [templateImportStatusLabel, setTemplateImportStatusLabel] = useState("Template未読込");
+  const [importedTemplateCollection, setImportedTemplateCollection] =
+    useState<ImportedTemplateCollection | null>(null);
   const [logs, setLogs] = useState<SystemLog[]>(() => [
-    createLog("M6 storage/export workspace initialized."),
+    createLog("M7 template import workspace initialized."),
   ]);
   const roiRef = useRef(roi);
   const mediaModeRef = useRef(mediaMode);
@@ -717,6 +735,18 @@ export function App() {
   const addLog = useCallback((message: string, level: LogLevel = "info") => {
     setLogs((currentLogs) => [createLog(message, level), ...currentLogs].slice(0, 12));
   }, []);
+
+  const activeTemplateRules = useMemo<readonly BattleTemplateRule[]>(
+    () => [
+      ...SEED_TEMPLATE_RULES,
+      ...(importedTemplateCollection?.rules ?? []),
+    ],
+    [importedTemplateCollection],
+  );
+
+  useEffect(() => {
+    templateRulesRef.current = activeTemplateRules;
+  }, [activeTemplateRules]);
 
   const setPendingOcrJobCount = useCallback((nextCount: number) => {
     const safeCount = Math.max(0, nextCount);
@@ -786,6 +816,8 @@ export function App() {
           rawText: response.result.rawText,
           ocrConfidence: response.result.confidence,
           lines: response.result.lines.map((line) => line.text),
+        }, undefined, {
+          templateRules: templateRulesRef.current,
         });
         const normalizedText = parseResult.normalizedText;
         const hasText = normalizedText.length > 0;
@@ -1034,6 +1066,41 @@ export function App() {
   useEffect(() => {
     upscaleFactorRef.current = upscaleFactor;
   }, [upscaleFactor]);
+
+  useEffect(() => {
+    if (!isIndexedDbSupported()) {
+      return;
+    }
+
+    let isActive = true;
+
+    loadLatestImportedTemplateCollection()
+      .then((collection) => {
+        if (!isActive || !collection) {
+          return;
+        }
+
+        setImportedTemplateCollection(collection);
+        setTemplateImportStatusLabel(
+          `Template復元 ${collection.rules.length} rules`,
+        );
+        addLog(`Template importを復元しました: ${collection.rules.length} rules`);
+      })
+      .catch((error) => {
+        if (!isActive) {
+          return;
+        }
+
+        const message =
+          error instanceof Error ? error.message : "Template importの復元に失敗しました。";
+        setTemplateImportStatusLabel("Template復元失敗");
+        addLog(message, "warn");
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [addLog]);
 
   useEffect(() => {
     const previousScrollRestoration = window.history.scrollRestoration;
@@ -1791,6 +1858,94 @@ export function App() {
     [addLog, restoreBattleLogDocument],
   );
 
+  const handleTemplateImportChange = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const selectedFiles = Array.from(event.target.files ?? []);
+
+      if (selectedFiles.length === 0) {
+        return;
+      }
+
+      try {
+        if (selectedFiles.length === 1) {
+          const [file] = selectedFiles;
+          const text = await file.text();
+          const templatePackResult = parseImportedTemplateCollectionJson(text);
+
+          if (templatePackResult.ok) {
+            setImportedTemplateCollection(templatePackResult.collection);
+            await saveImportedTemplateCollection(templatePackResult.collection);
+            setTemplateImportStatusLabel(
+              `Template読込 ${templatePackResult.collection.rules.length} rules`,
+            );
+            addLog(`Template packを読み込みました: ${file.name}`);
+            return;
+          }
+        }
+
+        const files = await Promise.all(
+          selectedFiles.map(async (file) => ({
+            name: file.name,
+            text: await file.text(),
+          })),
+        );
+        const result = createImportedTemplateCollectionFromJsonFiles(files);
+
+        if (!result.ok) {
+          setTemplateImportStatusLabel("Template読込失敗");
+          addLog(result.error, "error");
+          return;
+        }
+
+        setImportedTemplateCollection(result.collection);
+        await saveImportedTemplateCollection(result.collection);
+        setTemplateImportStatusLabel(`Template読込 ${result.collection.rules.length} rules`);
+        result.warnings.forEach((warning) => addLog(warning, "warn"));
+        addLog(
+          `champout JSONを読み込みました: ${result.collection.stats.sourceFileCount} files / ${result.collection.rules.length} rules`,
+        );
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Template JSONの読込に失敗しました。";
+        setTemplateImportStatusLabel("Template読込失敗");
+        addLog(message, "error");
+      } finally {
+        event.target.value = "";
+      }
+    },
+    [addLog],
+  );
+
+  const handleExportTemplateImport = useCallback(() => {
+    if (!importedTemplateCollection) {
+      setTemplateImportStatusLabel("Template未読込");
+      addLog("出力できるTemplate importがありません。", "warn");
+      return;
+    }
+
+    downloadTextFile(
+      `pokechronicle-template-import-${createFileStamp()}.json`,
+      serializeImportedTemplateCollection(importedTemplateCollection),
+      "application/json;charset=utf-8",
+    );
+    setTemplateImportStatusLabel(`Template出力 ${formatStorageTimestamp()}`);
+    addLog("Template import JSONを出力しました。");
+  }, [addLog, importedTemplateCollection]);
+
+  const handleClearTemplateImport = useCallback(async () => {
+    try {
+      await clearImportedTemplateCollections();
+      setImportedTemplateCollection(null);
+      setTemplateImportStatusLabel("Template削除済み");
+      addLog("Template importを削除しました。");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Template importの削除に失敗しました。";
+      setTemplateImportStatusLabel("Template削除失敗");
+      addLog(message, "error");
+    }
+  }, [addLog]);
+
   const handleUnknownReview = useCallback(
     (unknownId: string) => {
       setUnknownEvents((currentUnknowns) =>
@@ -2202,9 +2357,11 @@ export function App() {
           <div className="panel-heading">
             <div>
               <h1 id="review-title">レビュー</h1>
-              <p>{storageStatusLabel}</p>
+              <p>
+                {storageStatusLabel} / {templateImportStatusLabel}
+              </p>
             </div>
-            <span>M6</span>
+            <span>M7</span>
           </div>
 
           <div className="storage-actions" aria-label="battle log storage actions">
@@ -2237,6 +2394,47 @@ export function App() {
               accept="application/json,.json"
               onChange={(event) => void handleBattleLogImportChange(event)}
             />
+          </div>
+
+          <div className="storage-actions template-actions" aria-label="template import actions">
+            <button
+              type="button"
+              className="storage-button"
+              onClick={() => templateImportInputRef.current?.click()}
+            >
+              Template読込
+            </button>
+            <button
+              type="button"
+              className="storage-button"
+              onClick={handleExportTemplateImport}
+              disabled={!importedTemplateCollection}
+            >
+              Template出力
+            </button>
+            <button
+              type="button"
+              className="storage-button"
+              onClick={() => void handleClearTemplateImport()}
+              disabled={!importedTemplateCollection}
+            >
+              Template削除
+            </button>
+            <input
+              ref={templateImportInputRef}
+              className="visually-hidden"
+              type="file"
+              accept="application/json,.json"
+              multiple
+              onChange={(event) => void handleTemplateImportChange(event)}
+            />
+          </div>
+
+          <div className="template-import-summary" aria-label="template import summary">
+            <span>{SEED_TEMPLATE_RULES.length} seed</span>
+            <span>{importedTemplateCollection?.stats.sourceFileCount ?? 0} files</span>
+            <span>{importedTemplateCollection?.stats.battleCandidateCount ?? 0} candidates</span>
+            <span>{activeTemplateRules.length} active</span>
           </div>
 
           <div className="review-tabs" role="tablist" aria-label="review views">

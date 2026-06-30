@@ -6,7 +6,7 @@ The MVP is intentionally browser-only: capture or loaded media stays local, OCR 
 
 ## Current Status
 
-M6 is complete on top of the static app foundation:
+M7 is complete on top of the static app foundation:
 
 - React + TypeScript + Vite
 - Vitest + React Testing Library
@@ -37,8 +37,11 @@ M6 is complete on top of the static app foundation:
 - Schema-versioned Battle Log JSON export/import
 - Events CSV and Unknown messages CSV export
 - Bounded representative crop evidence in saved/exported logs
+- Browser-side champout/template JSON import
+- Imported template rules are stored in IndexedDB and combined with seed rules for live parsing
+- Imported template pack JSON export/delete controls
 
-Statistics and champout/template import are later milestones described in `AGENTS.md`.
+Statistics and MVP acceptance polish are later milestones described in `AGENTS.md`.
 
 ## Commands
 
@@ -60,6 +63,12 @@ npm run preview
 - No default cloud upload.
 - No runtime imports from `others/`.
 - No official assets, ROM dumps, official screenshots, or unverified redistributed battle-text dumps in the repository.
+
+## Template Import
+
+Use `Template読込` in the review panel to select one or more user-controlled champout-style JSON files, such as `rom-txt/jpn/btl_std.json` or `rom-txt/jpn/btl_attack_syn.json`.
+
+The app extracts text in the browser, generates safe template candidates, stores only the imported template pack in IndexedDB, and can export/delete that pack. ZIP import is not implemented yet; select JSON files directly.
 
 ## GitHub Pages Base Path
 

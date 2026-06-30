@@ -92,7 +92,20 @@ M6 makes the review data durable without adding a runtime server:
 - Events CSV and Unknown messages CSV exports are derived from the same Battle Log document. Unknown CSV includes review notes from durable manual corrections.
 - The app saves only bounded ROI crop evidence. It never stores the full video file or an unbounded frame stream.
 
-Statistics and champout import are later milestones.
+## M7 Template Import Boundary
+
+M7 adds user-selected champout-style JSON import without bundling champout text in the repository:
+
+- `src/core/templates/importedTemplates.ts` parses selected JSON text, recursively extracts Japanese strings, infers safe battle event types, and turns those candidates into `BattleTemplateRule` entries for the existing matcher.
+- `src/storage/indexedDb.ts` stores the latest imported template collection in a separate IndexedDB object store from Battle Logs.
+- The review panel exposes `Template読込`, `Template出力`, and `Template削除`.
+- Imported rules are combined with `SEED_TEMPLATE_RULES` and passed to `parseBattleMessage()` for live OCR classification.
+- Imported rule metadata keeps source file name, key path, label name, and original text for review/export provenance.
+- Runtime code still does not read from `others/`; the user must select JSON files in the browser.
+
+ZIP import is deferred. M7 supports selecting multiple JSON files directly.
+
+Statistics are a later milestone.
 
 ## Runtime Constraints
 

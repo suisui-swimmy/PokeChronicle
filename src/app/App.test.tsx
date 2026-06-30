@@ -115,7 +115,7 @@ describe("App", () => {
     });
   });
 
-  it("renders the M6 storage and review workspace shell", async () => {
+  it("renders the M7 template import and review workspace shell", async () => {
     render(<App />);
 
     expect(await screen.findByRole("combobox", { name: "映像ソース" })).toHaveValue("video-usb");
@@ -134,13 +134,19 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "停止" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "ファイル" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "レビュー" })).toBeInTheDocument();
-    expect(screen.getByText("未保存")).toBeInTheDocument();
+    expect(screen.getByText(/未保存/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "保存" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "読込" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "JSON" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "JSON読込" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Events CSV" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Unknown CSV" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Template読込" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Template出力" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Template削除" })).toBeDisabled();
+    expect(screen.getByText(/Template未読込/)).toBeInTheDocument();
+    expect(screen.getByLabelText("template import summary")).toHaveTextContent("0 files");
+    expect(screen.getByLabelText("template import summary")).toHaveTextContent("0 candidates");
     expect(screen.getByRole("tab", { name: /Timeline/ })).toHaveAttribute(
       "aria-selected",
       "true",
@@ -175,6 +181,7 @@ describe("App", () => {
     expect(screen.getByText("M4.5 完了")).toBeInTheDocument();
     expect(screen.getByText("M5 完了")).toBeInTheDocument();
     expect(screen.getByText("M6 完了")).toBeInTheDocument();
+    expect(screen.getByText("M7 完了")).toBeInTheDocument();
   });
 
   it("switches review tabs without rendering every log category at once", async () => {
@@ -218,7 +225,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("tab", { name: /System/ }));
 
     expect(screen.getByRole("heading", { name: "システムログ" })).toBeInTheDocument();
-    expect(screen.getByText("M6 storage/export workspace initialized.")).toBeInTheDocument();
+    expect(screen.getByText("M7 template import workspace initialized.")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "OCR Raw" })).not.toBeInTheDocument();
   });
 

@@ -1,6 +1,9 @@
 # Data Import
 
-M6 supports browser-side Battle Log JSON import/export for restoring user-owned analysis logs. Browser-side champout/template import is still a later milestone.
+M7 supports two browser-side import/export paths:
+
+- Battle Log JSON import/export for restoring user-owned analysis logs.
+- User-selected champout-style JSON import for template rules.
 
 ## Generated name dictionaries
 
@@ -32,7 +35,30 @@ M4.5 uses a small checked-in rule file for frequent messages that do not include
 - `data/rules/event_rules.ja.json`
 - `src/core/templates/templateMatcher.ts`
 
-These rules are hand-written seed templates, not champout-derived full dumps. They cover representative damage, healing, weather, terrain, ability, and item activation messages. Future champout import should feed the same matcher through user-selected files and browser storage.
+These rules are hand-written seed templates, not champout-derived full dumps. They cover representative damage, healing, weather, terrain, ability, and item activation messages.
+
+## champout/template import
+
+Use `Template読込` in the review panel and select one or more JSON files controlled by the user. Typical files are under a local champout checkout, for example:
+
+- `rom-txt/jpn/btl_std.json`
+- `rom-txt/jpn/btl_attack_syn.json`
+- other `rom-txt/jpn/btl_*.json` files
+
+The app does not import `others/champout` at runtime. The browser reads only files selected in the file picker.
+
+The importer:
+
+- Parses selected JSON files in the browser.
+- Recursively extracts Japanese text strings, including `OriginalText` values.
+- Prioritizes battle-related source names, labels, and message keywords.
+- Converts numbered placeholders such as `{0}` / `{1}` into matcher placeholders such as `{pokemon}`, `{move}`, and `{text}` when the event type can be inferred safely.
+- Keeps source file name, key path, label name, and original text as rule metadata.
+- Stores the generated template pack in IndexedDB.
+- Combines imported rules with checked-in seed rules for live OCR parsing.
+- Exports or deletes the imported template pack from the review panel.
+
+ZIP import is not implemented in M7. Select JSON files directly for now.
 
 ## Battle Log export/import
 
@@ -53,6 +79,6 @@ The app validates `schemaVersion` on import, restores the review state, and save
 
 Events and unknown messages can also be exported as CSV. Unknown CSV includes manual review notes when present.
 
-Future milestones will add browser-side import for user-selected champout-derived JSON or ZIP files. Imported text templates must be stored in browser storage or user-controlled exports unless redistribution is explicitly confirmed.
+Imported text templates stay in browser storage or user-controlled exports unless redistribution is explicitly confirmed.
 
 Runtime code must not import from `others/`.

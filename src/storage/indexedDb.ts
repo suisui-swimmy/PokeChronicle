@@ -1,13 +1,21 @@
 import type { BattleLogDocument } from "../core/events/schema";
+import type { ImportedTemplateCollection } from "../core/templates/importedTemplates";
 
 const DATABASE_NAME = "pokechronicle";
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 2;
 const BATTLE_LOG_STORE = "battleLogs";
+const TEMPLATE_IMPORT_STORE = "templateImports";
 
 export interface StoredBattleLogRecord {
   id: string;
   updatedAt: string;
   document: BattleLogDocument;
+}
+
+export interface StoredTemplateImportRecord {
+  id: string;
+  importedAt: string;
+  collection: ImportedTemplateCollection;
 }
 
 export interface IndexedDbAdapterOptions {
@@ -60,6 +68,14 @@ async function openDatabase(options?: IndexedDbAdapterOptions) {
 
     if (store && !store.indexNames.contains("updatedAt")) {
       store.createIndex("updatedAt", "updatedAt");
+    }
+
+    const templateStore = database.objectStoreNames.contains(TEMPLATE_IMPORT_STORE)
+      ? transaction?.objectStore(TEMPLATE_IMPORT_STORE)
+      : database.createObjectStore(TEMPLATE_IMPORT_STORE, { keyPath: "id" });
+
+    if (templateStore && !templateStore.indexNames.contains("importedAt")) {
+      templateStore.createIndex("importedAt", "importedAt");
     }
   });
 
@@ -125,6 +141,66 @@ export async function loadLatestBattleLogDocument(options?: IndexedDbAdapterOpti
     await transactionDone(transaction);
 
     return record?.document ?? null;
+  } finally {
+    database.close();
+  }
+}
+
+export async function saveImportedTemplateCollection(
+  collection: ImportedTemplateCollection,
+  options?: IndexedDbAdapterOptions,
+) {
+  const database = await openDatabase(options);
+  const record: StoredTemplateImportRecord = {
+    id: collection.id,
+    importedAt: collection.importedAt,
+    collection,
+  };
+
+  try {
+    const transaction = database.transaction(TEMPLATE_IMPORT_STORE, "readwrite");
+    transaction.objectStore(TEMPLATE_IMPORT_STORE).put(record);
+    await transactionDone(transaction);
+  } finally {
+    database.close();
+  }
+
+  return record;
+}
+
+export async function loadLatestImportedTemplateCollection(
+  options?: IndexedDbAdapterOptions,
+) {
+  const database = await openDatabase(options);
+
+  try {
+    const transaction = database.transaction(TEMPLATE_IMPORT_STORE, "readonly");
+    const store = transaction.objectStore(TEMPLATE_IMPORT_STORE);
+    const index = store.index("importedAt");
+    const request = index.openCursor(null, "prev");
+    const record = await new Promise<StoredTemplateImportRecord | null>((resolve, reject) => {
+      request.addEventListener("success", () => {
+        resolve((request.result?.value as StoredTemplateImportRecord | undefined) ?? null);
+      });
+      request.addEventListener("error", () =>
+        reject(request.error ?? new Error("IndexedDB cursor error")),
+      );
+    });
+    await transactionDone(transaction);
+
+    return record?.collection ?? null;
+  } finally {
+    database.close();
+  }
+}
+
+export async function clearImportedTemplateCollections(options?: IndexedDbAdapterOptions) {
+  const database = await openDatabase(options);
+
+  try {
+    const transaction = database.transaction(TEMPLATE_IMPORT_STORE, "readwrite");
+    transaction.objectStore(TEMPLATE_IMPORT_STORE).clear();
+    await transactionDone(transaction);
   } finally {
     database.close();
   }

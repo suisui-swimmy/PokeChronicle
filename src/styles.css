@@ -745,7 +745,7 @@ button:disabled {
 }
 
 .review-panel {
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto auto minmax(0, 1fr);
   gap: 12px;
 }
 
@@ -805,6 +805,43 @@ button:disabled {
   border-color: rgb(32 217 152 / 0.36);
   outline: none;
   color: var(--green);
+}
+
+.storage-button:disabled {
+  border-color: var(--border-soft);
+  color: var(--faint);
+  cursor: not-allowed;
+  opacity: 0.64;
+}
+
+.storage-button:disabled:hover,
+.storage-button:disabled:focus-visible {
+  color: var(--faint);
+}
+
+.template-actions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.template-import-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+  min-width: 0;
+}
+
+.template-import-summary span {
+  min-width: 0;
+  padding: 6px 7px;
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  color: var(--muted);
+  background: #0f1218;
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .review-tabs {
@@ -1158,7 +1195,7 @@ button:disabled {
   }
 
   .review-panel {
-    grid-template-rows: auto auto auto minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto auto minmax(0, 1fr);
   }
 }
 
@@ -1242,6 +1279,10 @@ button:disabled {
   }
 
   .storage-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .template-import-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
