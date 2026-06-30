@@ -73,7 +73,7 @@ $env:VITE_BASE_PATH="/"; npm run build; npm run preview
 
 ## OCR Assets
 
-Tesseract.js runs in a Web Worker. By default it may download worker/core/language assets from its upstream static CDN and cache language data in the browser; battle images are not uploaded.
+Tesseract.js runs in a Web Worker. By default the app loads language data from `https://tessdata.projectnaptha.com/4.0.0` and lets Tesseract.js cache it in the browser; battle images are not uploaded.
 
 If you host those assets yourself, relative paths are resolved against `import.meta.env.BASE_URL`:
 

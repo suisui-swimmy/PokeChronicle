@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createTesseractWorkerConfig, resolveTesseractAssetPath } from "./tesseractConfig";
+import {
+  DEFAULT_TESSERACT_LANG_PATH,
+  createTesseractWorkerConfig,
+  resolveTesseractAssetPath,
+} from "./tesseractConfig";
 
 describe("tesseractConfig", () => {
   it("resolves relative asset paths against the Vite base path", () => {
@@ -14,12 +18,23 @@ describe("tesseractConfig", () => {
     );
   });
 
-  it("uses Japanese OCR by default", () => {
+  it("uses Japanese OCR and a stable language data path by default", () => {
     expect(createTesseractWorkerConfig({}, "/PokeChronicle/")).toEqual({
       language: "jpn",
       workerPath: undefined,
       corePath: undefined,
-      langPath: undefined,
+      langPath: DEFAULT_TESSERACT_LANG_PATH,
     });
+  });
+
+  it("allows language data path overrides", () => {
+    expect(
+      createTesseractWorkerConfig(
+        {
+          VITE_TESSERACT_LANG_PATH: "tessdata",
+        },
+        "/PokeChronicle/",
+      ).langPath,
+    ).toBe("/PokeChronicle/tessdata");
   });
 });

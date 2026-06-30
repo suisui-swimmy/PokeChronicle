@@ -46,7 +46,8 @@ M3 moves recognition behind an OCR provider interface and keeps OCR work off the
 - `src/workers/ocr.worker.ts` owns the Tesseract.js provider and receives preprocessed ROI images from the app.
 - The app keeps raw OCR text and derives normalized display text without overwriting the raw value.
 - OCR jobs are bounded to one pending recognition at a time so slow recognition does not build an unbounded queue.
-- Tesseract worker/core/language asset paths can be supplied with `VITE_TESSERACT_WORKER_PATH`, `VITE_TESSERACT_CORE_PATH`, and `VITE_TESSERACT_LANG_PATH`; relative values are resolved against the Vite base path.
+- Tesseract language data defaults to `https://tessdata.projectnaptha.com/4.0.0` so Japanese OCR does not depend on the jsDelivr package fallback path; worker/core/language asset paths can still be supplied with `VITE_TESSERACT_WORKER_PATH`, `VITE_TESSERACT_CORE_PATH`, and `VITE_TESSERACT_LANG_PATH`.
+- Relative `VITE_TESSERACT_*` values are resolved against the Vite base path.
 
 ## M4 Parser Boundary
 

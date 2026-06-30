@@ -30,7 +30,11 @@ import {
 } from "../core/preprocess/messagePreprocess";
 import { mapDisplayRoiToSourceRect } from "../core/media/roiMapping";
 import { createTesseractWorkerConfig } from "../core/ocr/tesseractConfig";
-import type { OCRWorkerRequest, OCRWorkerResponse } from "../core/ocr/workerMessages";
+import type {
+  OCRWorkerJobMeta,
+  OCRWorkerRequest,
+  OCRWorkerResponse,
+} from "../core/ocr/workerMessages";
 import {
   parseBattleMessage,
   type BattleMessageParseResult,
@@ -72,6 +76,7 @@ const MAX_UNKNOWN_EVENTS = 48;
 const MAX_CROP_EVIDENCE = 80;
 const OCR_RAW_GROUP_LIMIT = 30;
 const MAX_PENDING_OCR_JOBS = 1;
+const OCR_JOB_TIMEOUT_MS = 60_000;
 const TIMELINE_DUPLICATE_WINDOW_MS = 2500;
 const DEFAULT_PREPROCESS_OPTIONS: MessagePreprocessOptions = {
   whiteThreshold: 180,
@@ -159,6 +164,12 @@ type OCRLogEntry = {
   lineCount: number;
   status: "recognized" | "empty" | "error";
   errorMessage?: string;
+};
+
+type ActiveOcrJob = {
+  jobId: string;
+  meta: OCRWorkerJobMeta;
+  timeoutId: number;
 };
 
 type CropEvidence = {
@@ -659,6 +670,7 @@ export function App() {
   const frameIndexRef = useRef(0);
   const ocrJobCounterRef = useRef(0);
   const pendingOcrJobsRef = useRef(0);
+  const activeOcrJobRef = useRef<ActiveOcrJob | null>(null);
   const samplingStartMsRef = useRef(0);
   const isOcrEnabledRef = useRef(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -712,6 +724,51 @@ export function App() {
     setPendingOcrJobs(safeCount);
   }, []);
 
+  const clearActiveOcrJob = useCallback((jobId?: string) => {
+    const activeJob = activeOcrJobRef.current;
+
+    if (!activeJob || (jobId && activeJob.jobId !== jobId)) {
+      return;
+    }
+
+    window.clearTimeout(activeJob.timeoutId);
+    activeOcrJobRef.current = null;
+  }, []);
+
+  const appendOcrErrorLog = useCallback(
+    (jobId: string, meta: OCRWorkerJobMeta | undefined, message: string) => {
+      const errorEntry: OCRLogEntry = {
+        id: jobId,
+        frameIndex: meta?.frameIndex ?? 0,
+        timestampMs: meta?.timestampMs ?? 0,
+        rawText: "",
+        normalizedText: "",
+        matchText: "",
+        confidence: null,
+        lineCount: 0,
+        status: "error",
+        errorMessage: message,
+      };
+
+      setOcrLogs((currentLogs) => [errorEntry, ...currentLogs].slice(0, MAX_OCR_LOGS));
+    },
+    [],
+  );
+
+  const resetOcrWorkerAfterFailure = useCallback(
+    (message: string, activeJob?: ActiveOcrJob | null) => {
+      clearActiveOcrJob(activeJob?.jobId);
+      const worker = ocrWorkerRef.current;
+      ocrWorkerRef.current = null;
+      worker?.terminate();
+      setPendingOcrJobCount(0);
+      setOcrProgress(0);
+      setOcrStatusLabel("OCR worker再起動待ち");
+      addLog(message, "error");
+    },
+    [addLog, clearActiveOcrJob, setPendingOcrJobCount],
+  );
+
   const handleOcrWorkerMessage = useCallback(
     (event: MessageEvent<OCRWorkerResponse>) => {
       const response = event.data;
@@ -723,6 +780,7 @@ export function App() {
       }
 
       if (response.type === "result") {
+        clearActiveOcrJob(response.jobId);
         setPendingOcrJobCount(pendingOcrJobsRef.current - 1);
         const parseResult = parseBattleMessage({
           rawText: response.result.rawText,
@@ -800,30 +858,22 @@ export function App() {
       }
 
       if (response.type === "error") {
+        clearActiveOcrJob(response.jobId);
         setPendingOcrJobCount(pendingOcrJobsRef.current - 1);
         setOcrProgress(0);
         setOcrStatusLabel("OCR失敗");
-        const errorEntry: OCRLogEntry = {
-          id: response.jobId,
-          frameIndex: response.meta?.frameIndex ?? 0,
-          timestampMs: response.meta?.timestampMs ?? 0,
-          rawText: "",
-          normalizedText: "",
-          matchText: "",
-          confidence: null,
-          lineCount: 0,
-          status: "error",
-          errorMessage: response.message,
-        };
-        setOcrLogs((currentLogs) => [
-          errorEntry,
-          ...currentLogs,
-        ].slice(0, MAX_OCR_LOGS));
+        appendOcrErrorLog(response.jobId, response.meta, response.message);
+
+        if (response.recoverable === false) {
+          resetOcrWorkerAfterFailure(`OCR workerが停止しました: ${response.message}`);
+        }
+
         addLog(`OCRに失敗しました: ${response.message}`, "error");
         return;
       }
 
       if (response.type === "terminated") {
+        clearActiveOcrJob();
         ocrWorkerRef.current?.terminate();
         ocrWorkerRef.current = null;
         setPendingOcrJobCount(0);
@@ -831,7 +881,13 @@ export function App() {
         setOcrStatusLabel("停止済み");
       }
     },
-    [addLog, setPendingOcrJobCount],
+    [
+      addLog,
+      appendOcrErrorLog,
+      clearActiveOcrJob,
+      resetOcrWorkerAfterFailure,
+      setPendingOcrJobCount,
+    ],
   );
 
   const ensureOcrWorker = useCallback(() => {
@@ -843,16 +899,26 @@ export function App() {
       type: "module",
     });
     worker.onmessage = handleOcrWorkerMessage;
-    worker.onerror = () => {
-      setPendingOcrJobCount(0);
-      setOcrProgress(0);
-      setOcrStatusLabel("OCR worker失敗");
-      addLog("OCR workerの起動または実行に失敗しました。", "error");
+    worker.onerror = (event) => {
+      const activeJob = activeOcrJobRef.current;
+      const message = event.message || "OCR workerの起動または実行に失敗しました。";
+      if (activeJob) {
+        appendOcrErrorLog(activeJob.jobId, activeJob.meta, message);
+      }
+      resetOcrWorkerAfterFailure(`OCR workerの起動または実行に失敗しました: ${message}`, activeJob);
+    };
+    worker.onmessageerror = () => {
+      const activeJob = activeOcrJobRef.current;
+      const message = "OCR workerからの応答を読み取れませんでした。";
+      if (activeJob) {
+        appendOcrErrorLog(activeJob.jobId, activeJob.meta, message);
+      }
+      resetOcrWorkerAfterFailure(message, activeJob);
     };
     ocrWorkerRef.current = worker;
 
     return worker;
-  }, [addLog, handleOcrWorkerMessage, setPendingOcrJobCount]);
+  }, [appendOcrErrorLog, handleOcrWorkerMessage, resetOcrWorkerAfterFailure]);
 
   const requestOcrWorkerShutdown = useCallback(() => {
     if (!ocrWorkerRef.current) {
@@ -871,6 +937,7 @@ export function App() {
     (message?: string) => {
       isOcrEnabledRef.current = false;
       setIsOcrEnabled(false);
+      clearActiveOcrJob();
       setPendingOcrJobCount(0);
       setOcrProgress(0);
       setOcrStatusLabel("停止中");
@@ -880,7 +947,7 @@ export function App() {
         addLog(message);
       }
     },
-    [addLog, requestOcrWorkerShutdown, setPendingOcrJobCount],
+    [addLog, clearActiveOcrJob, requestOcrWorkerShutdown, setPendingOcrJobCount],
   );
 
   const queueOcrRecognition = useCallback(
@@ -890,7 +957,6 @@ export function App() {
       }
 
       if (pendingOcrJobsRef.current >= MAX_PENDING_OCR_JOBS) {
-        setOcrStatusLabel("OCR処理待ち");
         return;
       }
 
@@ -898,21 +964,40 @@ export function App() {
       const nextPendingCount = pendingOcrJobsRef.current + 1;
       const jobId = `ocr-${ocrJobCounterRef.current + 1}`;
       const sourceFrameRef = createSourceFrameRef(sample.frameIndex, sample.timestampMs);
+      const meta: OCRWorkerJobMeta = {
+        cropHeight: sample.cropHeight,
+        cropWidth: sample.cropWidth,
+        frameIndex: sample.frameIndex,
+        roi: sample.roi,
+        timestampMs: sample.timestampMs,
+      };
       const message: OCRWorkerRequest = {
         type: "recognize",
         jobId,
         imageDataUrl: sample.processedDataUrl,
-        meta: {
-          cropHeight: sample.cropHeight,
-          cropWidth: sample.cropWidth,
-          frameIndex: sample.frameIndex,
-          roi: sample.roi,
-          timestampMs: sample.timestampMs,
-        },
+        meta,
         config: OCR_WORKER_CONFIG,
       };
+      const timeoutId = window.setTimeout(() => {
+        const activeJob = activeOcrJobRef.current;
+
+        if (!activeJob || activeJob.jobId !== jobId) {
+          return;
+        }
+
+        appendOcrErrorLog(
+          activeJob.jobId,
+          activeJob.meta,
+          `OCR job timed out after ${Math.round(OCR_JOB_TIMEOUT_MS / 1000)}s.`,
+        );
+        resetOcrWorkerAfterFailure(
+          "OCRの応答が一定時間返らなかったため、workerを再起動できる状態に戻しました。",
+          activeJob,
+        );
+      }, OCR_JOB_TIMEOUT_MS);
 
       ocrJobCounterRef.current += 1;
+      activeOcrJobRef.current = { jobId, meta, timeoutId };
       cropEvidenceBySourceRef.current.set(sourceFrameRef, {
         sourceFrameRef,
         rawDataUrl: sample.rawDataUrl,
@@ -926,7 +1011,12 @@ export function App() {
       setOcrStatusLabel("認識リクエスト送信");
       worker.postMessage(message);
     },
-    [ensureOcrWorker, setPendingOcrJobCount],
+    [
+      appendOcrErrorLog,
+      ensureOcrWorker,
+      resetOcrWorkerAfterFailure,
+      setPendingOcrJobCount,
+    ],
   );
 
   useEffect(() => {
@@ -1102,11 +1192,12 @@ export function App() {
         window.clearInterval(samplingTimerRef.current);
       }
 
+      clearActiveOcrJob();
       stopTracks(stream);
       clearObjectUrl();
       ocrWorkerRef.current?.terminate();
     };
-  }, [clearObjectUrl, stopTracks, stream]);
+  }, [clearActiveOcrJob, clearObjectUrl, stopTracks, stream]);
 
   useEffect(() => stopAudioInput, [stopAudioInput]);
 

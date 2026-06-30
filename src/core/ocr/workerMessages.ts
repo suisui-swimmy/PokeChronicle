@@ -40,6 +40,7 @@ export type OCRWorkerResponse =
       type: "error";
       jobId: string;
       meta?: OCRWorkerJobMeta;
+      recoverable?: boolean;
       message: string;
     }
   | {

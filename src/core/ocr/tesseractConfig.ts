@@ -13,6 +13,7 @@ export interface TesseractConfigEnv {
 }
 
 const ABSOLUTE_PATH_PATTERN = /^(?:[a-z][a-z\d+\-.]*:|\/\/)/i;
+export const DEFAULT_TESSERACT_LANG_PATH = "https://tessdata.projectnaptha.com/4.0.0";
 
 function trimTrailingSlash(value: string) {
   return value.endsWith("/") ? value.slice(0, -1) : value;
@@ -37,10 +38,12 @@ export function createTesseractWorkerConfig(
   env: TesseractConfigEnv,
   baseUrl: string,
 ): TesseractWorkerConfig {
+  const configuredLangPath = resolveTesseractAssetPath(env.VITE_TESSERACT_LANG_PATH, baseUrl);
+
   return {
     language: env.VITE_TESSERACT_LANGUAGE?.trim() || "jpn",
     workerPath: resolveTesseractAssetPath(env.VITE_TESSERACT_WORKER_PATH, baseUrl),
     corePath: resolveTesseractAssetPath(env.VITE_TESSERACT_CORE_PATH, baseUrl),
-    langPath: resolveTesseractAssetPath(env.VITE_TESSERACT_LANG_PATH, baseUrl),
+    langPath: configuredLangPath ?? DEFAULT_TESSERACT_LANG_PATH,
   };
 }

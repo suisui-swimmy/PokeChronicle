@@ -52,6 +52,7 @@ async function handleRecognize(request: Extract<OCRWorkerRequest, { type: "recog
       type: "error",
       jobId: request.jobId,
       meta: request.meta,
+      recoverable: true,
       message: error instanceof Error ? error.message : "OCR worker failed.",
     });
   }
@@ -66,7 +67,12 @@ self.addEventListener("message", (event: MessageEvent<OCRWorkerRequest>) => {
   }
 
   if (request.type === "terminate") {
-    void provider?.terminate().finally(() => {
+    const currentProvider = provider;
+
+    provider = null;
+    providerConfigKey = "";
+
+    void Promise.resolve(currentProvider?.terminate()).finally(() => {
       provider = null;
       providerConfigKey = "";
       postWorkerMessage({ type: "terminated", jobId: request.jobId });
