@@ -6,7 +6,7 @@ The MVP is intentionally browser-only: capture or loaded media stays local, OCR 
 
 ## Current Status
 
-M5 is in progress on top of the static app foundation:
+M6 is complete on top of the static app foundation:
 
 - React + TypeScript + Vite
 - Vitest + React Testing Library
@@ -33,8 +33,12 @@ M5 is in progress on top of the static app foundation:
 - Near-frame duplicate suppression for repeated timeline messages
 - Consecutive same raw OCR messages are grouped in the raw OCR tab
 - Minimal unknown review UI with reviewed status and correction notes
+- IndexedDB save/load for battle logs
+- Schema-versioned Battle Log JSON export/import
+- Events CSV and Unknown messages CSV export
+- Bounded representative crop evidence in saved/exported logs
 
-IndexedDB storage, full-log search/export/import, statistics, and champout import are later milestones described in `AGENTS.md`.
+Statistics and champout/template import are later milestones described in `AGENTS.md`.
 
 ## Commands
 

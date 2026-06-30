@@ -7,9 +7,12 @@ describe("battle log schema", () => {
 
     expect(document.schemaVersion).toBe(BATTLE_LOG_SCHEMA_VERSION);
     expect(document.battle.id).toBe("battle_test");
+    expect(document.media.sourceKind).toBe("none");
+    expect(document.roiProfile.roi).toEqual({ x: 0, y: 0, w: 1, h: 1 });
     expect(document.ocrMessages).toEqual([]);
     expect(document.events).toEqual([]);
     expect(document.unknowns).toEqual([]);
+    expect(document.frameEvidence).toEqual([]);
+    expect(document.manualCorrections).toEqual([]);
   });
 });
-

@@ -10,6 +10,9 @@ import {
 import { APP_ROUTES } from "./routes";
 import {
   BATTLE_LOG_SCHEMA_VERSION,
+  type BattleLogDocument,
+  type BattleLogFrameEvidence,
+  type BattleLogMediaMetadata,
   type BattleEvent,
   type NormalizedRoi,
   type OCRMessage,
@@ -32,6 +35,17 @@ import {
   parseBattleMessage,
   type BattleMessageParseResult,
 } from "../core/parser/seedParser";
+import {
+  createBattleLogDocument,
+  createEventsCsv,
+  createUnknownsCsv,
+  parseBattleLogJson,
+  serializeBattleLogDocument,
+} from "../storage/export";
+import {
+  loadLatestBattleLogDocument,
+  saveBattleLogDocument,
+} from "../storage/indexedDb";
 
 const MILESTONES = [
   { id: "M0", label: "静的アプリ基盤", status: "完了" },
@@ -40,10 +54,12 @@ const MILESTONES = [
   { id: "M3", label: "OCR providerとリアルタイムOCRログ", status: "完了" },
   { id: "M4", label: "正規化、辞書、seed parser", status: "完了" },
   { id: "M4.5", label: "seed template matcher", status: "完了" },
-  { id: "M5", label: "Event timeline、unknown bucket、レビュー", status: "進行中" },
+  { id: "M5", label: "Event timeline、unknown bucket、レビュー", status: "完了" },
+  { id: "M6", label: "IndexedDB保存とexport/import基盤", status: "完了" },
 ];
 
 const LIVE_BATTLE_ID = "battle_live";
+const LIVE_BATTLE_TITLE = "Live OCR battle log";
 const DEFAULT_ROI: NormalizedRoi = { x: 0.06, y: 0.72, w: 0.88, h: 0.2 };
 const MIN_ROI_SIZE = 0.08;
 const NO_AUDIO_DEVICE_ID = "none";
@@ -151,6 +167,7 @@ type CropEvidence = {
   processedDataUrl: string;
   cropWidth: number;
   cropHeight: number;
+  capturedAt: string | null;
 };
 
 type TimelineItem =
@@ -352,6 +369,33 @@ function groupOcrLogs(entries: readonly OCRLogEntry[], limit: number) {
   }
 
   return groups;
+}
+
+function sortNewestFirst<T extends { timestampMs: number; id: string }>(items: readonly T[]) {
+  return [...items].sort(
+    (left, right) => right.timestampMs - left.timestampMs || right.id.localeCompare(left.id),
+  );
+}
+
+function formatStorageTimestamp(date = new Date()) {
+  return date.toLocaleTimeString("ja-JP", { hour12: false });
+}
+
+function createFileStamp(date = new Date()) {
+  return date.toISOString().replace(/[:.]/g, "-");
+}
+
+function downloadTextFile(filename: string, content: string, type: string) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 function pruneOldestMapEntries<TKey, TValue>(map: Map<TKey, TValue>, maxSize: number) {
@@ -600,6 +644,8 @@ export function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const imagePreviewRef = useRef<HTMLImageElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const battleLogImportInputRef = useRef<HTMLInputElement | null>(null);
+  const previewColumnRef = useRef<HTMLDivElement | null>(null);
   const objectUrlRef = useRef<string | null>(null);
   const audioInputStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -647,8 +693,9 @@ export function App() {
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
   const [suppressedTimelineCount, setSuppressedTimelineCount] = useState(0);
   const [activeReviewTab, setActiveReviewTab] = useState<ReviewTab>("timeline");
+  const [storageStatusLabel, setStorageStatusLabel] = useState("未保存");
   const [logs, setLogs] = useState<SystemLog[]>(() => [
-    createLog("M5 review timeline workspace initialized."),
+    createLog("M6 storage/export workspace initialized."),
   ]);
   const roiRef = useRef(roi);
   const mediaModeRef = useRef(mediaMode);
@@ -872,6 +919,7 @@ export function App() {
         processedDataUrl: sample.processedDataUrl,
         cropWidth: sample.cropWidth,
         cropHeight: sample.cropHeight,
+        capturedAt: sample.capturedAt,
       });
       pruneOldestMapEntries(cropEvidenceBySourceRef.current, MAX_CROP_EVIDENCE);
       setPendingOcrJobCount(nextPendingCount);
@@ -896,6 +944,53 @@ export function App() {
   useEffect(() => {
     upscaleFactorRef.current = upscaleFactor;
   }, [upscaleFactor]);
+
+  useEffect(() => {
+    const previousScrollRestoration = window.history.scrollRestoration;
+    window.history.scrollRestoration = "manual";
+
+    const resetInitialScrollPosition = () => {
+      try {
+        window.scrollTo(0, 0);
+      } catch {
+        // jsdom does not implement window.scrollTo; direct scrollTop resets still cover tests.
+      }
+
+      const scrollingElement = document.scrollingElement;
+
+      if (scrollingElement) {
+        scrollingElement.scrollTop = 0;
+        scrollingElement.scrollLeft = 0;
+      }
+
+      document.documentElement.scrollTop = 0;
+      document.documentElement.scrollLeft = 0;
+      document.body.scrollTop = 0;
+      document.body.scrollLeft = 0;
+
+      if (previewColumnRef.current) {
+        previewColumnRef.current.scrollTop = 0;
+        previewColumnRef.current.scrollLeft = 0;
+      }
+    };
+
+    resetInitialScrollPosition();
+
+    const animationFrameId =
+      typeof window.requestAnimationFrame === "function"
+        ? window.requestAnimationFrame(resetInitialScrollPosition)
+        : null;
+    const timeoutId = window.setTimeout(resetInitialScrollPosition, 80);
+
+    return () => {
+      if (animationFrameId !== null && typeof window.cancelAnimationFrame === "function") {
+        window.cancelAnimationFrame(animationFrameId);
+      }
+
+      window.clearTimeout(timeoutId);
+      window.history.scrollRestoration = previousScrollRestoration;
+    };
+  }, []);
 
   const refreshDevices = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -1339,6 +1434,7 @@ export function App() {
     setUnknownEvents([]);
     setReviewNotes({});
     setSuppressedTimelineCount(0);
+    setStorageStatusLabel("未保存");
     cropEvidenceBySourceRef.current.clear();
     lastTimelineDeduplicationRef.current = null;
     lastAcceptedEventIdRef.current = null;
@@ -1417,6 +1513,191 @@ export function App() {
   const ocrLogGroups = useMemo(
     () => groupOcrLogs(ocrLogs, OCR_RAW_GROUP_LIMIT),
     [ocrLogs],
+  );
+
+  const buildCurrentBattleLogDocument = useCallback(() => {
+    const sourceKind: BattleLogMediaMetadata["sourceKind"] =
+      mediaMode === "idle" ? "none" : mediaMode;
+    const frameEvidence: BattleLogFrameEvidence[] = Array.from(
+      cropEvidenceBySourceRef.current.values(),
+    ).map((evidence, index) => ({
+      id: `frame_${index + 1}`,
+      battleId: LIVE_BATTLE_ID,
+      sourceFrameRef: evidence.sourceFrameRef,
+      rawDataUrl: evidence.rawDataUrl,
+      processedDataUrl: evidence.processedDataUrl,
+      cropWidth: evidence.cropWidth,
+      cropHeight: evidence.cropHeight,
+      capturedAt: evidence.capturedAt,
+    }));
+
+    return createBattleLogDocument({
+      battleId: LIVE_BATTLE_ID,
+      title: LIVE_BATTLE_TITLE,
+      startedAt: null,
+      media: {
+        sourceKind,
+        videoLabel: activeVideoLabel,
+        audioLabel: activeAudioLabel,
+        width: metadata.width,
+        height: metadata.height,
+        frameRate: metadata.frameRate,
+      },
+      roi,
+      roiName: "Battle message ROI",
+      ocrMessages,
+      events: battleEvents,
+      unknowns: unknownEvents,
+      frameEvidence,
+      reviewNotes,
+    });
+  }, [
+    activeAudioLabel,
+    activeVideoLabel,
+    battleEvents,
+    mediaMode,
+    metadata.frameRate,
+    metadata.height,
+    metadata.width,
+    ocrMessages,
+    reviewNotes,
+    roi,
+    unknownEvents,
+  ]);
+
+  const restoreBattleLogDocument = useCallback(
+    (document: BattleLogDocument) => {
+      const restoredEvents = sortNewestFirst(document.events);
+
+      cropEvidenceBySourceRef.current = new Map(
+        document.frameEvidence.map((evidence) => [
+          evidence.sourceFrameRef,
+          {
+            sourceFrameRef: evidence.sourceFrameRef,
+            rawDataUrl: evidence.rawDataUrl,
+            processedDataUrl: evidence.processedDataUrl,
+            cropWidth: evidence.cropWidth,
+            cropHeight: evidence.cropHeight,
+            capturedAt: evidence.capturedAt,
+          },
+        ]),
+      );
+      setOcrMessages(sortNewestFirst(document.ocrMessages));
+      setBattleEvents(restoredEvents);
+      setUnknownEvents(sortNewestFirst(document.unknowns));
+      setReviewNotes(
+        Object.fromEntries(
+          document.manualCorrections
+            .filter((correction) => correction.note.trim().length > 0)
+            .map((correction) => [correction.targetId, correction.note]),
+        ),
+      );
+      setRoi(document.roiProfile.roi);
+      setSuppressedTimelineCount(0);
+      lastTimelineDeduplicationRef.current = null;
+      lastAcceptedEventIdRef.current = restoredEvents[0]?.id ?? null;
+      setActiveReviewTab("timeline");
+      setStorageStatusLabel(`読込済み ${formatStorageTimestamp()}`);
+      addLog(`Battle Logを読み込みました: ${document.events.length} events / ${document.unknowns.length} unknown`);
+    },
+    [addLog],
+  );
+
+  const handleSaveBattleLog = useCallback(async () => {
+    try {
+      const document = buildCurrentBattleLogDocument();
+      await saveBattleLogDocument(document);
+      setStorageStatusLabel(`保存済み ${formatStorageTimestamp()}`);
+      addLog(`IndexedDBへ保存しました: ${document.ocrMessages.length} OCR / ${document.events.length} events`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "IndexedDB保存に失敗しました。";
+      setStorageStatusLabel("保存失敗");
+      addLog(message, "error");
+    }
+  }, [addLog, buildCurrentBattleLogDocument]);
+
+  const handleLoadBattleLog = useCallback(async () => {
+    try {
+      const document = await loadLatestBattleLogDocument();
+
+      if (!document) {
+        setStorageStatusLabel("保存なし");
+        addLog("IndexedDBに保存済みBattle Logがありません。", "warn");
+        return;
+      }
+
+      restoreBattleLogDocument(document);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "IndexedDB読込に失敗しました。";
+      setStorageStatusLabel("読込失敗");
+      addLog(message, "error");
+    }
+  }, [addLog, restoreBattleLogDocument]);
+
+  const handleExportBattleLogJson = useCallback(() => {
+    const document = buildCurrentBattleLogDocument();
+    downloadTextFile(
+      `pokechronicle-battle-log-${createFileStamp()}.json`,
+      serializeBattleLogDocument(document),
+      "application/json;charset=utf-8",
+    );
+    setStorageStatusLabel(`JSON出力 ${formatStorageTimestamp()}`);
+    addLog("Battle Log JSONを出力しました。");
+  }, [addLog, buildCurrentBattleLogDocument]);
+
+  const handleExportEventsCsv = useCallback(() => {
+    const document = buildCurrentBattleLogDocument();
+    downloadTextFile(
+      `pokechronicle-events-${createFileStamp()}.csv`,
+      createEventsCsv(document.events),
+      "text/csv;charset=utf-8",
+    );
+    setStorageStatusLabel(`Events CSV ${formatStorageTimestamp()}`);
+    addLog("Events CSVを出力しました。");
+  }, [addLog, buildCurrentBattleLogDocument]);
+
+  const handleExportUnknownsCsv = useCallback(() => {
+    const document = buildCurrentBattleLogDocument();
+    downloadTextFile(
+      `pokechronicle-unknowns-${createFileStamp()}.csv`,
+      createUnknownsCsv(document.unknowns, document.manualCorrections),
+      "text/csv;charset=utf-8",
+    );
+    setStorageStatusLabel(`Unknown CSV ${formatStorageTimestamp()}`);
+    addLog("Unknown messages CSVを出力しました。");
+  }, [addLog, buildCurrentBattleLogDocument]);
+
+  const handleBattleLogImportChange = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+
+      if (!file) {
+        return;
+      }
+
+      try {
+        const result = parseBattleLogJson(await file.text());
+
+        if (!result.ok) {
+          setStorageStatusLabel("JSON読込失敗");
+          addLog(result.error, "error");
+          return;
+        }
+
+        restoreBattleLogDocument(result.document);
+        await saveBattleLogDocument(result.document);
+        setStorageStatusLabel(`JSON読込 ${formatStorageTimestamp()}`);
+        result.warnings.forEach((warning) => addLog(warning, "warn"));
+        addLog(`Battle Log JSONを読み込みました: ${file.name}`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Battle Log JSONの読込に失敗しました。";
+        setStorageStatusLabel("JSON読込失敗");
+        addLog(message, "error");
+      } finally {
+        event.target.value = "";
+      }
+    },
+    [addLog, restoreBattleLogDocument],
   );
 
   const handleUnknownReview = useCallback(
@@ -1543,7 +1824,7 @@ export function App() {
       </header>
 
       <section className="capture-main" aria-label="M1 capture workspace">
-        <div className="preview-column">
+        <div ref={previewColumnRef} className="preview-column">
           <section className="preview-frame" aria-label="capture preview">
             <div className="preview-surface">
               {mediaMode === "image-file" && filePreviewUrl ? (
@@ -1828,8 +2109,43 @@ export function App() {
 
         <aside className="log-panel review-panel" aria-labelledby="review-title">
           <div className="panel-heading">
-            <h1 id="review-title">レビュー</h1>
-            <span>M5</span>
+            <div>
+              <h1 id="review-title">レビュー</h1>
+              <p>{storageStatusLabel}</p>
+            </div>
+            <span>M6</span>
+          </div>
+
+          <div className="storage-actions" aria-label="battle log storage actions">
+            <button type="button" className="storage-button" onClick={() => void handleSaveBattleLog()}>
+              保存
+            </button>
+            <button type="button" className="storage-button" onClick={() => void handleLoadBattleLog()}>
+              読込
+            </button>
+            <button type="button" className="storage-button" onClick={handleExportBattleLogJson}>
+              JSON
+            </button>
+            <button
+              type="button"
+              className="storage-button"
+              onClick={() => battleLogImportInputRef.current?.click()}
+            >
+              JSON読込
+            </button>
+            <button type="button" className="storage-button" onClick={handleExportEventsCsv}>
+              Events CSV
+            </button>
+            <button type="button" className="storage-button" onClick={handleExportUnknownsCsv}>
+              Unknown CSV
+            </button>
+            <input
+              ref={battleLogImportInputRef}
+              className="visually-hidden"
+              type="file"
+              accept="application/json,.json"
+              onChange={(event) => void handleBattleLogImportChange(event)}
+            />
           </div>
 
           <div className="review-tabs" role="tablist" aria-label="review views">

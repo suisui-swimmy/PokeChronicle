@@ -92,6 +92,7 @@ button:disabled {
 .device-selects,
 .device-select select,
 .icon-button,
+.storage-button,
 .capture-statusbar,
 .milestone-strip,
 .log-panel,
@@ -236,7 +237,8 @@ button:disabled {
 
 .preview-column {
   display: grid;
-  grid-template-rows: minmax(240px, 1fr) auto auto;
+  grid-template-rows: auto auto auto;
+  align-content: start;
   min-width: 0;
   min-height: 0;
   overflow: auto;
@@ -244,9 +246,12 @@ button:disabled {
 }
 
 .preview-frame {
+  --preview-frame-block-extra: 22px;
+  --preview-surface-height: clamp(240px, 44dvh, 560px);
   display: grid;
   align-items: center;
-  min-height: 0;
+  min-height: calc(var(--preview-surface-height) + var(--preview-frame-block-extra));
+  overflow: hidden;
   padding: 10px;
   border-radius: 4px;
   background: #0f1218;
@@ -255,7 +260,7 @@ button:disabled {
 .preview-surface {
   position: relative;
   width: 100%;
-  max-height: calc(100vh - 180px);
+  height: var(--preview-surface-height);
   aspect-ratio: 16 / 9;
   overflow: hidden;
   background: #050609;
@@ -740,7 +745,7 @@ button:disabled {
 }
 
 .review-panel {
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   gap: 12px;
 }
 
@@ -757,6 +762,13 @@ button:disabled {
   line-height: 1.2;
 }
 
+.panel-heading p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
 .panel-heading span {
   padding: 3px 8px;
   border: 1px solid rgb(32 217 152 / 0.36);
@@ -764,6 +776,35 @@ button:disabled {
   color: var(--green);
   font-size: 0.76rem;
   font-weight: 900;
+}
+
+.storage-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  min-width: 0;
+}
+
+.storage-button {
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 7px;
+  border-radius: 4px;
+  color: var(--text);
+  background: #11151d;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.storage-button:hover,
+.storage-button:focus-visible {
+  border-color: rgb(32 217 152 / 0.36);
+  outline: none;
+  color: var(--green);
 }
 
 .review-tabs {
@@ -1117,7 +1158,7 @@ button:disabled {
   }
 
   .review-panel {
-    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-rows: auto auto auto minmax(0, 1fr);
   }
 }
 
@@ -1168,6 +1209,8 @@ button:disabled {
   }
 
   .preview-frame {
+    --preview-frame-block-extra: 14px;
+    --preview-surface-height: clamp(180px, 38dvh, 320px);
     padding: 6px;
   }
 
@@ -1196,6 +1239,10 @@ button:disabled {
 
   .review-section-heading span {
     text-align: left;
+  }
+
+  .storage-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .timeline-evidence {

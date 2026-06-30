@@ -80,9 +80,18 @@ M5 turns OCR/parser output into reviewable in-memory evidence:
 - The live review panel is viewport-bounded and tabbed across timeline, resolved events, unknowns, raw OCR, and system logs. It is for monitoring and triage, not for dumping every log category into the page body.
 - Raw OCR display groups consecutive same-message entries in the UI; raw records remain available in memory for later persistence/export work.
 - The app shows source crop preview, parser evidence, and a minimal unknown review state for the active tab.
-- Review notes and reviewed state are in-memory only in M5. IndexedDB persistence, full-log search/export/import, and durable manual corrections remain M6 work.
 
-IndexedDB, statistics, and champout import are later milestones.
+## M6 Storage And Export Boundary
+
+M6 makes the review data durable without adding a runtime server:
+
+- `src/storage/export.ts` builds schema-versioned Battle Log JSON documents from OCR messages, parsed events, unknowns, ROI metadata, media metadata, bounded crop evidence, and manual corrections.
+- `src/storage/indexedDb.ts` is the only browser storage adapter for Battle Logs. It stores the current document in IndexedDB and can restore the latest saved log after a reload.
+- JSON import is for user-controlled Battle Log restore, not champout/template import. Imported logs are validated by `schemaVersion` before they replace the review state.
+- Events CSV and Unknown messages CSV exports are derived from the same Battle Log document. Unknown CSV includes review notes from durable manual corrections.
+- The app saves only bounded ROI crop evidence. It never stores the full video file or an unbounded frame stream.
+
+Statistics and champout import are later milestones.
 
 ## Runtime Constraints
 

@@ -1,6 +1,6 @@
 # Data Import
 
-Browser-side data import is not implemented yet.
+M6 supports browser-side Battle Log JSON import/export for restoring user-owned analysis logs. Browser-side champout/template import is still a later milestone.
 
 ## Generated name dictionaries
 
@@ -33,6 +33,25 @@ M4.5 uses a small checked-in rule file for frequent messages that do not include
 - `src/core/templates/templateMatcher.ts`
 
 These rules are hand-written seed templates, not champout-derived full dumps. They cover representative damage, healing, weather, terrain, ability, and item activation messages. Future champout import should feed the same matcher through user-selected files and browser storage.
+
+## Battle Log export/import
+
+The review workspace can export and import a schema-versioned Battle Log JSON document:
+
+- `schemaVersion`
+- app and export metadata
+- battle metadata
+- media metadata
+- ROI profile
+- raw OCR messages
+- parsed events
+- unknown messages
+- bounded frame/crop evidence
+- manual corrections derived from unknown review notes and reviewed status
+
+The app validates `schemaVersion` on import, restores the review state, and saves the imported log into IndexedDB. This import path is only for PokeChronicle Battle Logs.
+
+Events and unknown messages can also be exported as CSV. Unknown CSV includes manual review notes when present.
 
 Future milestones will add browser-side import for user-selected champout-derived JSON or ZIP files. Imported text templates must be stored in browser storage or user-controlled exports unless redistribution is explicitly confirmed.
 

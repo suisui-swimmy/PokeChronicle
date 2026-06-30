@@ -106,6 +106,45 @@ export interface UnknownEvent {
   reviewStatus: "unreviewed" | "reviewed";
 }
 
+export type BattleLogMediaSourceKind = "device" | "video-file" | "image-file" | "none";
+
+export interface BattleLogMediaMetadata {
+  sourceKind: BattleLogMediaSourceKind;
+  videoLabel: string | null;
+  audioLabel: string | null;
+  width: number | null;
+  height: number | null;
+  frameRate: number | null;
+}
+
+export interface BattleLogRoiProfile {
+  id: string;
+  name: string;
+  roi: NormalizedRoi;
+  updatedAt: string;
+}
+
+export interface BattleLogFrameEvidence {
+  id: string;
+  battleId: string;
+  sourceFrameRef: string;
+  rawDataUrl: string;
+  processedDataUrl: string;
+  cropWidth: number;
+  cropHeight: number;
+  capturedAt: string | null;
+}
+
+export interface ManualCorrection {
+  id: string;
+  battleId: string;
+  targetType: "unknown";
+  targetId: string;
+  note: string;
+  reviewStatus: UnknownEvent["reviewStatus"];
+  updatedAt: string;
+}
+
 export interface BattleLogDocument {
   schemaVersion: typeof BATTLE_LOG_SCHEMA_VERSION;
   appVersion: string;
@@ -115,10 +154,13 @@ export interface BattleLogDocument {
     title: string;
     startedAt: string | null;
   };
+  media: BattleLogMediaMetadata;
+  roiProfile: BattleLogRoiProfile;
   ocrMessages: OCRMessage[];
   events: BattleEvent[];
   unknowns: UnknownEvent[];
-  manualCorrections: unknown[];
+  frameEvidence: BattleLogFrameEvidence[];
+  manualCorrections: ManualCorrection[];
 }
 
 export function createEmptyBattleLog(battleId: string): BattleLogDocument {
@@ -131,9 +173,24 @@ export function createEmptyBattleLog(battleId: string): BattleLogDocument {
       title: "Untitled battle",
       startedAt: null,
     },
+    media: {
+      sourceKind: "none",
+      videoLabel: null,
+      audioLabel: null,
+      width: null,
+      height: null,
+      frameRate: null,
+    },
+    roiProfile: {
+      id: "roi_default",
+      name: "Default ROI",
+      roi: { x: 0, y: 0, w: 1, h: 1 },
+      updatedAt: new Date(0).toISOString(),
+    },
     ocrMessages: [],
     events: [],
     unknowns: [],
+    frameEvidence: [],
     manualCorrections: [],
   };
 }
