@@ -27,6 +27,7 @@ M7 is complete on top of the static app foundation:
 - Safe fuzzy dictionary matching that keeps low-confidence corrections reviewable
 - Seed parser coverage for observed move messages, effectiveness messages, and unknown fallback
 - Seed template matcher coverage for frequent damage, heal, weather, terrain, ability, and item messages
+- Build-time generated champout template pack for additional battle-message coverage
 - OCR log entries show the current parser classification candidate
 - Event timeline and unknown bucket views fed by the real-time OCR stream
 - Review tabs for timeline, resolved events, unknowns, raw OCR, and system logs so the live page does not grow with every log category
@@ -49,6 +50,7 @@ Run these from PowerShell in the repository root:
 
 ```powershell
 npm install
+npm run generate:champout-templates
 npm run generate:dictionaries
 npm run dev
 npm run test
@@ -66,7 +68,15 @@ npm run preview
 
 ## Template Import
 
-Use `Template読込` in the review panel to select one or more user-controlled champout-style JSON files, such as `rom-txt/jpn/btl_std.json` or `rom-txt/jpn/btl_attack_syn.json`.
+PokeChronicle bundles a compact generated champout template pack at build time. The generator reads selected local files from `others/champout/rom-txt/jpn`, verifies the MIT license and source commit, and writes `data/generated/champout-event-rules.ja.json`.
+
+```powershell
+npm run generate:champout-templates
+```
+
+The runtime app imports only the generated JSON. It does not read `others/champout`, and it does not bundle the full raw dump. Third-party source, license, commit, and notice details are recorded in `THIRD_PARTY_NOTICES.md`.
+
+Use `Template読込` in the review panel to add or test extra user-controlled champout-style JSON files, such as `rom-txt/jpn/btl_std.json` or `rom-txt/jpn/btl_attack_syn.json`.
 
 The app extracts text in the browser, generates safe template candidates, stores only the imported template pack in IndexedDB, and can export/delete that pack. ZIP import is not implemented yet; select JSON files directly.
 

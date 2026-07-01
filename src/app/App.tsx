@@ -38,12 +38,17 @@ import {
   type BattleMessageParseResult,
 } from "../core/parser/seedParser";
 import {
+  CHAMPOUT_TEMPLATE_RULES,
+  CHAMPOUT_TEMPLATE_STATS,
+} from "../core/templates/generatedChampoutTemplateRules";
+import {
   createImportedTemplateCollectionFromJsonFiles,
   parseImportedTemplateCollectionJson,
   serializeImportedTemplateCollection,
   type ImportedTemplateCollection,
 } from "../core/templates/importedTemplates";
 import { SEED_TEMPLATE_RULES } from "../core/templates/seedTemplateRules";
+import { STANDARD_TEMPLATE_RULES } from "../core/templates/standardTemplateRules";
 import type { BattleTemplateRule } from "../core/templates/types";
 import {
   createBattleLogDocument,
@@ -688,7 +693,7 @@ export function App() {
   const ocrJobCounterRef = useRef(0);
   const pendingOcrJobsRef = useRef(0);
   const activeOcrJobRef = useRef<ActiveOcrJob | null>(null);
-  const templateRulesRef = useRef<readonly BattleTemplateRule[]>(SEED_TEMPLATE_RULES);
+  const templateRulesRef = useRef<readonly BattleTemplateRule[]>(STANDARD_TEMPLATE_RULES);
   const samplingStartMsRef = useRef(0);
   const isOcrEnabledRef = useRef(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -741,7 +746,7 @@ export function App() {
 
   const activeTemplateRules = useMemo<readonly BattleTemplateRule[]>(
     () => [
-      ...SEED_TEMPLATE_RULES,
+      ...STANDARD_TEMPLATE_RULES,
       ...(importedTemplateCollection?.rules ?? []),
     ],
     [importedTemplateCollection],
@@ -2435,9 +2440,11 @@ export function App() {
 
             <div className="template-import-summary" aria-label="template import summary">
               <span>{SEED_TEMPLATE_RULES.length} seed</span>
+              <span>{CHAMPOUT_TEMPLATE_RULES.length} champout</span>
               <span>{importedTemplateCollection?.stats.sourceFileCount ?? 0} files</span>
               <span>{importedTemplateCollection?.stats.battleCandidateCount ?? 0} candidates</span>
               <span>{activeTemplateRules.length} active</span>
+              <span>{CHAMPOUT_TEMPLATE_STATS.sourceFileCount} bundled files</span>
             </div>
 
             <div className="review-tabs" role="tablist" aria-label="review views">

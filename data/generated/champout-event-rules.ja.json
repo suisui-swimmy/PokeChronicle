@@ -1,0 +1,1634 @@
+{
+  "schemaVersion": "0.1.0",
+  "generatedAt": "1970-01-01T00:00:00.000Z",
+  "generator": "scripts/generate-champout-templates.mjs",
+  "source": {
+    "name": "projectpokemon/champout",
+    "root": "others/champout",
+    "language": "jpn",
+    "license": "MIT",
+    "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db",
+    "noticeFile": "THIRD_PARTY_NOTICES.md",
+    "files": [
+      "btl_attack_syn.json",
+      "btl_std.json"
+    ]
+  },
+  "stats": {
+    "sourceFileCount": 2,
+    "extractedTextCount": 117,
+    "battleCandidateCount": 89,
+    "generatedRuleCount": 85,
+    "skippedTextCount": 32,
+    "duplicateRuleCount": 4,
+    "maxGeneratedRules": 600,
+    "perFile": [
+      {
+        "fileName": "btl_attack_syn.json",
+        "extractedTextCount": 2,
+        "battleCandidateCount": 2,
+        "generatedRuleCount": 1,
+        "skippedTextCount": 1
+      },
+      {
+        "fileName": "btl_std.json",
+        "extractedTextCount": 115,
+        "battleCandidateCount": 89,
+        "generatedRuleCount": 88,
+        "skippedTextCount": 27
+      }
+    ]
+  },
+  "rules": [
+    {
+      "id": "champout_move_1pbrfiv",
+      "eventType": "move",
+      "priority": 58,
+      "patterns": [
+        "相手の {pokemon}の{move}!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_attack_syn.json",
+        "keyPath": "mSDataSet[1].OriginalText",
+        "labelName": "ATKMSG_E_0001_syn",
+        "originalText": "相手の {0}の{1}!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_switch_in_zoggg7",
+      "eventType": "switch_in",
+      "priority": 50,
+      "patterns": [
+        "ゆけっ! {pokemon}!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[0].OriginalText",
+        "labelName": "BTL_STRID_STD_PutSingle",
+        "originalText": "ゆけっ! {0}!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_switch_in_1ecsm9d",
+      "eventType": "switch_in",
+      "priority": 50,
+      "patterns": [
+        "ゆけっ! {pokemon}!{target}!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[1].OriginalText",
+        "labelName": "BTL_STRID_STD_PutDouble",
+        "originalText": "ゆけっ! {0}!{1}!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_switch_in_1v7crta",
+      "eventType": "switch_in",
+      "priority": 50,
+      "patterns": [
+        "{text}は{pokemon}を 繰り出した!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[2].OriginalText",
+        "labelName": "BTL_STRID_STD_PutSingle_Player",
+        "originalText": "{0}は{1}を 繰り出した!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_switch_in_q249xh",
+      "eventType": "switch_in",
+      "priority": 50,
+      "patterns": [
+        "{text}は {pokemon}と{target}を 繰り出した!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[3].OriginalText",
+        "labelName": "BTL_STRID_STD_PutDouble_Player",
+        "originalText": "{0}は {1}と{2}を 繰り出した!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_switch_out_7i3s93",
+      "eventType": "switch_out",
+      "priority": 50,
+      "patterns": [
+        "{text}は{pokemon}を 引っこめた!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[5].OriginalText",
+        "labelName": "BTL_STRID_STD_BackChange_Player",
+        "originalText": "{0}は{1}を 引っこめた!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_battle_end_nd36tf",
+      "eventType": "battle_end",
+      "priority": 50,
+      "patterns": [
+        "{text}との勝負に 勝った!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[7].OriginalText",
+        "labelName": "BTL_STRID_STD_WinComm",
+        "originalText": "{0}との勝負に 勝った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_battle_end_1oqz439",
+      "eventType": "battle_end",
+      "priority": 50,
+      "patterns": [
+        "{text}との勝負に 負けた!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[9].OriginalText",
+        "labelName": "BTL_STRID_STD_LoseComm",
+        "originalText": "{0}との勝負に 負けた!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_battle_end_1kze2j0",
+      "eventType": "battle_end",
+      "priority": 50,
+      "patterns": [
+        "{text}との勝負は 引き分けだ!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[11].OriginalText",
+        "labelName": "BTL_STRID_STD_DrawComm",
+        "originalText": "{0}との勝負は 引き分けだ!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_battle_end_c4t6d9",
+      "eventType": "battle_end",
+      "priority": 50,
+      "patterns": [
+        "無効な勝負に なりました!対戦を 終了します!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[13].OriginalText",
+        "labelName": "BTL_STRID_STD_NoContestEnd",
+        "originalText": "無効な勝負に なりました!対戦を 終了します!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_fail_1mhcr35",
+      "eventType": "fail",
+      "priority": 50,
+      "patterns": [
+        "しかし うまく 決まらなかった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[15].OriginalText",
+        "labelName": "BTL_STRID_STD_WazaFail",
+        "originalText": "しかし うまく 決まらなかった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_supereffective_3kxdfm",
+      "eventType": "supereffective",
+      "priority": 50,
+      "patterns": [
+        "効果は ちょうバツグンだ!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[16].OriginalText",
+        "labelName": "BTL_STRID_STD_AffSGood_syn",
+        "originalText": "効果は ちょうバツグンだ!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_supereffective_5e3zit",
+      "eventType": "supereffective",
+      "priority": 50,
+      "patterns": [
+        "効果は バツグンだ!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[17].OriginalText",
+        "labelName": "BTL_STRID_STD_AffGood",
+        "originalText": "効果は バツグンだ!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_resisted_je8v6v",
+      "eventType": "resisted",
+      "priority": 50,
+      "patterns": [
+        "効果は いまひとつだ"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[18].OriginalText",
+        "labelName": "BTL_STRID_STD_AffBad",
+        "originalText": "効果は いまひとつだ",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_resisted_s8f301",
+      "eventType": "resisted",
+      "priority": 50,
+      "patterns": [
+        "効果は かなりいまひとつだ"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[19].OriginalText",
+        "labelName": "BTL_STRID_STD_AffSBad_syn",
+        "originalText": "効果は かなりいまひとつだ",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_damage_1cxbuo3",
+      "eventType": "damage",
+      "priority": 50,
+      "patterns": [
+        "わけも わからず自分を 攻撃した!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[20].OriginalText",
+        "labelName": "BTL_STRID_STD_KonranExe",
+        "originalText": "わけも わからず自分を 攻撃した!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_critical_1m85v2k",
+      "eventType": "critical",
+      "priority": 50,
+      "patterns": [
+        "急所に 当たった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[21].OriginalText",
+        "labelName": "BTL_STRID_STD_CriticalHit",
+        "originalText": "急所に 当たった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_fail_mr3t98",
+      "eventType": "fail",
+      "priority": 50,
+      "patterns": [
+        "しかし 技の残りポイントが なかった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[22].OriginalText",
+        "labelName": "BTL_STRID_STD_PP_Short",
+        "originalText": "しかし 技の残りポイントが なかった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_boost_1l50789",
+      "eventType": "boost",
+      "priority": 50,
+      "patterns": [
+        "日差しが 強くなった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[23].OriginalText",
+        "labelName": "BTL_STRID_STD_ShineStart",
+        "originalText": "日差しが 強くなった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_weather_start_1btb3pt",
+      "eventType": "weather_start",
+      "priority": 50,
+      "patterns": [
+        "雨が 降り始めた!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[24].OriginalText",
+        "labelName": "BTL_STRID_STD_RainStart",
+        "originalText": "雨が 降り始めた!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_weather_start_19zhw7i",
+      "eventType": "weather_start",
+      "priority": 50,
+      "patterns": [
+        "砂あらしが 吹き始めた!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[25].OriginalText",
+        "labelName": "BTL_STRID_STD_StormStart",
+        "originalText": "砂あらしが 吹き始めた!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_weather_start_1odrtwi",
+      "eventType": "weather_start",
+      "priority": 50,
+      "patterns": [
+        "雪が 降り始めた!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[26].OriginalText",
+        "labelName": "BTL_STRID_STD_SnowStart",
+        "originalText": "雪が 降り始めた!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_weather_end_15lqdy4",
+      "eventType": "weather_end",
+      "priority": 50,
+      "patterns": [
+        "日差しが 元に戻った!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[27].OriginalText",
+        "labelName": "BTL_STRID_STD_ShineEnd",
+        "originalText": "日差しが 元に戻った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_boost_jcpys6",
+      "eventType": "boost",
+      "priority": 50,
+      "patterns": [
+        "雨が 上がった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[28].OriginalText",
+        "labelName": "BTL_STRID_STD_RainEnd",
+        "originalText": "雨が 上がった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_weather_end_1udlty2",
+      "eventType": "weather_end",
+      "priority": 50,
+      "patterns": [
+        "砂あらしが おさまった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[29].OriginalText",
+        "labelName": "BTL_STRID_STD_StormEnd",
+        "originalText": "砂あらしが おさまった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_weather_end_u4895a",
+      "eventType": "weather_end",
+      "priority": 50,
+      "patterns": [
+        "雪が 止んだ!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[30].OriginalText",
+        "labelName": "BTL_STRID_STD_SnowEnd",
+        "originalText": "雪が 止んだ!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_weather_end_11qcmcg",
+      "eventType": "weather_end",
+      "priority": 50,
+      "patterns": [
+        "天候の影響が なくなった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[31].OriginalText",
+        "labelName": "BTL_STRID_STD_AirLock",
+        "originalText": "天候の影響が なくなった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_fail_nimz9x",
+      "eventType": "fail",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}の 効果で{text}しか だせない!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[34].OriginalText",
+        "labelName": "BTL_STRID_STD_KodawariLock",
+        "originalText": "{0}の 効果で{1}しか だせない!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_fail_194tyq9",
+      "eventType": "fail",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}の 効果で変化技が だせない!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[35].OriginalText",
+        "labelName": "BTL_STRID_STD_TotsugekiLock",
+        "originalText": "{0}の 効果で変化技が だせない!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_fail_dst6mv",
+      "eventType": "fail",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}は{text}しか だせない!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[36].OriginalText",
+        "labelName": "BTL_STRID_STD_WazaLock",
+        "originalText": "{0}は{1}しか だせない!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_heal_q9rnev",
+      "eventType": "heal",
+      "priority": 50,
+      "patterns": [
+        "おたがいの体力を 分かちあった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[39].OriginalText",
+        "labelName": "BTL_STRID_STD_Itamiwake",
+        "originalText": "おたがいの体力を 分かちあった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_field_end_1a9mfij",
+      "eventType": "field_end",
+      "priority": 50,
+      "patterns": [
+        "ゆがんだ 時空が 元に戻った!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[40].OriginalText",
+        "labelName": "BTL_STRID_STD_TrickRoomOff",
+        "originalText": "ゆがんだ 時空が 元に戻った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_boost_rssd3x",
+      "eventType": "boost",
+      "priority": 50,
+      "patterns": [
+        "じゅうりょくが 強くなった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[41].OriginalText",
+        "labelName": "BTL_STRID_STD_Jyuryoku",
+        "originalText": "じゅうりょくが 強くなった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_field_end_jl374b",
+      "eventType": "field_end",
+      "priority": 50,
+      "patterns": [
+        "じゅうりょくが 元に戻った!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[42].OriginalText",
+        "labelName": "BTL_STRID_STD_JyuryokuOff",
+        "originalText": "じゅうりょくが 元に戻った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_fail_1itxhrk",
+      "eventType": "fail",
+      "priority": 50,
+      "patterns": [
+        "しかし 身代わりを だすには体力が 足りなかった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[44].OriginalText",
+        "labelName": "BTL_STRID_STD_MigawariFail",
+        "originalText": "しかし 身代わりを だすには体力が 足りなかった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_boost_7i9a7t",
+      "eventType": "boost",
+      "priority": 50,
+      "patterns": [
+        "味方は リフレクターで物理に 強くなった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[45].OriginalText",
+        "labelName": "BTL_STRID_STD_Reflector",
+        "originalText": "味方は リフレクターで物理に 強くなった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_boost_d5dtkv",
+      "eventType": "boost",
+      "priority": 50,
+      "patterns": [
+        "相手は リフレクターで物理に 強くなった!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[46].OriginalText",
+        "labelName": "BTL_STRID_STD_Reflector_E",
+        "originalText": "相手は リフレクターで物理に 強くなった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_side_end_8laffj",
+      "eventType": "side_end",
+      "priority": 50,
+      "patterns": [
+        "味方の リフレクターがなくなった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[47].OriginalText",
+        "labelName": "BTL_STRID_STD_ReflectorOff",
+        "originalText": "味方の リフレクターがなくなった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_side_end_1jus4i1",
+      "eventType": "side_end",
+      "priority": 50,
+      "patterns": [
+        "相手の リフレクターがなくなった!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[48].OriginalText",
+        "labelName": "BTL_STRID_STD_ReflectorOff_E",
+        "originalText": "相手の リフレクターがなくなった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_boost_1coqtnl",
+      "eventType": "boost",
+      "priority": 50,
+      "patterns": [
+        "味方は ひかりのかべで特殊に 強くなった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[49].OriginalText",
+        "labelName": "BTL_STRID_STD_HikariNoKabe",
+        "originalText": "味方は ひかりのかべで特殊に 強くなった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_boost_19cx0ds",
+      "eventType": "boost",
+      "priority": 50,
+      "patterns": [
+        "相手は ひかりのかべで特殊に 強くなった!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[50].OriginalText",
+        "labelName": "BTL_STRID_STD_HikariNoKabe_E",
+        "originalText": "相手は ひかりのかべで特殊に 強くなった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_side_end_15v5k2e",
+      "eventType": "side_end",
+      "priority": 50,
+      "patterns": [
+        "味方の ひかりのかべがなくなった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[51].OriginalText",
+        "labelName": "BTL_STRID_STD_HikariNoKabeOff",
+        "originalText": "味方の ひかりのかべがなくなった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_side_end_5jtrie",
+      "eventType": "side_end",
+      "priority": 50,
+      "patterns": [
+        "相手の ひかりのかべがなくなった!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[52].OriginalText",
+        "labelName": "BTL_STRID_STD_HikariNoKabeOff_E",
+        "originalText": "相手の ひかりのかべがなくなった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_boost_1isrysu",
+      "eventType": "boost",
+      "priority": 50,
+      "patterns": [
+        "味方は オーロラベールで物理と 特殊に 強くなった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[53].OriginalText",
+        "labelName": "BTL_STRID_STD_AuroraVeil",
+        "originalText": "味方は オーロラベールで物理と 特殊に 強くなった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_boost_1ns9dci",
+      "eventType": "boost",
+      "priority": 50,
+      "patterns": [
+        "相手は オーロラベールで物理と 特殊に 強くなった!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[54].OriginalText",
+        "labelName": "BTL_STRID_STD_AuroraVeil_E",
+        "originalText": "相手は オーロラベールで物理と 特殊に 強くなった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_side_end_1aaslf7",
+      "eventType": "side_end",
+      "priority": 50,
+      "patterns": [
+        "味方の オーロラベールがなくなった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[55].OriginalText",
+        "labelName": "BTL_STRID_STD_AuroraVeilOff",
+        "originalText": "味方の オーロラベールがなくなった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_side_end_s35oqj",
+      "eventType": "side_end",
+      "priority": 50,
+      "patterns": [
+        "相手の オーロラベールがなくなった!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[56].OriginalText",
+        "labelName": "BTL_STRID_STD_AuroraVeilOff_E",
+        "originalText": "相手の オーロラベールがなくなった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_side_start_1ddj7fj",
+      "eventType": "side_start",
+      "priority": 50,
+      "patterns": [
+        "味方は神秘のベールに 包まれた!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[57].OriginalText",
+        "labelName": "BTL_STRID_STD_SinpiNoMamori",
+        "originalText": "味方は神秘のベールに 包まれた!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_side_start_ezp3if",
+      "eventType": "side_start",
+      "priority": 50,
+      "patterns": [
+        "相手は神秘のベールに 包まれた!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[58].OriginalText",
+        "labelName": "BTL_STRID_STD_SinpiNoMamori_E",
+        "originalText": "相手は神秘のベールに 包まれた!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_side_end_ezxafi",
+      "eventType": "side_end",
+      "priority": 50,
+      "patterns": [
+        "味方を 包んでいた神秘のベールが なくなった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[59].OriginalText",
+        "labelName": "BTL_STRID_STD_SinpiNoMamoriOff",
+        "originalText": "味方を 包んでいた神秘のベールが なくなった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_side_end_1p8f1t1",
+      "eventType": "side_end",
+      "priority": 50,
+      "patterns": [
+        "相手を 包んでいた神秘のベールが なくなった!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[60].OriginalText",
+        "labelName": "BTL_STRID_STD_SinpiNoMamoriOff_E",
+        "originalText": "相手を 包んでいた神秘のベールが なくなった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_side_start_13nk4c5",
+      "eventType": "side_start",
+      "priority": 50,
+      "patterns": [
+        "味方に追い風が 吹き始めた!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[61].OriginalText",
+        "labelName": "BTL_STRID_STD_Oikaze",
+        "originalText": "味方に追い風が 吹き始めた!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_side_start_1ppkvaf",
+      "eventType": "side_start",
+      "priority": 50,
+      "patterns": [
+        "相手に追い風が 吹き始めた!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[62].OriginalText",
+        "labelName": "BTL_STRID_STD_Oikaze_E",
+        "originalText": "相手に追い風が 吹き始めた!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_side_end_1l3p3k",
+      "eventType": "side_end",
+      "priority": 50,
+      "patterns": [
+        "味方の追い風が 止んだ!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[63].OriginalText",
+        "labelName": "BTL_STRID_STD_OikazeOff",
+        "originalText": "味方の追い風が 止んだ!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_side_end_gg7zwo",
+      "eventType": "side_end",
+      "priority": 50,
+      "patterns": [
+        "相手の追い風が 止んだ!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[64].OriginalText",
+        "labelName": "BTL_STRID_STD_OikazeOff_E",
+        "originalText": "相手の追い風が 止んだ!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_side_start_16kopag",
+      "eventType": "side_start",
+      "priority": 50,
+      "patterns": [
+        "味方の 足下にまきびしが 散らばった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[65].OriginalText",
+        "labelName": "BTL_STRID_STD_Makibisi",
+        "originalText": "味方の 足下にまきびしが 散らばった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_side_start_1owu9wa",
+      "eventType": "side_start",
+      "priority": 50,
+      "patterns": [
+        "相手の 足下にまきびしが 散らばった!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[66].OriginalText",
+        "labelName": "BTL_STRID_STD_Makibisi_E",
+        "originalText": "相手の 足下にまきびしが 散らばった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_side_end_mljvba",
+      "eventType": "side_end",
+      "priority": 50,
+      "patterns": [
+        "味方の 足下のまきびしが 消え去った!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[67].OriginalText",
+        "labelName": "BTL_STRID_STD_MakibisiOff",
+        "originalText": "味方の 足下のまきびしが 消え去った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_side_end_rhkqpi",
+      "eventType": "side_end",
+      "priority": 50,
+      "patterns": [
+        "相手の 足下のまきびしが 消え去った!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[68].OriginalText",
+        "labelName": "BTL_STRID_STD_MakibisiOff_E",
+        "originalText": "相手の 足下のまきびしが 消え去った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_side_start_1qtrgoo",
+      "eventType": "side_start",
+      "priority": 50,
+      "patterns": [
+        "味方の 足下にどくびしが 散らばった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[69].OriginalText",
+        "labelName": "BTL_STRID_STD_Dokubisi",
+        "originalText": "味方の 足下にどくびしが 散らばった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_side_start_9ty1jx",
+      "eventType": "side_start",
+      "priority": 50,
+      "patterns": [
+        "相手の 足下にどくびしが 散らばった!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[70].OriginalText",
+        "labelName": "BTL_STRID_STD_Dokubisi_E",
+        "originalText": "相手の 足下にどくびしが 散らばった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_side_end_f0zih9",
+      "eventType": "side_end",
+      "priority": 50,
+      "patterns": [
+        "味方の 足下のどくびしが 消え去った!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[71].OriginalText",
+        "labelName": "BTL_STRID_STD_DokubisiOff",
+        "originalText": "味方の 足下のどくびしが 消え去った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_side_end_abyvsd",
+      "eventType": "side_end",
+      "priority": 50,
+      "patterns": [
+        "相手の 足下のどくびしが 消え去った!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[72].OriginalText",
+        "labelName": "BTL_STRID_STD_DokubisiOff_E",
+        "originalText": "相手の 足下のどくびしが 消え去った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_side_end_16rwi4h",
+      "eventType": "side_end",
+      "priority": 50,
+      "patterns": [
+        "味方の 周りのステルスロックが 消え去った!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[75].OriginalText",
+        "labelName": "BTL_STRID_STD_StealthRockOff",
+        "originalText": "味方の 周りのステルスロックが 消え去った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_side_end_1k9uu4v",
+      "eventType": "side_end",
+      "priority": 50,
+      "patterns": [
+        "相手の 周りのステルスロックが 消え去った!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[76].OriginalText",
+        "labelName": "BTL_STRID_STD_StealthRockOff_E",
+        "originalText": "相手の 周りのステルスロックが 消え去った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_protect_tr6j4o",
+      "eventType": "protect",
+      "priority": 50,
+      "patterns": [
+        "味方の 周りをワイドガードが 守っている!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[77].OriginalText",
+        "labelName": "BTL_STRID_STD_WideGuard",
+        "originalText": "味方の 周りをワイドガードが 守っている!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_protect_1h0ihza",
+      "eventType": "protect",
+      "priority": 50,
+      "patterns": [
+        "相手の 周りをワイドガードが 守っている!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[78].OriginalText",
+        "labelName": "BTL_STRID_STD_WideGuard_E",
+        "originalText": "相手の 周りをワイドガードが 守っている!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_protect_170889s",
+      "eventType": "protect",
+      "priority": 50,
+      "patterns": [
+        "味方の 周りをファストガードが 守っている!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[79].OriginalText",
+        "labelName": "BTL_STRID_STD_FastGuard",
+        "originalText": "味方の 周りをファストガードが 守っている!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_protect_3h6ba1",
+      "eventType": "protect",
+      "priority": 50,
+      "patterns": [
+        "相手の 周りをファストガードが 守っている!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[80].OriginalText",
+        "labelName": "BTL_STRID_STD_FastGuard_E",
+        "originalText": "相手の 周りをファストガードが 守っている!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_item_1rmsygg",
+      "eventType": "item",
+      "priority": 50,
+      "patterns": [
+        "味方は 緊張してきのみが 食べられなくなった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[81].OriginalText",
+        "labelName": "BTL_STRID_STD_Kinchoukan",
+        "originalText": "味方は 緊張してきのみが 食べられなくなった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_item_y74x02",
+      "eventType": "item",
+      "priority": 50,
+      "patterns": [
+        "相手は 緊張してきのみが 食べられなくなった!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[82].OriginalText",
+        "labelName": "BTL_STRID_STD_Kinchoukan_E",
+        "originalText": "相手は 緊張してきのみが 食べられなくなった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_field_start_1enpg30",
+      "eventType": "field_start",
+      "priority": 50,
+      "patterns": [
+        "防御と 特防が 入れ替わる空間を 作りだした!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[83].OriginalText",
+        "labelName": "BTL_STRID_STD_WonderRoom_Start",
+        "originalText": "防御と 特防が 入れ替わる空間を 作りだした!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_field_end_1xngxe4",
+      "eventType": "field_end",
+      "priority": 50,
+      "patterns": [
+        "ワンダールームが 解除され防御と 特防が 元に戻った!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[84].OriginalText",
+        "labelName": "BTL_STRID_STD_WonderRoom_End",
+        "originalText": "ワンダールームが 解除され防御と 特防が 元に戻った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_field_end_lxrt82",
+      "eventType": "field_end",
+      "priority": 50,
+      "patterns": [
+        "持たせた 道具の 効果がなくなる 空間を 作りだした!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[85].OriginalText",
+        "labelName": "BTL_STRID_STD_MagicRoom_Start",
+        "originalText": "持たせた 道具の 効果がなくなる 空間を 作りだした!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_field_end_1qa59lx",
+      "eventType": "field_end",
+      "priority": 50,
+      "patterns": [
+        "マジックルームが 解除され道具の 効果が 元に戻った!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[86].OriginalText",
+        "labelName": "BTL_STRID_STD_MagicRoom_End",
+        "originalText": "マジックルームが 解除され道具の 効果が 元に戻った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_battle_end_1fvl7bw",
+      "eventType": "battle_end",
+      "priority": 50,
+      "patterns": [
+        "制限時間が なくなりました!対戦を 終了します!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[88].OriginalText",
+        "labelName": "BTL_STRID_STD_BattleTimeOver",
+        "originalText": "制限時間が なくなりました!対戦を 終了します!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_battle_end_18bme0e",
+      "eventType": "battle_end",
+      "priority": 50,
+      "patterns": [
+        "相手の 制限時間が なくなりました!対戦を 終了します!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[89].OriginalText",
+        "labelName": "BTL_STRID_STD_BattleTimeOver_Your",
+        "originalText": "相手の 制限時間が なくなりました!対戦を 終了します!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_battle_end_1cfvb19",
+      "eventType": "battle_end",
+      "priority": 50,
+      "patterns": [
+        "あなたの 制限時間が なくなりました!対戦を 終了します!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[90].OriginalText",
+        "labelName": "BTL_STRID_STD_BattleTimeOver_My",
+        "originalText": "あなたの 制限時間が なくなりました!対戦を 終了します!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_battle_end_1dypxk6",
+      "eventType": "battle_end",
+      "priority": 50,
+      "patterns": [
+        "一定時間 操作が ありませんでした!対戦を 終了します!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[91].OriginalText",
+        "labelName": "BTL_STRID_STD_CommandTimeOver",
+        "originalText": "一定時間 操作が ありませんでした!対戦を 終了します!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_battle_end_e0dvfh",
+      "eventType": "battle_end",
+      "priority": 50,
+      "patterns": [
+        "一定時間 相手の操作が ありませんでした!対戦を 終了します!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[92].OriginalText",
+        "labelName": "BTL_STRID_STD_CommandTimeOver_win",
+        "originalText": "一定時間 相手の操作が ありませんでした!対戦を 終了します!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_battle_end_1rxarh9",
+      "eventType": "battle_end",
+      "priority": 50,
+      "patterns": [
+        "降参が 選ばれました"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[93].OriginalText",
+        "labelName": "BTL_STRID_STD_Retired",
+        "originalText": "降参が 選ばれました",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_fail_1bxbqv0",
+      "eventType": "fail",
+      "priority": 50,
+      "patterns": [
+        "きのみを 食べていないので技が だせない!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[104].OriginalText",
+        "labelName": "BTL_STRID_STD_GeppuWarn",
+        "originalText": "きのみを 食べていないので技が だせない!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_terrain_start_1fh8g78",
+      "eventType": "terrain_start",
+      "priority": 50,
+      "patterns": [
+        "足下が 不思議な感じに なった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[107].OriginalText",
+        "labelName": "BTL_STRID_STD_PhychoField_Start",
+        "originalText": "足下が 不思議な感じに なった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_item_1g70g3z",
+      "eventType": "item",
+      "priority": 50,
+      "patterns": [
+        "おちゃかいをしてみんなで きのみを 食べた!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[109].OriginalText",
+        "labelName": "BTL_STRID_STD_Ochakai",
+        "originalText": "おちゃかいをしてみんなで きのみを 食べた!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_fail_6ic3mx",
+      "eventType": "fail",
+      "priority": 50,
+      "patterns": [
+        "きのみを 持っていないので 技がだせない!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[111].OriginalText",
+        "labelName": "BTL_STRID_STD_Hoobaru_Failed",
+        "originalText": "きのみを 持っていないので 技がだせない!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    }
+  ]
+}

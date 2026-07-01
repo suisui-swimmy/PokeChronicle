@@ -11,7 +11,7 @@ videoinput capture / video / screenshot
 -> Canvas preprocessing
 -> OCR provider
 -> text normalization
--> seed rules / dictionary / imported templates
+-> seed rules / generated champout templates / dictionary / imported templates
 -> battle events or unknowns
 -> review timeline
 -> statistics and export
@@ -94,14 +94,22 @@ M6 makes the review data durable without adding a runtime server:
 
 ## M7 Template Import Boundary
 
-M7 adds user-selected champout-style JSON import without bundling champout text in the repository:
+M7 includes a standard generated champout template pack plus user-selected champout-style JSON import:
+
+- `scripts/generate-champout-templates.mjs` is a development/build-time Node script. It verifies the local `others/champout` MIT license and source commit, reads selected Japanese battle text files, and writes `data/generated/champout-event-rules.ja.json`.
+- The generated pack is compact: it uses `OriginalText` from `btl_attack_syn.json` and `btl_std.json`, keeps only safely classified battle-event templates, and records source file, key path, label name, original text, and source commit for each generated rule.
+- `src/core/templates/generatedChampoutTemplateRules.ts` imports the generated JSON. Runtime code does not read from `others/champout`.
+- `src/core/templates/standardTemplateRules.ts` combines `SEED_TEMPLATE_RULES` with generated champout rules. Imported rules are appended after that standard pack for live parsing.
+- Third-party source, MIT license, source commit, and notice details are recorded in `THIRD_PARTY_NOTICES.md`.
+
+M7 also keeps user-selected import for additional validation and local updates:
 
 - `src/core/templates/importedTemplates.ts` parses selected JSON text, recursively extracts Japanese strings, infers safe battle event types, and turns those candidates into `BattleTemplateRule` entries for the existing matcher.
 - `src/storage/indexedDb.ts` stores the latest imported template collection in a separate IndexedDB object store from Battle Logs.
 - The review panel exposes `Template読込`, `Template出力`, and `Template削除`.
-- Imported rules are combined with `SEED_TEMPLATE_RULES` and passed to `parseBattleMessage()` for live OCR classification.
+- Imported rules are combined with the standard seed + generated champout rules and passed to `parseBattleMessage()` for live OCR classification.
 - Imported rule metadata keeps source file name, key path, label name, and original text for review/export provenance.
-- Runtime code still does not read from `others/`; the user must select JSON files in the browser.
+- Runtime code still does not read from `others/`; optional user imports must be selected in the browser.
 
 ZIP import is deferred. M7 supports selecting multiple JSON files directly.
 

@@ -8,7 +8,7 @@ import { matchDictionaryEntry } from "../dictionary/fuzzyMatch";
 import { BATTLE_DICTIONARY } from "../dictionary/generatedBattleDictionary";
 import { findDictionarySpans, type DictionarySpan } from "../dictionary/spanMatch";
 import type { DictionaryEntry, DictionaryMatch } from "../dictionary/types";
-import { SEED_TEMPLATE_RULES } from "../templates/seedTemplateRules";
+import { STANDARD_TEMPLATE_RULES } from "../templates/standardTemplateRules";
 import { matchTemplateRules } from "../templates/templateMatcher";
 import type { BattleTemplateRule } from "../templates/types";
 
@@ -797,7 +797,7 @@ export function parseBattleMessage(
     ocrConfidence,
     dictionary,
     surfaces,
-    options.templateRules ?? SEED_TEMPLATE_RULES,
+    options.templateRules ?? STANDARD_TEMPLATE_RULES,
   );
 
   if (templateEvent) {

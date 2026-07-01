@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "generate:champout-templates": "node scripts/generate-champout-templates.mjs",
     "generate:dictionaries": "node scripts/generate-battle-dictionaries.mjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
