@@ -131,9 +131,21 @@ describe("parseBattleMessage", () => {
       status: "event",
       event: { type: "supereffective" },
     });
+    expect(parseBattleMessage("効果は パツグンだ")).toMatchObject({
+      status: "event",
+      event: { type: "supereffective" },
+    });
+    expect(parseBattleMessage("効果は パッグンだ")).toMatchObject({
+      status: "event",
+      event: { type: "supereffective" },
+    });
     expect(parseBattleMessage("相手の カラマネロと オーロングに\n効果は バッグンだ/")).toMatchObject({
       status: "event",
       event: { type: "supereffective" },
+    });
+    expect(parseBattleMessage("ドドゲザンに 効果は いまひとつだ")).toMatchObject({
+      status: "event",
+      event: { type: "resisted" },
     });
     expect(parseBattleMessage("効果は いまひとつのようだ")).toMatchObject({
       status: "event",
@@ -177,6 +189,35 @@ describe("parseBattleMessage", () => {
     });
   });
 
+  it("parses noisy life-cost HP loss variants without overwriting raw text", () => {
+    const result = parseBattleMessage({
+      rawText: "イヅダイトウは\n命か 少し削られだ/",
+      lines: ["イヅダイトウは", "命か 少し削られだ/"],
+      ocrConfidence: 0.82,
+    });
+
+    expect(result.status).toBe("event");
+    expect(result.rawText).toBe("イヅダイトウは\n命か 少し削られだ/");
+    expect(result.status === "event" ? result.event : null).toMatchObject({
+      type: "damage",
+      actor: { name: "イダイトウ" },
+      move: null,
+    });
+  });
+
+  it("parses exact life-cost OCR variants through seed templates", () => {
+    for (const rawText of [
+      "イダイトウは 命か 少し削られだ",
+      "イダイトウは 命が 少し削られだ",
+      "イダイトウは 命か 少し削られた",
+    ]) {
+      expect(parseBattleMessage(rawText)).toMatchObject({
+        status: "event",
+        event: { type: "damage", actor: { name: "イダイトウ" } },
+      });
+    }
+  });
+
   it("parses exact opponent HP loss templates with opponent side", () => {
     const result = parseBattleMessage({
       rawText: "相手の イダイトウは\n命が 少し削られた/",
@@ -217,6 +258,51 @@ describe("parseBattleMessage", () => {
     expect(parseBattleMessage("エルフーンの すばやさが 下がった！")).toMatchObject({
       status: "event",
       event: { type: "unboost" },
+    });
+    expect(parseBattleMessage("エルフーンの すばやさが 下かった！")).toMatchObject({
+      status: "event",
+      event: { type: "unboost" },
+    });
+    expect(parseBattleMessage("エルフーンの すばやさが 下がっだ！")).toMatchObject({
+      status: "event",
+      event: { type: "unboost" },
+    });
+  });
+
+  it("parses faint and battle-end OCR variants", () => {
+    for (const rawText of ["たおれだ", "だたおれだ"]) {
+      expect(parseBattleMessage(rawText)).toMatchObject({
+        status: "event",
+        event: { type: "faint" },
+      });
+    }
+
+    for (const rawText of [
+      "降参が 選ばれました",
+      "降参が 選はばれました",
+      "勝負に 負けた",
+      "勝負に 口けた",
+    ]) {
+      expect(parseBattleMessage(rawText)).toMatchObject({
+        status: "event",
+        event: { type: "battle_end" },
+      });
+    }
+  });
+
+  it("relaxes move OCR matching only inside a strong actor-move shape", () => {
+    const result = parseBattleMessage({
+      rawText: "相手の キュウコンの\nオーパーヒードト/",
+      lines: ["相手の キュウコンの", "オーパーヒードト/"],
+      ocrConfidence: 0.86,
+    });
+
+    expect(result.status).toBe("event");
+    expect(result.status === "event" ? result.event : null).toMatchObject({
+      type: "move",
+      actor: { name: "キュウコン", side: "opponent" },
+      move: "オーバーヒート",
+      classification: { method: "fuzzy_dictionary" },
     });
   });
 

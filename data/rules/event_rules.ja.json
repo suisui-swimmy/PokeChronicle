@@ -4,7 +4,10 @@
     "eventType": "damage",
     "priority": 120,
     "patterns": [
-      "相手の{pokemon}は命が少し削られた"
+      "相手の{pokemon}は命が少し削られた",
+      "相手の{pokemon}は命か少し削られた",
+      "相手の{pokemon}は命が少し削られだ",
+      "相手の{pokemon}は命か少し削られだ"
     ],
     "constants": {
       "actor.side": "opponent"
@@ -15,7 +18,10 @@
     "eventType": "damage",
     "priority": 100,
     "patterns": [
-      "{pokemon}は命が少し削られた"
+      "{pokemon}は命が少し削られた",
+      "{pokemon}は命か少し削られた",
+      "{pokemon}は命が少し削られだ",
+      "{pokemon}は命か少し削られだ"
     ]
   },
   {

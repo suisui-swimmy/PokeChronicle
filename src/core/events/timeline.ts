@@ -41,6 +41,39 @@ export function createSourceFrameRef(frameIndex: number | null, timestampMs: num
   return frameIndex === null ? `time:${timestampMs}` : `frame:${frameIndex}:${timestampMs}`;
 }
 
+function countCharacters(value: string) {
+  return Array.from(value).length;
+}
+
+function containsJapaneseText(value: string) {
+  return /[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u.test(value);
+}
+
+export function shouldCreateUnknownEvent(input: {
+  matchText: string;
+  normalizedText: string;
+  ocrConfidence: number | null;
+  candidateMatches: readonly string[];
+}) {
+  const matchText = input.matchText.trim();
+
+  if (!matchText) {
+    return false;
+  }
+
+  const matchTextLength = countCharacters(matchText);
+
+  if (matchTextLength >= 6 && (input.ocrConfidence ?? 0) >= 0.7) {
+    return true;
+  }
+
+  if (input.candidateMatches.length > 0 && matchTextLength >= 3) {
+    return true;
+  }
+
+  return containsJapaneseText(input.normalizedText) && matchTextLength >= 8;
+}
+
 function createEventDedupeKey(parseResult: BattleMessageParseResult) {
   if (parseResult.status === "unknown") {
     return parseResult.matchText ? `unknown:${parseResult.matchText}` : null;
@@ -57,7 +90,7 @@ function createEventDedupeKey(parseResult: BattleMessageParseResult) {
     actor,
     parseResult.event.move ?? "",
     target,
-    parseResult.matchText,
+    parseResult.event.classification.templateId ?? "",
   ].join("|");
 }
 
@@ -91,6 +124,17 @@ function createBattleEvent(input: TimelineObservationInput): BattleEvent | null 
 
 function createUnknownEvent(input: TimelineObservationInput): UnknownEvent | null {
   if (input.parseResult.status !== "unknown" || !input.parseResult.matchText) {
+    return null;
+  }
+
+  if (
+    !shouldCreateUnknownEvent({
+      matchText: input.parseResult.matchText,
+      normalizedText: input.parseResult.normalizedText,
+      ocrConfidence: input.ocrConfidence,
+      candidateMatches: input.parseResult.candidateMatches,
+    })
+  ) {
     return null;
   }
 

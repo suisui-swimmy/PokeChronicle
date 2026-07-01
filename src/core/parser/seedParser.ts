@@ -61,6 +61,18 @@ const DEFAULT_ACTOR = { name: null, side: null } satisfies BattleEvent["actor"];
 const OPPONENT_PREFIX = "相手の";
 const MAX_INLINE_GAP_NOISE = 4;
 const MAX_CANDIDATE_MATCHES = 16;
+const RELAXED_STRONG_ACTOR_MOVE_OPTIONS = {
+  acceptScore: 0.72,
+  reviewScore: 0.68,
+  acceptMargin: 0.12,
+  minOcrConfidenceForFuzzy: 0.68,
+} as const;
+const RELAXED_HP_LOSS_ACTOR_OPTIONS = {
+  acceptScore: 0.8,
+  reviewScore: 0.72,
+  acceptMargin: 0.08,
+  minOcrConfidenceForFuzzy: 0.65,
+} as const;
 
 interface MatchSurface {
   id: string;
@@ -263,17 +275,23 @@ function parseContextEvent(
     ...surfaces.map((surface) => surface.matchText),
   ].filter((value, index, values) => value && values.indexOf(value) === index);
   const effectPatterns: Array<[BattleEventType, string, string[]]> = [
-    ["supereffective", "effect_supereffective", ["効果はバツグンだ", "効果はバッグンだ", "効果はバックンだ"]],
-    ["resisted", "effect_resisted", ["効果はいまひとつ"]],
+    [
+      "supereffective",
+      "effect_supereffective",
+      ["効果はバツグンだ", "効果はパツグンだ", "効果はバッグンだ", "効果はパッグンだ", "効果はバックンだ"],
+    ],
+    ["resisted", "effect_resisted", ["効果はいまひとつ", "効果はいまひとつだ"]],
     ["immune", "effect_immune", ["効果がない", "効果はない"]],
     ["critical", "critical_hit", ["急所"]],
     ["boost", "stat_boost", ["上がった"]],
-    ["unboost", "stat_unboost", ["下がった"]],
+    ["unboost", "stat_unboost", ["下がった", "下かった", "下がっだ"]],
     ["miss", "move_miss", ["外れた", "あたらなかった"]],
     ["fail", "move_fail", ["失敗", "うまく決まらない"]],
     ["protect", "protect", ["身を守った", "守られた"]],
-    ["faint", "faint", ["倒れた", "たおれた", "ひんし"]],
+    ["faint", "faint", ["倒れた", "たおれた", "たおれだ", "だたおれだ", "ひんし"]],
     ["switch_out", "switch_out", ["引っこめた", "ひっこめた"]],
+    ["battle_end", "battle_end_surrender", ["降参が選ばれました", "降参が選はばれました"]],
+    ["battle_end", "battle_end_loss", ["勝負に負けた", "勝負に口けた"]],
   ];
 
   for (const [type, templateId, patterns] of effectPatterns) {
@@ -299,6 +317,95 @@ function parseContextEvent(
   }
 
   return null;
+}
+
+function createEventFromDictionaryActor(
+  type: BattleEventType,
+  rawText: string,
+  normalizedText: string,
+  matchText: string,
+  actorMatch: DictionaryMatch,
+  side: BattleEvent["actor"]["side"],
+  ocrConfidence: number | null | undefined,
+  templateId: string,
+): EventParseResult {
+  return {
+    status: "event",
+    rawText,
+    normalizedText,
+    matchText,
+    event: {
+      type,
+      actor: {
+        name: actorMatch.best,
+        side,
+      },
+      move: null,
+      target: null,
+      confidence: combineConfidence(ocrConfidence, [actorMatch.score ?? 1]),
+      classification: createClassification(
+        actorMatch.method === "fuzzy" ? "fuzzy_dictionary" : "seed_rule",
+        templateId,
+        [formatDictionaryCandidate("pokemon", actorMatch)],
+      ),
+    },
+    candidateMatches: [formatDictionaryCandidate("pokemon", actorMatch), templateId],
+  };
+}
+
+function parseHpLossLifeCostEvent(
+  rawText: string,
+  normalizedText: string,
+  matchText: string,
+  ocrConfidence: number | null | undefined,
+  dictionary: BattleMessageDictionary,
+  surfaces: readonly MatchSurface[],
+) {
+  const candidateMatches: string[] = [];
+
+  for (const surface of surfaces) {
+    const match = surface.matchText.match(/(?:(相手の))?(.{2,16}?)は命[がか]少し削られ[ただ]/u);
+
+    if (!match) {
+      continue;
+    }
+
+    let side: BattleEvent["actor"]["side"] = match[1] ? "opponent" : null;
+    let actorText = match[2];
+    const opponentPrefixIndex = actorText.lastIndexOf(OPPONENT_PREFIX);
+
+    if (opponentPrefixIndex >= 0) {
+      side = "opponent";
+      actorText = actorText.slice(opponentPrefixIndex + OPPONENT_PREFIX.length);
+    }
+
+    const actorMatch = matchDictionaryEntry(actorText, dictionary.pokemon, {
+      ocrConfidence,
+      ...RELAXED_HP_LOSS_ACTOR_OPTIONS,
+    });
+
+    pushUniqueCandidate(candidateMatches, formatDictionaryCandidate("pokemon", actorMatch));
+
+    if (actorMatch.status !== "accepted") {
+      continue;
+    }
+
+    return {
+      result: createEventFromDictionaryActor(
+        "damage",
+        rawText,
+        normalizedText,
+        matchText,
+        actorMatch,
+        side,
+        ocrConfidence,
+        "hp_loss_life_cost_noisy",
+      ),
+      candidateMatches,
+    };
+  }
+
+  return { candidateMatches };
 }
 
 function splitMoveMessage(matchText: string) {
@@ -519,13 +626,34 @@ function parseMoveEvent(
     const pokemonMatch = matchDictionaryEntry(part.actorText, dictionary.pokemon, {
       ocrConfidence,
     });
-    const moveMatch = matchDictionaryEntry(part.moveText, dictionary.moves, {
+    const strictMoveMatch = matchDictionaryEntry(part.moveText, dictionary.moves, {
       ocrConfidence,
     });
+    let moveMatch = strictMoveMatch;
     const partCandidates = [
       formatDictionaryCandidate("pokemon", pokemonMatch),
-      formatDictionaryCandidate("move", moveMatch),
+      formatDictionaryCandidate("move", strictMoveMatch),
     ];
+
+    if (
+      pokemonMatch.status === "accepted" &&
+      (pokemonMatch.method === "exact" || (pokemonMatch.score ?? 0) >= 0.9) &&
+      strictMoveMatch.status !== "accepted"
+    ) {
+      const relaxedMoveMatch = matchDictionaryEntry(part.moveText, dictionary.moves, {
+        ocrConfidence,
+        ...RELAXED_STRONG_ACTOR_MOVE_OPTIONS,
+      });
+      pushUniqueCandidate(
+        partCandidates,
+        `strong-actor:${formatDictionaryCandidate("move", relaxedMoveMatch)}`,
+      );
+
+      if (relaxedMoveMatch.status === "accepted") {
+        moveMatch = relaxedMoveMatch;
+      }
+    }
+
     candidateMatches.push(...partCandidates);
 
     if (pokemonMatch.status !== "accepted" || moveMatch.status !== "accepted") {
@@ -676,6 +804,19 @@ export function parseBattleMessage(
     return templateEvent;
   }
 
+  const hpLossEvent = parseHpLossLifeCostEvent(
+    rawText,
+    normalizedText,
+    matchText,
+    ocrConfidence,
+    dictionary,
+    surfaces,
+  );
+
+  if (hpLossEvent.result) {
+    return hpLossEvent.result;
+  }
+
   const moveEvent = parseMoveEvent(
     rawText,
     normalizedText,
@@ -689,5 +830,10 @@ export function parseBattleMessage(
     return moveEvent.result;
   }
 
-  return createUnknownResult(rawText, normalizedText, matchText, moveEvent?.candidateMatches ?? []);
+  return createUnknownResult(
+    rawText,
+    normalizedText,
+    matchText,
+    [...hpLossEvent.candidateMatches, ...(moveEvent?.candidateMatches ?? [])],
+  );
 }

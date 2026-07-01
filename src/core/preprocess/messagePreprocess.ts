@@ -6,6 +6,12 @@ export interface MessagePreprocessOptions {
   invert: boolean;
 }
 
+export interface MessagePreprocessMetrics {
+  foregroundPixelCount: number;
+  totalPixelCount: number;
+  foregroundPixelRatio: number;
+}
+
 function clampByte(value: number) {
   return Math.min(Math.max(Math.round(value), 0), 255);
 }
@@ -53,4 +59,58 @@ export function preprocessMessageImageData(
   }
 
   return output;
+}
+
+function isProcessedForegroundPixel(
+  data: Uint8ClampedArray,
+  index: number,
+  foregroundValue: number,
+) {
+  const alpha = data[index + 3];
+
+  if (alpha === 0) {
+    return false;
+  }
+
+  const tolerance = 8;
+
+  return (
+    Math.abs(data[index] - foregroundValue) <= tolerance &&
+    Math.abs(data[index + 1] - foregroundValue) <= tolerance &&
+    Math.abs(data[index + 2] - foregroundValue) <= tolerance
+  );
+}
+
+export function analyzeProcessedMessageImageData(
+  processed: ImageData,
+  options: MessagePreprocessOptions,
+): MessagePreprocessMetrics {
+  const { foregroundValue } = getOutputValues(options.background, options.invert);
+  const totalPixelCount = processed.width * processed.height;
+  let foregroundPixelCount = 0;
+
+  for (let index = 0; index < processed.data.length; index += 4) {
+    if (isProcessedForegroundPixel(processed.data, index, foregroundValue)) {
+      foregroundPixelCount += 1;
+    }
+  }
+
+  return {
+    foregroundPixelCount,
+    totalPixelCount,
+    foregroundPixelRatio:
+      totalPixelCount === 0 ? 0 : foregroundPixelCount / totalPixelCount,
+  };
+}
+
+export function preprocessMessageImageDataWithMetrics(
+  source: ImageData,
+  options: MessagePreprocessOptions,
+) {
+  const imageData = preprocessMessageImageData(source, options);
+
+  return {
+    imageData,
+    metrics: analyzeProcessedMessageImageData(imageData, options),
+  };
 }

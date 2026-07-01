@@ -23,7 +23,7 @@ import {
   type TimelineDeduplicationRecord,
 } from "../core/events/timeline";
 import {
-  preprocessMessageImageData,
+  preprocessMessageImageDataWithMetrics,
   type MessagePreprocessOptions,
 } from "../core/preprocess/messagePreprocess";
 import { mapDisplayRoiToSourceRect } from "../core/media/roiMapping";
@@ -77,6 +77,8 @@ const OCR_RAW_GROUP_LIMIT = 30;
 const MAX_PENDING_OCR_JOBS = 1;
 const OCR_JOB_TIMEOUT_MS = 60_000;
 const TIMELINE_DUPLICATE_WINDOW_MS = 2500;
+const MIN_TEXT_PIXEL_RATIO = 0.004;
+const MAX_TEXT_PIXEL_RATIO = 0.18;
 const DEFAULT_PREPROCESS_OPTIONS: MessagePreprocessOptions = {
   whiteThreshold: 180,
   background: "black",
@@ -139,6 +141,9 @@ type CapturedFrameImages = {
   sourceHeight: number;
   cropWidth: number;
   cropHeight: number;
+  foregroundPixelCount: number;
+  totalPixelCount: number;
+  foregroundPixelRatio: number;
 };
 
 type FrameSample = CapturedFrameImages & {
@@ -248,6 +253,10 @@ function formatConfidence(confidence: number | null) {
   return `${Math.round(confidence * 100)}%`;
 }
 
+function formatTextDensity(ratio: number) {
+  return `${(ratio * 100).toFixed(1)}%`;
+}
+
 function formatProgress(progress: number) {
   return `${Math.round(clamp(progress, 0, 1) * 100)}%`;
 }
@@ -256,6 +265,8 @@ function formatEventType(type: string) {
   const labels: Record<string, string> = {
     ability: "特性",
     activate: "発動",
+    battle_end: "勝負終了",
+    battle_start: "勝負開始",
     boost: "能力上昇",
     critical: "急所",
     damage: "ダメージ",
@@ -615,7 +626,10 @@ function captureRoiFrame(
   );
 
   const rawImageData = rawContext.getImageData(0, 0, crop.width, crop.height);
-  const processedImageData = preprocessMessageImageData(rawImageData, preprocess);
+  const { imageData: processedImageData, metrics } = preprocessMessageImageDataWithMetrics(
+    rawImageData,
+    preprocess,
+  );
   const processedCanvas = document.createElement("canvas");
   processedCanvas.width = crop.width;
   processedCanvas.height = crop.height;
@@ -647,6 +661,9 @@ function captureRoiFrame(
     sourceHeight,
     cropWidth: crop.width,
     cropHeight: crop.height,
+    foregroundPixelCount: metrics.foregroundPixelCount,
+    totalPixelCount: metrics.totalPixelCount,
+    foregroundPixelRatio: metrics.foregroundPixelRatio,
   };
 }
 
@@ -971,6 +988,16 @@ export function App() {
   const queueOcrRecognition = useCallback(
     (sample: FrameSample) => {
       if (!isOcrEnabledRef.current) {
+        return;
+      }
+
+      if (
+        sample.foregroundPixelRatio < MIN_TEXT_PIXEL_RATIO ||
+        sample.foregroundPixelRatio > MAX_TEXT_PIXEL_RATIO
+      ) {
+        setOcrStatusLabel(
+          `OCR skipped: text density gate (${formatTextDensity(sample.foregroundPixelRatio)})`,
+        );
         return;
       }
 
@@ -2226,7 +2253,7 @@ export function App() {
                   <span>preprocessed</span>
                   <span>
                     {latestFrameSample
-                      ? `${latestFrameSample.upscaleFactor}x / ${latestFrameSample.preprocess.whiteThreshold}`
+                      ? `${latestFrameSample.upscaleFactor}x / ${latestFrameSample.preprocess.whiteThreshold} / text ${formatTextDensity(latestFrameSample.foregroundPixelRatio)}`
                       : "未生成"}
                   </span>
                 </figcaption>
