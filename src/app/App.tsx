@@ -7,9 +7,7 @@ import {
   type ChangeEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { APP_ROUTES } from "./routes";
 import {
-  BATTLE_LOG_SCHEMA_VERSION,
   type BattleLogDocument,
   type BattleLogFrameEvidence,
   type BattleLogMediaMetadata,
@@ -62,18 +60,6 @@ import {
   saveBattleLogDocument,
   saveImportedTemplateCollection,
 } from "../storage/indexedDb";
-
-const MILESTONES = [
-  { id: "M0", label: "静的アプリ基盤", status: "完了" },
-  { id: "M1", label: "キャプチャ表示とROI調整", status: "完了" },
-  { id: "M2", label: "フレームサンプリングと前処理preview", status: "完了" },
-  { id: "M3", label: "OCR providerとリアルタイムOCRログ", status: "完了" },
-  { id: "M4", label: "正規化、辞書、seed parser", status: "完了" },
-  { id: "M4.5", label: "seed template matcher", status: "完了" },
-  { id: "M5", label: "Event timeline、unknown bucket、レビュー", status: "完了" },
-  { id: "M6", label: "IndexedDB保存とexport/import基盤", status: "完了" },
-  { id: "M7", label: "champout/template import", status: "完了" },
-];
 
 const LIVE_BATTLE_ID = "battle_live";
 const LIVE_BATTLE_TITLE = "Live OCR battle log";
@@ -2108,6 +2094,15 @@ export function App() {
             </div>
           </section>
 
+          <details className="management-panel" aria-label="analysis and data management">
+            <summary className="management-summary">
+              <span className="management-summary-icon" aria-hidden="true" />
+              <span>解析・データ管理</span>
+              <strong>
+                OCR {isOcrEnabled ? "実行中" : "停止中"} / {battleEvents.length} resolved
+              </strong>
+            </summary>
+
           <section className="analysis-panel" aria-label="frame sampling and preprocessing">
             <div className="analysis-header">
               <div>
@@ -2335,6 +2330,367 @@ export function App() {
             </section>
           </section>
 
+          <section className="data-management-panel" aria-label="data import export and review details">
+            <div className="panel-heading panel-heading--compact">
+              <div>
+                <h2>データ管理</h2>
+                <p>
+                  {storageStatusLabel} / {templateImportStatusLabel}
+                </p>
+              </div>
+            </div>
+
+            <div className="storage-actions" aria-label="battle log storage actions">
+              <button type="button" className="storage-button" onClick={() => void handleSaveBattleLog()}>
+                保存
+              </button>
+              <button type="button" className="storage-button" onClick={() => void handleLoadBattleLog()}>
+                読込
+              </button>
+              <button type="button" className="storage-button" onClick={handleExportBattleLogJson}>
+                JSON
+              </button>
+              <button
+                type="button"
+                className="storage-button"
+                onClick={() => battleLogImportInputRef.current?.click()}
+              >
+                JSON読込
+              </button>
+              <button type="button" className="storage-button" onClick={handleExportEventsCsv}>
+                Events CSV
+              </button>
+              <button type="button" className="storage-button" onClick={handleExportUnknownsCsv}>
+                Unknown CSV
+              </button>
+              <input
+                ref={battleLogImportInputRef}
+                className="visually-hidden"
+                type="file"
+                accept="application/json,.json"
+                onChange={(event) => void handleBattleLogImportChange(event)}
+              />
+            </div>
+
+            <div className="storage-actions template-actions" aria-label="template import actions">
+              <button
+                type="button"
+                className="storage-button"
+                onClick={() => templateImportInputRef.current?.click()}
+              >
+                Template読込
+              </button>
+              <button
+                type="button"
+                className="storage-button"
+                onClick={handleExportTemplateImport}
+                disabled={!importedTemplateCollection}
+              >
+                Template出力
+              </button>
+              <button
+                type="button"
+                className="storage-button"
+                onClick={() => void handleClearTemplateImport()}
+                disabled={!importedTemplateCollection}
+              >
+                Template削除
+              </button>
+              <input
+                ref={templateImportInputRef}
+                className="visually-hidden"
+                type="file"
+                accept="application/json,.json"
+                multiple
+                onChange={(event) => void handleTemplateImportChange(event)}
+              />
+            </div>
+
+            <div className="template-import-summary" aria-label="template import summary">
+              <span>{SEED_TEMPLATE_RULES.length} seed</span>
+              <span>{importedTemplateCollection?.stats.sourceFileCount ?? 0} files</span>
+              <span>{importedTemplateCollection?.stats.battleCandidateCount ?? 0} candidates</span>
+              <span>{activeTemplateRules.length} active</span>
+            </div>
+
+            <div className="review-tabs" role="tablist" aria-label="review views">
+              {REVIEW_TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  id={`review-tab-${tab.id}`}
+                  aria-controls={`review-panel-${tab.id}`}
+                  aria-selected={activeReviewTab === tab.id}
+                  className="review-tab"
+                  onClick={() => setActiveReviewTab(tab.id)}
+                >
+                  <span>{tab.label}</span>
+                  {tab.id === "timeline" ? <strong>{timelineItems.length}</strong> : null}
+                  {tab.id === "resolved" ? <strong>{battleEvents.length}</strong> : null}
+                  {tab.id === "unknown" ? <strong>{unknownEvents.length}</strong> : null}
+                  {tab.id === "ocr" ? <strong>{ocrLogGroups.length}</strong> : null}
+                  {tab.id === "system" ? <strong>{logs.length}</strong> : null}
+                </button>
+              ))}
+            </div>
+
+            <div className="review-tabpanels">
+              {activeReviewTab === "timeline" ? (
+                <section
+                  id="review-panel-timeline"
+                  role="tabpanel"
+                  aria-labelledby="review-tab-timeline"
+                  className="review-section"
+                >
+                  <div className="review-section-heading">
+                    <h2>イベントタイムライン</h2>
+                    <span>
+                      {battleEvents.length} events / {unknownEvents.length} unknown /{" "}
+                      {suppressedTimelineCount} dup
+                    </span>
+                  </div>
+                  <ol className="timeline-list">
+                    {timelineItems.length === 0 ? (
+                      <li className="timeline-empty">タイムライン空</li>
+                    ) : (
+                      timelineItems.map((item) => {
+                        const sourceFrameRef = getTimelineItemSourceFrameRef(item);
+                        const cropEvidence = sourceFrameRef
+                          ? cropEvidenceBySourceRef.current.get(sourceFrameRef)
+                          : null;
+
+                        if (item.kind === "event") {
+                          return (
+                            <li key={item.event.id} className="timeline-entry timeline-entry--event">
+                              <div className="timeline-meta">
+                                <span>#{item.event.source.frameIndex ?? "--"}</span>
+                                <span>{item.event.timestampMs}ms</span>
+                                <span>{item.event.classification.method}</span>
+                              </div>
+                              <p>{formatEventSummary(item.event)}</p>
+                              <div className="timeline-evidence">
+                                {cropEvidence ? (
+                                  <img src={cropEvidence.processedDataUrl} alt="イベント元crop" />
+                                ) : null}
+                                <code>{item.event.rawText || "raw empty"}</code>
+                              </div>
+                            </li>
+                          );
+                        }
+
+                        return (
+                          <li
+                            key={item.unknown.id}
+                            className="timeline-entry timeline-entry--unknown"
+                          >
+                            <div className="timeline-meta">
+                              <span>{item.unknown.sourceFrameRef ?? "frame未保存"}</span>
+                              <span>{item.unknown.timestampMs}ms</span>
+                              <span>{formatReviewStatus(item.unknown.reviewStatus)}</span>
+                            </div>
+                            <p>{item.unknown.normalizedText || "unknown text empty"}</p>
+                            <div className="timeline-evidence">
+                              {cropEvidence ? (
+                                <img src={cropEvidence.processedDataUrl} alt="unknown元crop" />
+                              ) : null}
+                              <code>{item.unknown.rawText || "raw empty"}</code>
+                            </div>
+                          </li>
+                        );
+                      })
+                    )}
+                  </ol>
+                </section>
+              ) : null}
+
+              {activeReviewTab === "resolved" ? (
+                <section
+                  id="review-panel-resolved"
+                  role="tabpanel"
+                  aria-labelledby="review-tab-resolved"
+                  className="review-section"
+                >
+                  <div className="review-section-heading">
+                    <h2>解決ログ</h2>
+                    <span>{battleEvents.length} resolved</span>
+                  </div>
+                  <ol className="resolved-list">
+                    {battleEvents.length === 0 ? (
+                      <li className="timeline-empty">解決ログ空</li>
+                    ) : (
+                      battleEvents.map((event) => {
+                        const sourceFrameRef = createSourceFrameRef(
+                          event.source.frameIndex,
+                          event.source.timestampMs,
+                        );
+                        const cropEvidence = cropEvidenceBySourceRef.current.get(sourceFrameRef);
+
+                        return (
+                          <li key={event.id} className="resolved-entry">
+                            <div className="timeline-meta">
+                              <span>#{event.source.frameIndex ?? "--"}</span>
+                              <span>{event.timestampMs}ms</span>
+                              <span>{formatConfidence(event.confidence)}</span>
+                            </div>
+                            <h3>{event.normalizedText || formatEventSummary(event)}</h3>
+                            <div className="resolved-summary">
+                              <span className="parse-chip parse-chip--event">
+                                {formatResolvedEventChip(event)}
+                              </span>
+                              <span>{event.normalizedText || "normalized empty"}</span>
+                            </div>
+                            <div className="timeline-evidence">
+                              {cropEvidence ? (
+                                <img src={cropEvidence.processedDataUrl} alt="resolved元crop" />
+                              ) : null}
+                              <code>{event.rawText || "raw empty"}</code>
+                            </div>
+                          </li>
+                        );
+                      })
+                    )}
+                  </ol>
+                </section>
+              ) : null}
+
+              {activeReviewTab === "unknown" ? (
+                <section
+                  id="review-panel-unknown"
+                  role="tabpanel"
+                  aria-labelledby="review-tab-unknown"
+                  className="review-section"
+                >
+                  <div className="review-section-heading">
+                    <h2>Unknown bucket</h2>
+                    <span>
+                      {reviewedUnknownCount}/{unknownEvents.length} reviewed
+                    </span>
+                  </div>
+                  <ol className="unknown-list">
+                    {unknownEvents.length === 0 ? (
+                      <li className="timeline-empty">unknown空</li>
+                    ) : (
+                      unknownEvents.map((unknown) => (
+                        <li key={unknown.id} className="unknown-entry">
+                          <div className="timeline-meta">
+                            <span>{unknown.id}</span>
+                            <span>{formatConfidence(unknown.ocrConfidence)}</span>
+                            <span>{formatReviewStatus(unknown.reviewStatus)}</span>
+                          </div>
+                          <p>{unknown.normalizedText}</p>
+                          <label className="review-note">
+                            <span>修正メモ</span>
+                            <textarea
+                              value={reviewNotes[unknown.id] ?? ""}
+                              aria-label={`修正メモ ${unknown.id}`}
+                              rows={2}
+                              onChange={(event) =>
+                                handleReviewNoteChange(unknown.id, event.target.value)
+                              }
+                            />
+                          </label>
+                          <details className="candidate-details">
+                            <summary>{unknown.candidateMatches.length} candidates</summary>
+                            <code>
+                              {unknown.candidateMatches.length > 0
+                                ? unknown.candidateMatches.join("\n")
+                                : "候補なし"}
+                            </code>
+                          </details>
+                          <button
+                            type="button"
+                            className="review-button"
+                            onClick={() => handleUnknownReview(unknown.id)}
+                            disabled={unknown.reviewStatus === "reviewed"}
+                          >
+                            reviewedにする
+                          </button>
+                        </li>
+                      ))
+                    )}
+                  </ol>
+                </section>
+              ) : null}
+
+              {activeReviewTab === "ocr" ? (
+                <section
+                  id="review-panel-ocr"
+                  role="tabpanel"
+                  aria-labelledby="review-tab-ocr"
+                  className="review-section"
+                >
+                  <div className="review-section-heading">
+                    <h2>OCR Raw</h2>
+                    <span>
+                      {ocrLogGroups.length} groups / {ocrMessages.length} messages
+                    </span>
+                  </div>
+                  <ol className="ocr-raw-list">
+                    {ocrLogGroups.length === 0 ? (
+                      <li className="timeline-empty">OCR raw空</li>
+                    ) : (
+                      ocrLogGroups.map((group) => (
+                        <li
+                          key={`${group.entry.id}-${group.key}`}
+                          className={`ocr-raw-entry ocr-log-entry--${group.entry.status}`}
+                        >
+                          <div className="timeline-meta">
+                            <span>#{group.entry.frameIndex}</span>
+                            <span>{group.entry.timestampMs}ms</span>
+                            <span>{formatConfidence(group.entry.confidence)}</span>
+                            {group.count > 1 ? <span>x{group.count}</span> : null}
+                          </div>
+                          {group.entry.status === "error" ? (
+                            <p>{group.entry.errorMessage}</p>
+                          ) : (
+                            <>
+                              <p>{group.entry.normalizedText || "テキストなし"}</p>
+                              {group.entry.parseResult ? (
+                                <div className="parse-summary">
+                                  <span
+                                    className={`parse-chip parse-chip--${group.entry.parseResult.status}`}
+                                  >
+                                    {formatParseSummary(group.entry.parseResult)}
+                                  </span>
+                                  <span>{group.entry.matchText || "match empty"}</span>
+                                </div>
+                              ) : null}
+                              <code>{group.entry.rawText || "raw empty"}</code>
+                            </>
+                          )}
+                        </li>
+                      ))
+                    )}
+                  </ol>
+                </section>
+              ) : null}
+
+              {activeReviewTab === "system" ? (
+                <section
+                  id="review-panel-system"
+                  role="tabpanel"
+                  aria-labelledby="review-tab-system"
+                  className="review-section"
+                >
+                  <div className="review-section-heading">
+                    <h2>システムログ</h2>
+                    <span>{ocrMessages.length} OCR messages</span>
+                  </div>
+                  <ol className="log-list">
+                    {logs.map((log) => (
+                      <li key={log.id} className={`log-entry log-entry--${log.level}`}>
+                        <time>{log.timestamp}</time>
+                        <span>{log.message}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+              ) : null}
+            </div>
+          </section>
+          </details>
+
           <footer className="capture-statusbar" aria-label="media status">
             <span>
               <span className={`status-dot status-dot--${statusTone}`} aria-hidden="true" />
@@ -2353,377 +2709,24 @@ export function App() {
           </footer>
         </div>
 
-        <aside className="log-panel review-panel" aria-labelledby="review-title">
-          <div className="panel-heading">
-            <div>
-              <h1 id="review-title">レビュー</h1>
-              <p>
-                {storageStatusLabel} / {templateImportStatusLabel}
-              </p>
-            </div>
-            <span>M7</span>
+        <aside className="log-panel resolved-log-panel" aria-labelledby="log-title">
+          <div className="log-panel-heading">
+            <h1 id="log-title">ログ</h1>
+            <span>{battleEvents.length} resolved</span>
           </div>
-
-          <div className="storage-actions" aria-label="battle log storage actions">
-            <button type="button" className="storage-button" onClick={() => void handleSaveBattleLog()}>
-              保存
-            </button>
-            <button type="button" className="storage-button" onClick={() => void handleLoadBattleLog()}>
-              読込
-            </button>
-            <button type="button" className="storage-button" onClick={handleExportBattleLogJson}>
-              JSON
-            </button>
-            <button
-              type="button"
-              className="storage-button"
-              onClick={() => battleLogImportInputRef.current?.click()}
-            >
-              JSON読込
-            </button>
-            <button type="button" className="storage-button" onClick={handleExportEventsCsv}>
-              Events CSV
-            </button>
-            <button type="button" className="storage-button" onClick={handleExportUnknownsCsv}>
-              Unknown CSV
-            </button>
-            <input
-              ref={battleLogImportInputRef}
-              className="visually-hidden"
-              type="file"
-              accept="application/json,.json"
-              onChange={(event) => void handleBattleLogImportChange(event)}
-            />
-          </div>
-
-          <div className="storage-actions template-actions" aria-label="template import actions">
-            <button
-              type="button"
-              className="storage-button"
-              onClick={() => templateImportInputRef.current?.click()}
-            >
-              Template読込
-            </button>
-            <button
-              type="button"
-              className="storage-button"
-              onClick={handleExportTemplateImport}
-              disabled={!importedTemplateCollection}
-            >
-              Template出力
-            </button>
-            <button
-              type="button"
-              className="storage-button"
-              onClick={() => void handleClearTemplateImport()}
-              disabled={!importedTemplateCollection}
-            >
-              Template削除
-            </button>
-            <input
-              ref={templateImportInputRef}
-              className="visually-hidden"
-              type="file"
-              accept="application/json,.json"
-              multiple
-              onChange={(event) => void handleTemplateImportChange(event)}
-            />
-          </div>
-
-          <div className="template-import-summary" aria-label="template import summary">
-            <span>{SEED_TEMPLATE_RULES.length} seed</span>
-            <span>{importedTemplateCollection?.stats.sourceFileCount ?? 0} files</span>
-            <span>{importedTemplateCollection?.stats.battleCandidateCount ?? 0} candidates</span>
-            <span>{activeTemplateRules.length} active</span>
-          </div>
-
-          <div className="review-tabs" role="tablist" aria-label="review views">
-            {REVIEW_TABS.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                id={`review-tab-${tab.id}`}
-                aria-controls={`review-panel-${tab.id}`}
-                aria-selected={activeReviewTab === tab.id}
-                className="review-tab"
-                onClick={() => setActiveReviewTab(tab.id)}
-              >
-                <span>{tab.label}</span>
-                {tab.id === "timeline" ? <strong>{timelineItems.length}</strong> : null}
-                {tab.id === "resolved" ? <strong>{battleEvents.length}</strong> : null}
-                {tab.id === "unknown" ? <strong>{unknownEvents.length}</strong> : null}
-                {tab.id === "ocr" ? <strong>{ocrLogGroups.length}</strong> : null}
-                {tab.id === "system" ? <strong>{logs.length}</strong> : null}
-              </button>
-            ))}
-          </div>
-
-          <div className="review-tabpanels">
-            {activeReviewTab === "timeline" ? (
-              <section
-                id="review-panel-timeline"
-                role="tabpanel"
-                aria-labelledby="review-tab-timeline"
-                className="review-section"
-              >
-                <div className="review-section-heading">
-                  <h2>イベントタイムライン</h2>
-                  <span>
-                    {battleEvents.length} events / {unknownEvents.length} unknown /{" "}
-                    {suppressedTimelineCount} dup
-                  </span>
-                </div>
-                <ol className="timeline-list">
-                  {timelineItems.length === 0 ? (
-                    <li className="timeline-empty">タイムライン空</li>
-                  ) : (
-                    timelineItems.map((item) => {
-                      const sourceFrameRef = getTimelineItemSourceFrameRef(item);
-                      const cropEvidence = sourceFrameRef
-                        ? cropEvidenceBySourceRef.current.get(sourceFrameRef)
-                        : null;
-
-                      if (item.kind === "event") {
-                        return (
-                          <li key={item.event.id} className="timeline-entry timeline-entry--event">
-                            <div className="timeline-meta">
-                              <span>#{item.event.source.frameIndex ?? "--"}</span>
-                              <span>{item.event.timestampMs}ms</span>
-                              <span>{item.event.classification.method}</span>
-                            </div>
-                            <p>{formatEventSummary(item.event)}</p>
-                            <div className="timeline-evidence">
-                              {cropEvidence ? (
-                                <img src={cropEvidence.processedDataUrl} alt="イベント元crop" />
-                              ) : null}
-                              <code>{item.event.rawText || "raw empty"}</code>
-                            </div>
-                          </li>
-                        );
-                      }
-
-                      return (
-                        <li
-                          key={item.unknown.id}
-                          className="timeline-entry timeline-entry--unknown"
-                        >
-                          <div className="timeline-meta">
-                            <span>{item.unknown.sourceFrameRef ?? "frame未保存"}</span>
-                            <span>{item.unknown.timestampMs}ms</span>
-                            <span>{formatReviewStatus(item.unknown.reviewStatus)}</span>
-                          </div>
-                          <p>{item.unknown.normalizedText || "unknown text empty"}</p>
-                          <div className="timeline-evidence">
-                            {cropEvidence ? (
-                              <img src={cropEvidence.processedDataUrl} alt="unknown元crop" />
-                            ) : null}
-                            <code>{item.unknown.rawText || "raw empty"}</code>
-                          </div>
-                        </li>
-                      );
-                    })
-                  )}
-                </ol>
-              </section>
-            ) : null}
-
-            {activeReviewTab === "resolved" ? (
-              <section
-                id="review-panel-resolved"
-                role="tabpanel"
-                aria-labelledby="review-tab-resolved"
-                className="review-section"
-              >
-                <div className="review-section-heading">
-                  <h2>解決ログ</h2>
-                  <span>{battleEvents.length} resolved</span>
-                </div>
-                <ol className="resolved-list">
-                  {battleEvents.length === 0 ? (
-                    <li className="timeline-empty">解決ログ空</li>
-                  ) : (
-                    battleEvents.map((event) => {
-                      const sourceFrameRef = createSourceFrameRef(
-                        event.source.frameIndex,
-                        event.source.timestampMs,
-                      );
-                      const cropEvidence = cropEvidenceBySourceRef.current.get(sourceFrameRef);
-
-                      return (
-                        <li key={event.id} className="resolved-entry">
-                          <div className="timeline-meta">
-                            <span>#{event.source.frameIndex ?? "--"}</span>
-                            <span>{event.timestampMs}ms</span>
-                            <span>{formatConfidence(event.confidence)}</span>
-                          </div>
-                          <h3>{event.normalizedText || formatEventSummary(event)}</h3>
-                          <div className="resolved-summary">
-                            <span className="parse-chip parse-chip--event">
-                              {formatResolvedEventChip(event)}
-                            </span>
-                            <span>{event.normalizedText || "normalized empty"}</span>
-                          </div>
-                          <div className="timeline-evidence">
-                            {cropEvidence ? (
-                              <img src={cropEvidence.processedDataUrl} alt="resolved元crop" />
-                            ) : null}
-                            <code>{event.rawText || "raw empty"}</code>
-                          </div>
-                        </li>
-                      );
-                    })
-                  )}
-                </ol>
-              </section>
-            ) : null}
-
-            {activeReviewTab === "unknown" ? (
-              <section
-                id="review-panel-unknown"
-                role="tabpanel"
-                aria-labelledby="review-tab-unknown"
-                className="review-section"
-              >
-                <div className="review-section-heading">
-                  <h2>Unknown bucket</h2>
-                  <span>
-                    {reviewedUnknownCount}/{unknownEvents.length} reviewed
-                  </span>
-                </div>
-                <ol className="unknown-list">
-                  {unknownEvents.length === 0 ? (
-                    <li className="timeline-empty">unknown空</li>
-                  ) : (
-                    unknownEvents.map((unknown) => (
-                      <li key={unknown.id} className="unknown-entry">
-                        <div className="timeline-meta">
-                          <span>{unknown.id}</span>
-                          <span>{formatConfidence(unknown.ocrConfidence)}</span>
-                          <span>{formatReviewStatus(unknown.reviewStatus)}</span>
-                        </div>
-                        <p>{unknown.normalizedText}</p>
-                        <label className="review-note">
-                          <span>修正メモ</span>
-                          <textarea
-                            value={reviewNotes[unknown.id] ?? ""}
-                            aria-label={`修正メモ ${unknown.id}`}
-                            rows={2}
-                            onChange={(event) =>
-                              handleReviewNoteChange(unknown.id, event.target.value)
-                            }
-                          />
-                        </label>
-                        <details className="candidate-details">
-                          <summary>{unknown.candidateMatches.length} candidates</summary>
-                          <code>
-                            {unknown.candidateMatches.length > 0
-                              ? unknown.candidateMatches.join("\n")
-                              : "候補なし"}
-                          </code>
-                        </details>
-                        <button
-                          type="button"
-                          className="review-button"
-                          onClick={() => handleUnknownReview(unknown.id)}
-                          disabled={unknown.reviewStatus === "reviewed"}
-                        >
-                          reviewedにする
-                        </button>
-                      </li>
-                    ))
-                  )}
-                </ol>
-              </section>
-            ) : null}
-
-            {activeReviewTab === "ocr" ? (
-              <section
-                id="review-panel-ocr"
-                role="tabpanel"
-                aria-labelledby="review-tab-ocr"
-                className="review-section"
-              >
-                <div className="review-section-heading">
-                  <h2>OCR Raw</h2>
-                  <span>
-                    {ocrLogGroups.length} groups / {ocrMessages.length} messages
-                  </span>
-                </div>
-                <ol className="ocr-raw-list">
-                  {ocrLogGroups.length === 0 ? (
-                    <li className="timeline-empty">OCR raw空</li>
-                  ) : (
-                    ocrLogGroups.map((group) => (
-                      <li
-                        key={`${group.entry.id}-${group.key}`}
-                        className={`ocr-raw-entry ocr-log-entry--${group.entry.status}`}
-                      >
-                        <div className="timeline-meta">
-                          <span>#{group.entry.frameIndex}</span>
-                          <span>{group.entry.timestampMs}ms</span>
-                          <span>{formatConfidence(group.entry.confidence)}</span>
-                          {group.count > 1 ? <span>x{group.count}</span> : null}
-                        </div>
-                        {group.entry.status === "error" ? (
-                          <p>{group.entry.errorMessage}</p>
-                        ) : (
-                          <>
-                            <p>{group.entry.normalizedText || "テキストなし"}</p>
-                            {group.entry.parseResult ? (
-                              <div className="parse-summary">
-                                <span
-                                  className={`parse-chip parse-chip--${group.entry.parseResult.status}`}
-                                >
-                                  {formatParseSummary(group.entry.parseResult)}
-                                </span>
-                                <span>{group.entry.matchText || "match empty"}</span>
-                              </div>
-                            ) : null}
-                            <code>{group.entry.rawText || "raw empty"}</code>
-                          </>
-                        )}
-                      </li>
-                    ))
-                  )}
-                </ol>
-              </section>
-            ) : null}
-
-            {activeReviewTab === "system" ? (
-              <section
-                id="review-panel-system"
-                role="tabpanel"
-                aria-labelledby="review-tab-system"
-                className="review-section"
-              >
-                <div className="review-section-heading">
-                  <h2>システムログ</h2>
-                  <span>{ocrMessages.length} OCR messages</span>
-                </div>
-                <ol className="log-list">
-                  {logs.map((log) => (
-                    <li key={log.id} className={`log-entry log-entry--${log.level}`}>
-                      <time>{log.timestamp}</time>
-                      <span>{log.message}</span>
-                    </li>
-                  ))}
-                </ol>
-              </section>
-            ) : null}
-          </div>
+          <ol className="resolved-text-log" aria-label="resolved text log">
+            {battleEvents.length === 0 ? (
+              <li className="resolved-text-log-empty">解決ログ空</li>
+            ) : (
+              battleEvents.map((event) => (
+                <li key={event.id}>{event.normalizedText || formatEventSummary(event)}</li>
+              ))
+            )}
+          </ol>
         </aside>
+
       </section>
 
-      <section className="milestone-strip" aria-label="project status">
-        <span>schema: {BATTLE_LOG_SCHEMA_VERSION}</span>
-        <span>route: {APP_ROUTES.home.path}</span>
-        {MILESTONES.map((milestone) => (
-          <span key={milestone.id}>
-            {milestone.id} {milestone.status}
-          </span>
-        ))}
-      </section>
     </main>
   );
 }

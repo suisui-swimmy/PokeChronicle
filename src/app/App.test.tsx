@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 
@@ -115,11 +115,25 @@ describe("App", () => {
     });
   });
 
-  it("renders the M7 template import and review workspace shell", async () => {
+  it("renders the M7.5 capture-first shell with hidden management controls", async () => {
     render(<App />);
 
     expect(await screen.findByRole("combobox", { name: "映像ソース" })).toHaveValue("video-usb");
     expect(screen.getByRole("combobox", { name: "音声ソース" })).toHaveValue("none");
+    expect(screen.getByRole("button", { name: "開始" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "停止" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "ファイル" })).toBeInTheDocument();
+    expect(screen.getByLabelText("preview placeholder")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "ログ" })).toBeInTheDocument();
+    expect(within(screen.getByLabelText("resolved text log")).getByText("解決ログ空")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "レビュー" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("project status")).not.toBeInTheDocument();
+    const managementPanel = screen.getByLabelText("analysis and data management");
+    expect(managementPanel).not.toHaveAttribute("open");
+
+    fireEvent.click(screen.getByText("解析・データ管理"));
+    expect(managementPanel).toHaveAttribute("open");
+
     expect(screen.getByRole("combobox", { name: "fps" })).toHaveValue("3");
     expect(screen.getByRole("slider", { name: /白抽出/ })).toHaveValue("180");
     expect(screen.getByRole("combobox", { name: "背景" })).toHaveValue("black");
@@ -130,10 +144,6 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "OCR停止" })).toBeDisabled();
     expect(screen.getByRole("option", { name: "OBS Virtual Camera" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "音声なし" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "開始" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "停止" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "ファイル" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "レビュー" })).toBeInTheDocument();
     expect(screen.getByText(/未保存/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "保存" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "読込" })).toBeInTheDocument();
@@ -169,23 +179,16 @@ describe("App", () => {
     );
     expect(screen.getByRole("heading", { name: "イベントタイムライン" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "リアルタイムOCR" })).toBeInTheDocument();
-    expect(screen.getByLabelText("preview placeholder")).toBeInTheDocument();
     expect(screen.getByText("バッファ空")).toBeInTheDocument();
     expect(screen.getByText("OCRログ空")).toBeInTheDocument();
     expect(screen.getByText("タイムライン空")).toBeInTheDocument();
     expect(screen.getByText(/ROI: x=0.0600 y=0.7200 w=0.8800 h=0.2000/)).toBeInTheDocument();
-    expect(screen.getByText("M1 完了")).toBeInTheDocument();
-    expect(screen.getByText("M2 完了")).toBeInTheDocument();
-    expect(screen.getByText("M3 完了")).toBeInTheDocument();
-    expect(screen.getByText("M4 完了")).toBeInTheDocument();
-    expect(screen.getByText("M4.5 完了")).toBeInTheDocument();
-    expect(screen.getByText("M5 完了")).toBeInTheDocument();
-    expect(screen.getByText("M6 完了")).toBeInTheDocument();
-    expect(screen.getByText("M7 完了")).toBeInTheDocument();
   });
 
-  it("switches review tabs without rendering every log category at once", async () => {
+  it("switches management review tabs without rendering every log category at once", async () => {
     render(<App />);
+
+    fireEvent.click(await screen.findByText("解析・データ管理"));
 
     expect(await screen.findByRole("tab", { name: /Timeline/ })).toHaveAttribute(
       "aria-selected",
@@ -203,7 +206,9 @@ describe("App", () => {
       "true",
     );
     expect(screen.getByRole("heading", { name: "解決ログ" })).toBeInTheDocument();
-    expect(screen.getByText("解決ログ空")).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("tabpanel", { name: /解決済み/ })).getByText("解決ログ空"),
+    ).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "イベントタイムライン" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: /Unknown/ }));
@@ -247,8 +252,13 @@ describe("App", () => {
       });
     });
     expect(await screen.findByText("入力(16:9)")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("解析・データ管理"));
     fireEvent.click(screen.getByRole("tab", { name: /System/ }));
-    expect(await screen.findByText(/入力を開始しました/)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        within(screen.getByRole("tabpanel", { name: /System/ })).getByText(/入力を開始しました/),
+      ).toBeInTheDocument();
+    });
   });
 
   it("starts selected audio input through a separate audio stream", async () => {
@@ -288,7 +298,12 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "ROIを初期位置へ戻す" }));
 
+    fireEvent.click(screen.getByText("解析・データ管理"));
     fireEvent.click(screen.getByRole("tab", { name: /System/ }));
-    expect(screen.getByText("ROIを初期位置へ戻しました。")).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("tabpanel", { name: /System/ })).getByText(
+        "ROIを初期位置へ戻しました。",
+      ),
+    ).toBeInTheDocument();
   });
 });
