@@ -129,6 +129,7 @@ type DragState = {
   startY: number;
   startRoi: NormalizedRoi;
 };
+type RoiField = keyof NormalizedRoi;
 
 type FrameSourceElement = HTMLVideoElement | HTMLImageElement;
 
@@ -207,6 +208,35 @@ function clamp(value: number, min: number, max: number) {
 
 function roundRoiValue(value: number) {
   return Math.round(value * 10000) / 10000;
+}
+
+function updateRoiField(currentRoi: NormalizedRoi, field: RoiField, value: number): NormalizedRoi {
+  if (!Number.isFinite(value)) {
+    return currentRoi;
+  }
+
+  switch (field) {
+    case "x":
+      return {
+        ...currentRoi,
+        x: roundRoiValue(clamp(value, 0, 1 - currentRoi.w)),
+      };
+    case "y":
+      return {
+        ...currentRoi,
+        y: roundRoiValue(clamp(value, 0, 1 - currentRoi.h)),
+      };
+    case "w":
+      return {
+        ...currentRoi,
+        w: roundRoiValue(clamp(value, MIN_ROI_SIZE, 1 - currentRoi.x)),
+      };
+    case "h":
+      return {
+        ...currentRoi,
+        h: roundRoiValue(clamp(value, MIN_ROI_SIZE, 1 - currentRoi.y)),
+      };
+  }
 }
 
 function formatResolution(metadata: MediaMetadata) {
@@ -704,6 +734,7 @@ export function App() {
   });
   const [audioReady, setAudioReady] = useState(false);
   const [roi, setRoi] = useState<NormalizedRoi>(DEFAULT_ROI);
+  const [isRoiVisible, setIsRoiVisible] = useState(true);
   const [sampleFps, setSampleFps] = useState(DEFAULT_SAMPLE_FPS);
   const [isSampling, setIsSampling] = useState(false);
   const [preprocessOptions, setPreprocessOptions] =
@@ -1623,6 +1654,10 @@ export function App() {
     addLog("ROIを初期位置へ戻しました。");
   }, [addLog]);
 
+  const handleRoiNumberChange = useCallback((field: RoiField, value: string) => {
+    setRoi((currentRoi) => updateRoiField(currentRoi, field, Number(value)));
+  }, []);
+
   const statusTone = useMemo(() => {
     if (statusLabel.includes("失敗") || statusLabel === "非対応") {
       return "danger";
@@ -2027,15 +2062,6 @@ export function App() {
             accept="video/*,image/*"
             onChange={handleFileChange}
           />
-          <button
-            type="button"
-            className="icon-button icon-button--ghost"
-            aria-label="ROIを初期位置へ戻す"
-            onClick={handleResetRoi}
-          >
-            <span aria-hidden="true">↺</span>
-            <span>ROI</span>
-          </button>
         </div>
       </header>
 
@@ -2074,7 +2100,7 @@ export function App() {
                   <span>プレビュー待機中</span>
                 </div>
               ) : null}
-              <RoiOverlay roi={roi} onChange={setRoi} />
+              {isRoiVisible ? <RoiOverlay roi={roi} onChange={setRoi} /> : null}
             </div>
           </section>
 
@@ -2086,6 +2112,87 @@ export function App() {
                 OCR {isOcrEnabled ? "実行中" : "停止中"} / {battleEvents.length} resolved
               </strong>
             </summary>
+
+          <section className="roi-settings-panel" aria-label="ROI settings">
+            <div className="roi-settings-header">
+              <div>
+                <h2>ROI設定</h2>
+                <span>
+                  x={roi.x.toFixed(4)} y={roi.y.toFixed(4)} w={roi.w.toFixed(4)} h=
+                  {roi.h.toFixed(4)}
+                </span>
+              </div>
+              <div className="roi-setting-actions">
+                <label className="toggle-control roi-visibility-toggle">
+                  <input
+                    type="checkbox"
+                    checked={isRoiVisible}
+                    onChange={(event) => setIsRoiVisible(event.target.checked)}
+                  />
+                  <span>ROI表示</span>
+                </label>
+                <button
+                  type="button"
+                  className="icon-button icon-button--compact"
+                  onClick={handleResetRoi}
+                >
+                  <span aria-hidden="true">↺</span>
+                  <span>ROIリセット</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="roi-number-grid" aria-label="ROI numeric settings">
+              <label className="roi-number-control">
+                <span>X</span>
+                <input
+                  aria-label="ROI X"
+                  type="number"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={roi.x.toFixed(4)}
+                  onChange={(event) => handleRoiNumberChange("x", event.target.value)}
+                />
+              </label>
+              <label className="roi-number-control">
+                <span>Y</span>
+                <input
+                  aria-label="ROI Y"
+                  type="number"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={roi.y.toFixed(4)}
+                  onChange={(event) => handleRoiNumberChange("y", event.target.value)}
+                />
+              </label>
+              <label className="roi-number-control">
+                <span>W</span>
+                <input
+                  aria-label="ROI W"
+                  type="number"
+                  min={MIN_ROI_SIZE}
+                  max={1}
+                  step={0.01}
+                  value={roi.w.toFixed(4)}
+                  onChange={(event) => handleRoiNumberChange("w", event.target.value)}
+                />
+              </label>
+              <label className="roi-number-control">
+                <span>H</span>
+                <input
+                  aria-label="ROI H"
+                  type="number"
+                  min={MIN_ROI_SIZE}
+                  max={1}
+                  step={0.01}
+                  value={roi.h.toFixed(4)}
+                  onChange={(event) => handleRoiNumberChange("h", event.target.value)}
+                />
+              </label>
+            </div>
+          </section>
 
           <section className="analysis-panel" aria-label="frame sampling and preprocessing">
             <div className="analysis-header">

@@ -123,6 +123,7 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "開始" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "停止" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "ファイル" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "ROIを初期位置へ戻す" })).not.toBeInTheDocument();
     expect(screen.getByLabelText("preview placeholder")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "ログ" })).not.toBeInTheDocument();
     expect(screen.queryByText("0 resolved")).not.toBeInTheDocument();
@@ -136,6 +137,13 @@ describe("App", () => {
     fireEvent.click(screen.getByText("解析・データ管理"));
     expect(managementPanel).toHaveAttribute("open");
 
+    expect(screen.getByRole("heading", { name: "ROI設定" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "ROI表示" })).toBeChecked();
+    expect(screen.getByRole("spinbutton", { name: "ROI X" })).toHaveValue(0.06);
+    expect(screen.getByRole("spinbutton", { name: "ROI Y" })).toHaveValue(0.72);
+    expect(screen.getByRole("spinbutton", { name: "ROI W" })).toHaveValue(0.88);
+    expect(screen.getByRole("spinbutton", { name: "ROI H" })).toHaveValue(0.2);
+    expect(screen.getByRole("button", { name: "ROIリセット" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "fps" })).toHaveValue("3");
     expect(screen.getByRole("slider", { name: /白抽出/ })).toHaveValue("180");
     expect(screen.getByRole("combobox", { name: "背景" })).toHaveValue("black");
@@ -295,14 +303,27 @@ describe("App", () => {
     expect(await screen.findByText(/再生中/)).toBeInTheDocument();
   });
 
-  it("resets ROI from the toolbar", async () => {
+  it("configures ROI from analysis and data management", async () => {
     render(<App />);
 
     expect(await screen.findByRole("combobox", { name: "映像ソース" })).toHaveValue("video-usb");
-
-    fireEvent.click(screen.getByRole("button", { name: "ROIを初期位置へ戻す" }));
+    expect(screen.getByLabelText("ROI adjustment layer")).toBeInTheDocument();
 
     fireEvent.click(screen.getByText("解析・データ管理"));
+    fireEvent.change(screen.getByRole("spinbutton", { name: "ROI X" }), {
+      target: { value: "0.1" },
+    });
+    expect(screen.getByRole("spinbutton", { name: "ROI X" })).toHaveValue(0.1);
+    expect(screen.getByText(/ROI: x=0.1000 y=0.7200 w=0.8800 h=0.2000/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "ROI表示" }));
+    expect(screen.queryByLabelText("ROI adjustment layer")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "ROI表示" }));
+    expect(screen.getByLabelText("ROI adjustment layer")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "ROIリセット" }));
+    expect(screen.getByRole("spinbutton", { name: "ROI X" })).toHaveValue(0.06);
     fireEvent.click(screen.getByRole("tab", { name: /System/ }));
     expect(
       within(screen.getByRole("tabpanel", { name: /System/ })).getByText(
