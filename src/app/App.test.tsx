@@ -144,19 +144,21 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "OCR停止" })).toBeDisabled();
     expect(screen.getByRole("option", { name: "OBS Virtual Camera" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "音声なし" })).toBeInTheDocument();
-    expect(screen.getByText(/未保存/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "保存" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "読込" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "JSON" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "JSON読込" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Events CSV" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Unknown CSV" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Template読込" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Template出力" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Template削除" })).toBeDisabled();
-    expect(screen.getByText(/Template未読込/)).toBeInTheDocument();
-    expect(screen.getByLabelText("template import summary")).toHaveTextContent("0 files");
-    expect(screen.getByLabelText("template import summary")).toHaveTextContent("0 candidates");
+    expect(screen.getByText("Battle Log JSON / CSV")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ログJSON出力" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ログJSON読込" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "イベントCSV出力" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Unknown CSV出力" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "保存" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "読込" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "ログ保存" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "ログ読込" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Template読込" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Template出力" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Template削除" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/未保存/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Template未読込/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("template import summary")).not.toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /Timeline/ })).toHaveAttribute(
       "aria-selected",
       "true",

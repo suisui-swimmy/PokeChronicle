@@ -38,16 +38,11 @@ import {
   type BattleMessageParseResult,
 } from "../core/parser/seedParser";
 import {
-  CHAMPOUT_TEMPLATE_RULES,
-  CHAMPOUT_TEMPLATE_STATS,
-} from "../core/templates/generatedChampoutTemplateRules";
-import {
   createImportedTemplateCollectionFromJsonFiles,
   parseImportedTemplateCollectionJson,
   serializeImportedTemplateCollection,
   type ImportedTemplateCollection,
 } from "../core/templates/importedTemplates";
-import { SEED_TEMPLATE_RULES } from "../core/templates/seedTemplateRules";
 import { STANDARD_TEMPLATE_RULES } from "../core/templates/standardTemplateRules";
 import type { BattleTemplateRule } from "../core/templates/types";
 import {
@@ -60,9 +55,7 @@ import {
 import {
   clearImportedTemplateCollections,
   isIndexedDbSupported,
-  loadLatestBattleLogDocument,
   loadLatestImportedTemplateCollection,
-  saveBattleLogDocument,
   saveImportedTemplateCollection,
 } from "../storage/indexedDb";
 
@@ -728,7 +721,6 @@ export function App() {
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
   const [suppressedTimelineCount, setSuppressedTimelineCount] = useState(0);
   const [activeReviewTab, setActiveReviewTab] = useState<ReviewTab>("timeline");
-  const [storageStatusLabel, setStorageStatusLabel] = useState("未保存");
   const [templateImportStatusLabel, setTemplateImportStatusLabel] = useState("Template未読込");
   const [importedTemplateCollection, setImportedTemplateCollection] =
     useState<ImportedTemplateCollection | null>(null);
@@ -1610,7 +1602,6 @@ export function App() {
     setUnknownEvents([]);
     setReviewNotes({});
     setSuppressedTimelineCount(0);
-    setStorageStatusLabel("未保存");
     cropEvidenceBySourceRef.current.clear();
     lastTimelineDeduplicationRef.current = null;
     lastAcceptedEventIdRef.current = null;
@@ -1773,42 +1764,10 @@ export function App() {
       lastTimelineDeduplicationRef.current = null;
       lastAcceptedEventIdRef.current = restoredEvents[0]?.id ?? null;
       setActiveReviewTab("timeline");
-      setStorageStatusLabel(`読込済み ${formatStorageTimestamp()}`);
       addLog(`Battle Logを読み込みました: ${document.events.length} events / ${document.unknowns.length} unknown`);
     },
     [addLog],
   );
-
-  const handleSaveBattleLog = useCallback(async () => {
-    try {
-      const document = buildCurrentBattleLogDocument();
-      await saveBattleLogDocument(document);
-      setStorageStatusLabel(`保存済み ${formatStorageTimestamp()}`);
-      addLog(`IndexedDBへ保存しました: ${document.ocrMessages.length} OCR / ${document.events.length} events`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "IndexedDB保存に失敗しました。";
-      setStorageStatusLabel("保存失敗");
-      addLog(message, "error");
-    }
-  }, [addLog, buildCurrentBattleLogDocument]);
-
-  const handleLoadBattleLog = useCallback(async () => {
-    try {
-      const document = await loadLatestBattleLogDocument();
-
-      if (!document) {
-        setStorageStatusLabel("保存なし");
-        addLog("IndexedDBに保存済みBattle Logがありません。", "warn");
-        return;
-      }
-
-      restoreBattleLogDocument(document);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "IndexedDB読込に失敗しました。";
-      setStorageStatusLabel("読込失敗");
-      addLog(message, "error");
-    }
-  }, [addLog, restoreBattleLogDocument]);
 
   const handleExportBattleLogJson = useCallback(() => {
     const document = buildCurrentBattleLogDocument();
@@ -1817,7 +1776,6 @@ export function App() {
       serializeBattleLogDocument(document),
       "application/json;charset=utf-8",
     );
-    setStorageStatusLabel(`JSON出力 ${formatStorageTimestamp()}`);
     addLog("Battle Log JSONを出力しました。");
   }, [addLog, buildCurrentBattleLogDocument]);
 
@@ -1828,7 +1786,6 @@ export function App() {
       createEventsCsv(document.events),
       "text/csv;charset=utf-8",
     );
-    setStorageStatusLabel(`Events CSV ${formatStorageTimestamp()}`);
     addLog("Events CSVを出力しました。");
   }, [addLog, buildCurrentBattleLogDocument]);
 
@@ -1839,7 +1796,6 @@ export function App() {
       createUnknownsCsv(document.unknowns, document.manualCorrections),
       "text/csv;charset=utf-8",
     );
-    setStorageStatusLabel(`Unknown CSV ${formatStorageTimestamp()}`);
     addLog("Unknown messages CSVを出力しました。");
   }, [addLog, buildCurrentBattleLogDocument]);
 
@@ -1855,19 +1811,15 @@ export function App() {
         const result = parseBattleLogJson(await file.text());
 
         if (!result.ok) {
-          setStorageStatusLabel("JSON読込失敗");
           addLog(result.error, "error");
           return;
         }
 
         restoreBattleLogDocument(result.document);
-        await saveBattleLogDocument(result.document);
-        setStorageStatusLabel(`JSON読込 ${formatStorageTimestamp()}`);
         result.warnings.forEach((warning) => addLog(warning, "warn"));
         addLog(`Battle Log JSONを読み込みました: ${file.name}`);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Battle Log JSONの読込に失敗しました。";
-        setStorageStatusLabel("JSON読込失敗");
         addLog(message, "error");
       } finally {
         event.target.value = "";
@@ -2366,34 +2318,26 @@ export function App() {
             <div className="panel-heading panel-heading--compact">
               <div>
                 <h2>データ管理</h2>
-                <p>
-                  {storageStatusLabel} / {templateImportStatusLabel}
-                </p>
+                <p>Battle Log JSON / CSV</p>
               </div>
             </div>
 
             <div className="storage-actions" aria-label="battle log storage actions">
-              <button type="button" className="storage-button" onClick={() => void handleSaveBattleLog()}>
-                保存
-              </button>
-              <button type="button" className="storage-button" onClick={() => void handleLoadBattleLog()}>
-                読込
-              </button>
               <button type="button" className="storage-button" onClick={handleExportBattleLogJson}>
-                JSON
+                ログJSON出力
               </button>
               <button
                 type="button"
                 className="storage-button"
                 onClick={() => battleLogImportInputRef.current?.click()}
               >
-                JSON読込
+                ログJSON読込
               </button>
               <button type="button" className="storage-button" onClick={handleExportEventsCsv}>
-                Events CSV
+                イベントCSV出力
               </button>
               <button type="button" className="storage-button" onClick={handleExportUnknownsCsv}>
-                Unknown CSV
+                Unknown CSV出力
               </button>
               <input
                 ref={battleLogImportInputRef}
@@ -2402,49 +2346,6 @@ export function App() {
                 accept="application/json,.json"
                 onChange={(event) => void handleBattleLogImportChange(event)}
               />
-            </div>
-
-            <div className="storage-actions template-actions" aria-label="template import actions">
-              <button
-                type="button"
-                className="storage-button"
-                onClick={() => templateImportInputRef.current?.click()}
-              >
-                Template読込
-              </button>
-              <button
-                type="button"
-                className="storage-button"
-                onClick={handleExportTemplateImport}
-                disabled={!importedTemplateCollection}
-              >
-                Template出力
-              </button>
-              <button
-                type="button"
-                className="storage-button"
-                onClick={() => void handleClearTemplateImport()}
-                disabled={!importedTemplateCollection}
-              >
-                Template削除
-              </button>
-              <input
-                ref={templateImportInputRef}
-                className="visually-hidden"
-                type="file"
-                accept="application/json,.json"
-                multiple
-                onChange={(event) => void handleTemplateImportChange(event)}
-              />
-            </div>
-
-            <div className="template-import-summary" aria-label="template import summary">
-              <span>{SEED_TEMPLATE_RULES.length} seed</span>
-              <span>{CHAMPOUT_TEMPLATE_RULES.length} champout</span>
-              <span>{importedTemplateCollection?.stats.sourceFileCount ?? 0} files</span>
-              <span>{importedTemplateCollection?.stats.battleCandidateCount ?? 0} candidates</span>
-              <span>{activeTemplateRules.length} active</span>
-              <span>{CHAMPOUT_TEMPLATE_STATS.sourceFileCount} bundled files</span>
             </div>
 
             <div className="review-tabs" role="tablist" aria-label="review views">
