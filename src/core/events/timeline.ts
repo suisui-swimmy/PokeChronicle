@@ -21,6 +21,7 @@ export interface TimelineObservationInput {
   roi: NormalizedRoi;
   afterEventId: string | null;
   recentConstrainedCandidates?: readonly TimelineConstrainedCandidateRecord[];
+  recentAcceptedEvents?: readonly TimelineAcceptedEventRecord[];
   candidatePromotionWindowMs?: number;
 }
 
@@ -45,6 +46,15 @@ export interface TimelineConstrainedCandidateRecord {
   frameIndex: number | null;
 }
 
+export interface TimelineAcceptedEventRecord {
+  eventType: BattleEvent["type"];
+  actorName: string | null;
+  actorSide: BattleEvent["actor"]["side"];
+  templateId: string | null;
+  timestampMs: number;
+  frameIndex: number | null;
+}
+
 interface ParsedConstrainedCandidateMatch {
   identity: string;
   eventType: BattleEvent["type"];
@@ -55,6 +65,13 @@ interface ParsedConstrainedCandidateMatch {
   targetSide: NonNullable<BattleEvent["target"]>["side"] | null;
   templateId: string | null;
   score: number | null;
+}
+
+interface ParsedPartialTemplateMatch {
+  eventType: BattleEvent["type"];
+  actorName: string | null;
+  actorSide: BattleEvent["actor"]["side"];
+  templateId: string | null;
 }
 
 export function createSourceFrameRef(frameIndex: number | null, timestampMs: number) {
@@ -181,6 +198,43 @@ function extractConstrainedCandidateMatch(
   };
 }
 
+function extractPartialTemplateMatch(
+  candidateMatches: readonly string[],
+): ParsedPartialTemplateMatch | null {
+  const encoded = candidateMatches.find((candidate) => candidate.startsWith("partial-template;"));
+
+  if (!encoded) {
+    return null;
+  }
+
+  const fields = new Map<string, string>();
+
+  for (const part of encoded.split(";").slice(1)) {
+    const separatorIndex = part.indexOf("=");
+
+    if (separatorIndex <= 0) {
+      continue;
+    }
+
+    fields.set(part.slice(0, separatorIndex), part.slice(separatorIndex + 1));
+  }
+
+  const eventType = decodeCandidateValue(fields.get("eventType")) as BattleEvent["type"];
+  const actorName = decodeCandidateValue(fields.get("actorName"));
+  const templateId = decodeCandidateValue(fields.get("templateId"));
+
+  if (!eventType || eventType === "unknown" || !actorName) {
+    return null;
+  }
+
+  return {
+    eventType,
+    actorName,
+    actorSide: parseNullableSide(decodeCandidateValue(fields.get("actorSide"))),
+    templateId: templateId || null,
+  };
+}
+
 function getPromotedConstrainedCandidate(
   input: TimelineObservationInput,
 ): ParsedConstrainedCandidateMatch | null {
@@ -204,6 +258,37 @@ function getPromotedConstrainedCandidate(
   return hasRecentMatch ? candidate : null;
 }
 
+function shouldSuppressPartialTemplateUnknown(input: TimelineObservationInput) {
+  if (input.parseResult.status !== "unknown") {
+    return false;
+  }
+
+  const candidate = extractPartialTemplateMatch(input.parseResult.candidateMatches);
+
+  if (!candidate) {
+    return false;
+  }
+
+  const windowMs = input.candidatePromotionWindowMs ?? DEFAULT_TIMELINE_DUPLICATE_WINDOW_MS;
+
+  return (input.recentAcceptedEvents ?? []).some((record) => {
+    const deltaMs = input.timestampMs - record.timestampMs;
+    const templateMatches =
+      !candidate.templateId ||
+      !record.templateId ||
+      candidate.templateId === record.templateId;
+
+    return (
+      record.eventType === candidate.eventType &&
+      record.actorName === candidate.actorName &&
+      record.actorSide === candidate.actorSide &&
+      templateMatches &&
+      deltaMs >= 0 &&
+      deltaMs <= windowMs
+    );
+  });
+}
+
 export function createConstrainedCandidateRecord(
   parseResult: BattleMessageParseResult,
   timestampMs: number,
@@ -219,6 +304,19 @@ export function createConstrainedCandidateRecord(
     identity: candidate.identity,
     timestampMs,
     frameIndex,
+  };
+}
+
+export function createAcceptedEventRecord(
+  event: Pick<BattleEvent, "type" | "actor" | "classification" | "source" | "timestampMs">,
+): TimelineAcceptedEventRecord {
+  return {
+    eventType: event.type,
+    actorName: event.actor.name,
+    actorSide: event.actor.side,
+    templateId: event.classification.templateId,
+    timestampMs: event.timestampMs,
+    frameIndex: event.source.frameIndex,
   };
 }
 
@@ -341,7 +439,7 @@ export function createTimelineObservation(input: TimelineObservationInput): Time
   };
   const promotedCandidate = getPromotedConstrainedCandidate(input);
   const event = createBattleEvent(input, promotedCandidate);
-  const unknown = event ? null : createUnknownEvent(input);
+  const unknown = event || shouldSuppressPartialTemplateUnknown(input) ? null : createUnknownEvent(input);
   const dedupeKey = event
     ? createResolvedEventDedupeKey(event)
     : unknown && input.parseResult.matchText

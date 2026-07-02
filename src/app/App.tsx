@@ -17,13 +17,17 @@ import {
   type UnknownEvent,
 } from "../core/events/schema";
 import {
+  createAcceptedEventRecord,
   createConstrainedCandidateRecord,
   createSourceFrameRef,
   createTimelineObservation,
   shouldSuppressTimelineObservation,
+  type TimelineAcceptedEventRecord,
   type TimelineConstrainedCandidateRecord,
   type TimelineDeduplicationRecord,
 } from "../core/events/timeline";
+import { renderBattleEventCanonicalText } from "../core/events/canonicalText";
+import type { DictionaryEntry } from "../core/dictionary/types";
 import {
   createMessageLineCropVariants,
   preprocessMessageImageDataWithMetrics,
@@ -64,7 +68,7 @@ import {
 
 const LIVE_BATTLE_ID = "battle_live";
 const LIVE_BATTLE_TITLE = "Live OCR battle log";
-const DEFAULT_ROI: NormalizedRoi = { x: 0.06, y: 0.72, w: 0.88, h: 0.2 };
+const DEFAULT_ROI: NormalizedRoi = { x: 0.33, y: 0.72, w: 0.3, h: 0.14 };
 const MIN_ROI_SIZE = 0.08;
 const NO_AUDIO_DEVICE_ID = "none";
 const DEFAULT_SAMPLE_FPS = 3;
@@ -78,6 +82,8 @@ const OCR_RAW_GROUP_LIMIT = 30;
 const MAX_PENDING_OCR_JOBS = 1;
 const OCR_JOB_TIMEOUT_MS = 60_000;
 const TIMELINE_DUPLICATE_WINDOW_MS = 2500;
+const MAX_SESSION_ROSTER_DICTIONARY_ENTRIES = 18;
+const MAX_OBSERVED_MOVE_DICTIONARY_ENTRIES = 96;
 const MIN_TEXT_PIXEL_RATIO = 0.004;
 const MAX_TEXT_PIXEL_RATIO = 0.18;
 const DEFAULT_PREPROCESS_OPTIONS: MessagePreprocessOptions = {
@@ -374,6 +380,87 @@ function formatEventSummary(event: BattleEvent) {
   const move = event.move ? ` / ${event.move}` : "";
 
   return `${formatEventType(event.type)}${actor}${move}`;
+}
+
+function formatCanonicalEventText(event: BattleEvent) {
+  return renderBattleEventCanonicalText(event);
+}
+
+function createObservedDictionaryEntry(kind: "pokemon" | "move", label: string): DictionaryEntry {
+  return {
+    id: `${kind === "pokemon" ? "session-roster" : "observed-move"}:${encodeURIComponent(label)}`,
+    label,
+  };
+}
+
+function upsertObservedDictionaryEntry(
+  currentEntries: readonly DictionaryEntry[],
+  kind: "pokemon" | "move",
+  label: string | null,
+  limit: number,
+) {
+  if (!label) {
+    return currentEntries;
+  }
+
+  const withoutExisting = currentEntries.filter((entry) => entry.label !== label);
+
+  return [createObservedDictionaryEntry(kind, label), ...withoutExisting].slice(0, limit);
+}
+
+function collectSessionRosterDictionary(events: readonly BattleEvent[]) {
+  let entries: readonly DictionaryEntry[] = [];
+
+  for (const event of events) {
+    entries = upsertObservedDictionaryEntry(
+      entries,
+      "pokemon",
+      event.actor.name,
+      MAX_SESSION_ROSTER_DICTIONARY_ENTRIES,
+    );
+    entries = upsertObservedDictionaryEntry(
+      entries,
+      "pokemon",
+      event.target?.name ?? null,
+      MAX_SESSION_ROSTER_DICTIONARY_ENTRIES,
+    );
+  }
+
+  return entries;
+}
+
+function collectObservedMoveDictionary(events: readonly BattleEvent[]) {
+  let entries: readonly DictionaryEntry[] = [];
+
+  for (const event of events) {
+    entries = upsertObservedDictionaryEntry(
+      entries,
+      "move",
+      event.move,
+      MAX_OBSERVED_MOVE_DICTIONARY_ENTRIES,
+    );
+  }
+
+  return entries;
+}
+
+function formatOcrLogDisplayText(entry: OCRLogEntry) {
+  if (entry.parseResult?.status === "event") {
+    const event = {
+      id: entry.id,
+      battleId: LIVE_BATTLE_ID,
+      turn: null,
+      timestampMs: entry.timestampMs,
+      rawText: entry.rawText,
+      normalizedText: entry.normalizedText,
+      source: { frameIndex: entry.frameIndex, timestampMs: entry.timestampMs, cropObjectUrl: null },
+      ...entry.parseResult.event,
+    } satisfies BattleEvent;
+
+    return formatCanonicalEventText(event);
+  }
+
+  return entry.normalizedText || "テキストなし";
 }
 
 function formatResolvedEventChip(event: BattleEvent) {
@@ -782,6 +869,9 @@ export function App() {
   const cropEvidenceBySourceRef = useRef<Map<string, CropEvidence>>(new Map());
   const lastTimelineDeduplicationRef = useRef<TimelineDeduplicationRecord | null>(null);
   const recentConstrainedCandidateRecordsRef = useRef<TimelineConstrainedCandidateRecord[]>([]);
+  const recentAcceptedEventRecordsRef = useRef<TimelineAcceptedEventRecord[]>([]);
+  const sessionRosterDictionaryRef = useRef<DictionaryEntry[]>([]);
+  const observedMoveDictionaryRef = useRef<DictionaryEntry[]>([]);
   const lastAcceptedEventIdRef = useRef<string | null>(null);
   const frameIndexRef = useRef(0);
   const ocrJobCounterRef = useRef(0);
@@ -836,6 +926,38 @@ export function App() {
 
   const addLog = useCallback((message: string, level: LogLevel = "info") => {
     setLogs((currentLogs) => [createLog(message, level), ...currentLogs].slice(0, 12));
+  }, []);
+
+  const rememberBattleEventDictionaries = useCallback((event: BattleEvent) => {
+    sessionRosterDictionaryRef.current = upsertObservedDictionaryEntry(
+      sessionRosterDictionaryRef.current,
+      "pokemon",
+      event.actor.name,
+      MAX_SESSION_ROSTER_DICTIONARY_ENTRIES,
+    ) as DictionaryEntry[];
+    sessionRosterDictionaryRef.current = upsertObservedDictionaryEntry(
+      sessionRosterDictionaryRef.current,
+      "pokemon",
+      event.target?.name ?? null,
+      MAX_SESSION_ROSTER_DICTIONARY_ENTRIES,
+    ) as DictionaryEntry[];
+    observedMoveDictionaryRef.current = upsertObservedDictionaryEntry(
+      observedMoveDictionaryRef.current,
+      "move",
+      event.move,
+      MAX_OBSERVED_MOVE_DICTIONARY_ENTRIES,
+    ) as DictionaryEntry[];
+  }, []);
+
+  const rememberAcceptedEventRecord = useCallback((event: BattleEvent) => {
+    const minTimestampMs = event.timestampMs - TIMELINE_DUPLICATE_WINDOW_MS;
+
+    recentAcceptedEventRecordsRef.current = [
+      createAcceptedEventRecord(event),
+      ...recentAcceptedEventRecordsRef.current.filter(
+        (record) => record.timestampMs >= minTimestampMs,
+      ),
+    ].slice(0, 16);
   }, []);
 
   const activeTemplateRules = useMemo<readonly BattleTemplateRule[]>(
@@ -920,6 +1042,8 @@ export function App() {
           lines: response.result.lines.map((line) => line.text),
         }, undefined, {
           templateRules: templateRulesRef.current,
+          sessionRosterDictionary: sessionRosterDictionaryRef.current,
+          observedMoveDictionary: observedMoveDictionaryRef.current,
         });
         const normalizedText = parseResult.normalizedText;
         const hasText = normalizedText.length > 0;
@@ -947,6 +1071,7 @@ export function App() {
           roi: response.meta.roi,
           afterEventId: lastAcceptedEventIdRef.current,
           recentConstrainedCandidates: recentConstrainedCandidateRecordsRef.current,
+          recentAcceptedEvents: recentAcceptedEventRecordsRef.current,
           candidatePromotionWindowMs: TIMELINE_DUPLICATE_WINDOW_MS,
         });
         const constrainedCandidateRecord = createConstrainedCandidateRecord(
@@ -968,6 +1093,11 @@ export function App() {
               (record) => record.timestampMs >= minTimestampMs,
             ),
           ].slice(0, 12);
+        }
+
+        if (observation.event) {
+          rememberBattleEventDictionaries(observation.event);
+          rememberAcceptedEventRecord(observation.event);
         }
 
         setOcrLogs((currentLogs) => [nextEntry, ...currentLogs].slice(0, MAX_OCR_LOGS));
@@ -1036,6 +1166,8 @@ export function App() {
       addLog,
       appendOcrErrorLog,
       clearActiveOcrJob,
+      rememberAcceptedEventRecord,
+      rememberBattleEventDictionaries,
       resetOcrWorkerAfterFailure,
       setPendingOcrJobCount,
     ],
@@ -1724,6 +1856,9 @@ export function App() {
     cropEvidenceBySourceRef.current.clear();
     lastTimelineDeduplicationRef.current = null;
     recentConstrainedCandidateRecordsRef.current = [];
+    recentAcceptedEventRecordsRef.current = [];
+    sessionRosterDictionaryRef.current = [];
+    observedMoveDictionaryRef.current = [];
     lastAcceptedEventIdRef.current = null;
     setOcrProgress(0);
     setOcrStatusLabel("OCR準備中");
@@ -1886,6 +2021,12 @@ export function App() {
       setRoi(document.roiProfile.roi);
       setSuppressedTimelineCount(0);
       lastTimelineDeduplicationRef.current = null;
+      recentConstrainedCandidateRecordsRef.current = [];
+      recentAcceptedEventRecordsRef.current = restoredEvents
+        .map((event) => createAcceptedEventRecord(event))
+        .slice(0, 16);
+      sessionRosterDictionaryRef.current = collectSessionRosterDictionary(restoredEvents) as DictionaryEntry[];
+      observedMoveDictionaryRef.current = collectObservedMoveDictionary(restoredEvents) as DictionaryEntry[];
       lastAcceptedEventIdRef.current = restoredEvents[0]?.id ?? null;
       setActiveReviewTab("timeline");
       addLog(`Battle Logを読み込みました: ${document.events.length} events / ${document.unknowns.length} unknown`);
@@ -2489,7 +2630,7 @@ export function App() {
                         <p>{entry.errorMessage}</p>
                       ) : (
                         <>
-                          <p>{entry.normalizedText || "テキストなし"}</p>
+                          <p>{formatOcrLogDisplayText(entry)}</p>
                           {entry.parseResult ? (
                             <div className="parse-summary">
                               <span
@@ -2500,7 +2641,11 @@ export function App() {
                               <span>{entry.matchText || "match empty"}</span>
                             </div>
                           ) : null}
-                          <code>{entry.rawText || "raw empty"}</code>
+                          <details className="raw-text-details">
+                            <summary>OCR詳細</summary>
+                            <span>{entry.normalizedText || "normalized empty"}</span>
+                            <code>{entry.rawText || "raw empty"}</code>
+                          </details>
                         </>
                       )}
                     </li>
@@ -2599,12 +2744,16 @@ export function App() {
                                 <span>{item.event.timestampMs}ms</span>
                                 <span>{item.event.classification.method}</span>
                               </div>
-                              <p>{formatEventSummary(item.event)}</p>
+                              <p>{formatCanonicalEventText(item.event)}</p>
                               <div className="timeline-evidence">
                                 {cropEvidence ? (
                                   <img src={cropEvidence.processedDataUrl} alt="イベント元crop" />
                                 ) : null}
-                                <code>{item.event.rawText || "raw empty"}</code>
+                                <details className="raw-text-details">
+                                  <summary>OCR詳細</summary>
+                                  <span>{item.event.normalizedText || "normalized empty"}</span>
+                                  <code>{item.event.rawText || "raw empty"}</code>
+                                </details>
                               </div>
                             </li>
                           );
@@ -2664,7 +2813,7 @@ export function App() {
                               <span>{event.timestampMs}ms</span>
                               <span>{formatConfidence(event.confidence)}</span>
                             </div>
-                            <h3>{event.normalizedText || formatEventSummary(event)}</h3>
+                            <h3>{formatCanonicalEventText(event)}</h3>
                             <div className="resolved-summary">
                               <span className="parse-chip parse-chip--event">
                                 {formatResolvedEventChip(event)}
@@ -2675,7 +2824,11 @@ export function App() {
                               {cropEvidence ? (
                                 <img src={cropEvidence.processedDataUrl} alt="resolved元crop" />
                               ) : null}
-                              <code>{event.rawText || "raw empty"}</code>
+                              <details className="raw-text-details">
+                                <summary>OCR詳細</summary>
+                                <span>{event.normalizedText || "normalized empty"}</span>
+                                <code>{event.rawText || "raw empty"}</code>
+                              </details>
                             </div>
                           </li>
                         );
@@ -2846,7 +2999,7 @@ export function App() {
               <li className="resolved-text-log-empty">解決ログ空</li>
             ) : (
               battleEvents.map((event) => (
-                <li key={event.id}>{event.normalizedText || formatEventSummary(event)}</li>
+                <li key={event.id}>{formatCanonicalEventText(event)}</li>
               ))
             )}
           </ol>

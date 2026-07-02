@@ -118,7 +118,8 @@ describe("App", () => {
   it("renders the M7.5 capture-first shell with hidden management controls", async () => {
     render(<App />);
 
-    expect(await screen.findByRole("combobox", { name: "映像ソース" })).toHaveValue("video-usb");
+    const videoSourceSelect = await screen.findByRole("combobox", { name: "映像ソース" });
+    await waitFor(() => expect(videoSourceSelect).toHaveValue("video-usb"));
     expect(screen.getByRole("combobox", { name: "音声ソース" })).toHaveValue("none");
     expect(screen.getByRole("button", { name: "開始" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "停止" })).toBeDisabled();
@@ -139,10 +140,10 @@ describe("App", () => {
 
     expect(screen.getByRole("heading", { name: "ROI設定" })).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "ROI表示" })).toBeChecked();
-    expect(screen.getByRole("spinbutton", { name: "ROI X" })).toHaveValue(0.06);
+    expect(screen.getByRole("spinbutton", { name: "ROI X" })).toHaveValue(0.33);
     expect(screen.getByRole("spinbutton", { name: "ROI Y" })).toHaveValue(0.72);
-    expect(screen.getByRole("spinbutton", { name: "ROI W" })).toHaveValue(0.88);
-    expect(screen.getByRole("spinbutton", { name: "ROI H" })).toHaveValue(0.2);
+    expect(screen.getByRole("spinbutton", { name: "ROI W" })).toHaveValue(0.3);
+    expect(screen.getByRole("spinbutton", { name: "ROI H" })).toHaveValue(0.14);
     expect(screen.getByRole("button", { name: "ROIリセット" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "fps" })).toHaveValue("3");
     expect(screen.getByRole("slider", { name: /白抽出/ })).toHaveValue("180");
@@ -194,7 +195,7 @@ describe("App", () => {
     expect(screen.getByText("バッファ空")).toBeInTheDocument();
     expect(screen.getByText("OCRログ空")).toBeInTheDocument();
     expect(screen.getByText("タイムライン空")).toBeInTheDocument();
-    expect(screen.getByText(/ROI: x=0.0600 y=0.7200 w=0.8800 h=0.2000/)).toBeInTheDocument();
+    expect(screen.getByText(/ROI: x=0.3300 y=0.7200 w=0.3000 h=0.1400/)).toBeInTheDocument();
   });
 
   it("switches management review tabs without rendering every log category at once", async () => {
@@ -314,7 +315,7 @@ describe("App", () => {
       target: { value: "0.1" },
     });
     expect(screen.getByRole("spinbutton", { name: "ROI X" })).toHaveValue(0.1);
-    expect(screen.getByText(/ROI: x=0.1000 y=0.7200 w=0.8800 h=0.2000/)).toBeInTheDocument();
+    expect(screen.getByText(/ROI: x=0.1000 y=0.7200 w=0.3000 h=0.1400/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("checkbox", { name: "ROI表示" }));
     expect(screen.queryByLabelText("ROI adjustment layer")).not.toBeInTheDocument();
@@ -323,7 +324,7 @@ describe("App", () => {
     expect(screen.getByLabelText("ROI adjustment layer")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "ROIリセット" }));
-    expect(screen.getByRole("spinbutton", { name: "ROI X" })).toHaveValue(0.06);
+    expect(screen.getByRole("spinbutton", { name: "ROI X" })).toHaveValue(0.33);
     fireEvent.click(screen.getByRole("tab", { name: /System/ }));
     expect(
       within(screen.getByRole("tabpanel", { name: /System/ })).getByText(

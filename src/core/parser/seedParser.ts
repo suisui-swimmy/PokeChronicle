@@ -25,10 +25,14 @@ export interface BattleMessageParseInput {
 export interface BattleMessageDictionary {
   pokemon: readonly DictionaryEntry[];
   moves: readonly DictionaryEntry[];
+  sessionRosterDictionary?: readonly DictionaryEntry[];
+  observedMoveDictionary?: readonly DictionaryEntry[];
 }
 
 export interface BattleMessageParserOptions {
   templateRules?: readonly BattleTemplateRule[];
+  sessionRosterDictionary?: readonly DictionaryEntry[];
+  observedMoveDictionary?: readonly DictionaryEntry[];
 }
 
 export interface ParsedBattleEvent {
@@ -70,18 +74,49 @@ const RELAXED_STRONG_ACTOR_MOVE_OPTIONS = {
   reviewScore: 0.68,
   acceptMargin: 0.12,
   minOcrConfidenceForFuzzy: 0.68,
+  similarity: "ocr_weighted",
 } as const;
 const RELAXED_STRONG_MOVE_ACTOR_OPTIONS = {
   acceptScore: 0.62,
   reviewScore: 0.58,
   acceptMargin: 0.1,
   minOcrConfidenceForFuzzy: 0.72,
+  similarity: "ocr_weighted",
 } as const;
 const RELAXED_HP_LOSS_ACTOR_OPTIONS = {
   acceptScore: 0.8,
   reviewScore: 0.72,
   acceptMargin: 0.08,
   minOcrConfidenceForFuzzy: 0.65,
+  similarity: "ocr_weighted",
+} as const;
+const SESSION_POKEMON_MATCH_OPTIONS = {
+  acceptScore: 0.62,
+  reviewScore: 0.54,
+  acceptMargin: 0.02,
+  minOcrConfidenceForFuzzy: 0.35,
+  similarity: "ocr_weighted",
+} as const;
+const SESSION_MOVE_MATCH_OPTIONS = {
+  acceptScore: 0.6,
+  reviewScore: 0.52,
+  acceptMargin: 0.02,
+  minOcrConfidenceForFuzzy: 0.35,
+  similarity: "ocr_weighted",
+} as const;
+const OCR_WEIGHTED_GLOBAL_POKEMON_OPTIONS = {
+  acceptScore: 0.78,
+  reviewScore: 0.7,
+  acceptMargin: 0.06,
+  minOcrConfidenceForFuzzy: 0.55,
+  similarity: "ocr_weighted",
+} as const;
+const OCR_WEIGHTED_GLOBAL_MOVE_OPTIONS = {
+  acceptScore: 0.78,
+  reviewScore: 0.7,
+  acceptMargin: 0.06,
+  minOcrConfidenceForFuzzy: 0.55,
+  similarity: "ocr_weighted",
 } as const;
 
 interface MatchSurface {
@@ -107,6 +142,86 @@ function formatDictionaryCandidate(kind: "pokemon" | "move", match: DictionaryMa
 
   const score = match.score === null ? "--" : match.score.toFixed(2);
   return `${kind}:${match.normalizedInput}->${match.best}:${match.status}:${score}:${match.reason}`;
+}
+
+function createRuntimeDictionary(
+  dictionary: BattleMessageDictionary,
+  options: BattleMessageParserOptions,
+): BattleMessageDictionary {
+  return {
+    ...dictionary,
+    sessionRosterDictionary:
+      options.sessionRosterDictionary ?? dictionary.sessionRosterDictionary ?? [],
+    observedMoveDictionary:
+      options.observedMoveDictionary ?? dictionary.observedMoveDictionary ?? [],
+  };
+}
+
+function matchPrioritizedDictionaryEntry(
+  input: string,
+  kind: "pokemon" | "move",
+  priorityEntries: readonly DictionaryEntry[],
+  fallbackEntries: readonly DictionaryEntry[],
+  ocrConfidence: number | null | undefined,
+  priorityOptions: Parameters<typeof matchDictionaryEntry>[2],
+  fallbackOptions: Parameters<typeof matchDictionaryEntry>[2],
+) {
+  const candidateMatches: string[] = [];
+
+  if (priorityEntries.length > 0) {
+    const priorityMatch = matchDictionaryEntry(input, priorityEntries, {
+      ...priorityOptions,
+      ocrConfidence,
+    });
+
+    pushUniqueCandidate(candidateMatches, `session:${formatDictionaryCandidate(kind, priorityMatch)}`);
+
+    if (priorityMatch.status === "accepted") {
+      return { match: priorityMatch, candidateMatches };
+    }
+  }
+
+  const fallbackMatch = matchDictionaryEntry(input, fallbackEntries, {
+    ...fallbackOptions,
+    ocrConfidence,
+  });
+  pushUniqueCandidate(candidateMatches, `global:${formatDictionaryCandidate(kind, fallbackMatch)}`);
+
+  return { match: fallbackMatch, candidateMatches };
+}
+
+function matchPokemonEntry(
+  input: string,
+  dictionary: BattleMessageDictionary,
+  ocrConfidence: number | null | undefined,
+  fallbackOptions: Parameters<typeof matchDictionaryEntry>[2] = OCR_WEIGHTED_GLOBAL_POKEMON_OPTIONS,
+) {
+  return matchPrioritizedDictionaryEntry(
+    input,
+    "pokemon",
+    dictionary.sessionRosterDictionary ?? [],
+    dictionary.pokemon,
+    ocrConfidence,
+    SESSION_POKEMON_MATCH_OPTIONS,
+    fallbackOptions,
+  );
+}
+
+function matchMoveEntry(
+  input: string,
+  dictionary: BattleMessageDictionary,
+  ocrConfidence: number | null | undefined,
+  fallbackOptions: Parameters<typeof matchDictionaryEntry>[2] = OCR_WEIGHTED_GLOBAL_MOVE_OPTIONS,
+) {
+  return matchPrioritizedDictionaryEntry(
+    input,
+    "move",
+    dictionary.observedMoveDictionary ?? [],
+    dictionary.moves,
+    ocrConfidence,
+    SESSION_MOVE_MATCH_OPTIONS,
+    fallbackOptions,
+  );
 }
 
 function combineConfidence(ocrConfidence: number | null | undefined, scores: number[]) {
@@ -349,12 +464,144 @@ function createSimpleEvent(
   };
 }
 
+function createContextEventWithParticipant(input: {
+  type: BattleEventType;
+  normalizedText: string;
+  matchText: string;
+  rawText: string;
+  ocrConfidence: number | null | undefined;
+  templateId: string;
+  actor?: BattleEvent["actor"];
+  target?: BattleEvent["target"];
+  participantMatch: DictionaryMatch;
+}): EventParseResult {
+  const participantCandidate = formatDictionaryCandidate("pokemon", input.participantMatch);
+
+  return {
+    status: "event",
+    rawText: input.rawText,
+    normalizedText: input.normalizedText,
+    matchText: input.matchText,
+    event: {
+      type: input.type,
+      actor: input.actor ?? DEFAULT_ACTOR,
+      move: null,
+      target: input.target ?? null,
+      confidence: combineConfidence(input.ocrConfidence, [input.participantMatch.score ?? 1]),
+      classification: createClassification(
+        input.participantMatch.method === "fuzzy" ? "fuzzy_dictionary" : "seed_rule",
+        input.templateId,
+        [participantCandidate],
+      ),
+    },
+    candidateMatches: [input.templateId, participantCandidate],
+  };
+}
+
+function cleanupParticipantCandidate(rawText: string) {
+  let side: BattleEvent["actor"]["side"] = null;
+  let candidate = rawText;
+  const opponentIndex = candidate.lastIndexOf(OPPONENT_PREFIX);
+
+  if (opponentIndex >= 0) {
+    side = "opponent";
+    candidate = candidate.slice(opponentIndex + OPPONENT_PREFIX.length);
+  }
+
+  for (const separator of ["と", "、", ","]) {
+    const separatorIndex = candidate.lastIndexOf(separator);
+
+    if (separatorIndex >= 0) {
+      candidate = candidate.slice(separatorIndex + separator.length);
+    }
+  }
+
+  candidate = candidate
+    .replace(/^[^ぁ-んァ-ヶー一-龯A-Za-z0-9]+/u, "")
+    .replace(/[^ぁ-んァ-ヶー一-龯A-Za-z0-9]+$/u, "");
+
+  if (countCharacters(candidate) < 2 || countCharacters(candidate) > 14) {
+    return null;
+  }
+
+  return { candidate, side };
+}
+
+function extractParticipantBeforeMarker(
+  surfaceText: string,
+  patternText: string,
+  marker: "に" | "は" | "の",
+) {
+  const patternIndex = surfaceText.indexOf(patternText);
+
+  if (patternIndex <= 0) {
+    return null;
+  }
+
+  const prefix = surfaceText.slice(0, patternIndex);
+  const markerIndex = prefix.lastIndexOf(marker);
+
+  if (markerIndex <= 0) {
+    return null;
+  }
+
+  return cleanupParticipantCandidate(prefix.slice(0, markerIndex));
+}
+
+function extractContextParticipant(
+  type: BattleEventType,
+  patterns: readonly string[],
+  surfaceMatchTexts: readonly string[],
+  dictionary: BattleMessageDictionary,
+  ocrConfidence: number | null | undefined,
+) {
+  const marker =
+    type === "supereffective" || type === "resisted" || type === "immune"
+      ? "に"
+      : type === "boost" || type === "unboost"
+        ? "の"
+        : "は";
+
+  for (const pattern of patterns) {
+    const patternText = createOcrMatchText(pattern);
+
+    if (!patternText) {
+      continue;
+    }
+
+    for (const surfaceText of surfaceMatchTexts) {
+      const participant = extractParticipantBeforeMarker(surfaceText, patternText, marker);
+
+      if (!participant) {
+        continue;
+      }
+
+      const { match, candidateMatches } = matchPokemonEntry(
+        participant.candidate,
+        dictionary,
+        ocrConfidence,
+      );
+
+      if (match.status === "accepted") {
+        return {
+          match,
+          candidateMatches,
+          side: participant.side,
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
 function parseContextEvent(
   rawText: string,
   normalizedText: string,
   matchText: string,
   ocrConfidence: number | null | undefined,
   surfaces: readonly MatchSurface[],
+  dictionary: BattleMessageDictionary,
 ) {
   const surfaceMatchTexts = [
     matchText,
@@ -402,6 +649,42 @@ function parseContextEvent(
         return surfaceMatchTexts.some((surfaceText) => surfaceText.includes(patternText));
       })
     ) {
+      const participant = extractContextParticipant(
+        type,
+        patterns,
+        surfaceMatchTexts,
+        dictionary,
+        ocrConfidence,
+      );
+
+      if (participant) {
+        const participantField =
+          type === "supereffective" || type === "resisted" || type === "immune"
+            ? {
+                target: {
+                  name: participant.match.best,
+                  side: participant.side,
+                },
+              }
+            : {
+                actor: {
+                  name: participant.match.best,
+                  side: participant.side,
+                },
+              };
+
+        return createContextEventWithParticipant({
+          type,
+          normalizedText,
+          matchText,
+          rawText,
+          ocrConfidence,
+          templateId,
+          participantMatch: participant.match,
+          ...participantField,
+        });
+      }
+
       return createSimpleEvent(type, normalizedText, matchText, rawText, ocrConfidence, templateId);
     }
   }
@@ -499,12 +782,14 @@ function parseHpLossLifeCostEvent(
       actorText = actorText.slice(opponentPrefixIndex + OPPONENT_PREFIX.length);
     }
 
-    const actorMatch = matchDictionaryEntry(actorText, dictionary.pokemon, {
+    const { match: actorMatch, candidateMatches: actorCandidates } = matchPokemonEntry(
+      actorText,
+      dictionary,
       ocrConfidence,
-      ...RELAXED_HP_LOSS_ACTOR_OPTIONS,
-    });
+      RELAXED_HP_LOSS_ACTOR_OPTIONS,
+    );
 
-    pushUniqueCandidate(candidateMatches, formatDictionaryCandidate("pokemon", actorMatch));
+    actorCandidates.forEach((candidate) => pushUniqueCandidate(candidateMatches, candidate));
 
     if (actorMatch.status !== "accepted") {
       continue;
@@ -745,16 +1030,14 @@ function parseMoveEvent(
   const candidateMatches: string[] = [];
 
   for (const part of parts) {
-    let pokemonMatch = matchDictionaryEntry(part.actorText, dictionary.pokemon, {
-      ocrConfidence,
-    });
-    const strictMoveMatch = matchDictionaryEntry(part.moveText, dictionary.moves, {
-      ocrConfidence,
-    });
+    const strictPokemonResult = matchPokemonEntry(part.actorText, dictionary, ocrConfidence);
+    let pokemonMatch = strictPokemonResult.match;
+    const strictMoveResult = matchMoveEntry(part.moveText, dictionary, ocrConfidence);
+    const strictMoveMatch = strictMoveResult.match;
     let moveMatch = strictMoveMatch;
     const partCandidates = [
-      formatDictionaryCandidate("pokemon", pokemonMatch),
-      formatDictionaryCandidate("move", strictMoveMatch),
+      ...strictPokemonResult.candidateMatches,
+      ...strictMoveResult.candidateMatches,
     ];
 
     if (
@@ -762,13 +1045,15 @@ function parseMoveEvent(
       (pokemonMatch.method === "exact" || (pokemonMatch.score ?? 0) >= 0.9) &&
       strictMoveMatch.status !== "accepted"
     ) {
-      const relaxedMoveMatch = matchDictionaryEntry(part.moveText, dictionary.moves, {
+      const relaxedMoveResult = matchMoveEntry(
+        part.moveText,
+        dictionary,
         ocrConfidence,
-        ...RELAXED_STRONG_ACTOR_MOVE_OPTIONS,
-      });
-      pushUniqueCandidate(
-        partCandidates,
-        `strong-actor:${formatDictionaryCandidate("move", relaxedMoveMatch)}`,
+        RELAXED_STRONG_ACTOR_MOVE_OPTIONS,
+      );
+      const relaxedMoveMatch = relaxedMoveResult.match;
+      relaxedMoveResult.candidateMatches.forEach((candidate) =>
+        pushUniqueCandidate(partCandidates, `strong-actor:${candidate}`),
       );
 
       if (relaxedMoveMatch.status === "accepted") {
@@ -781,13 +1066,15 @@ function parseMoveEvent(
       (strictMoveMatch.method === "exact" || (strictMoveMatch.score ?? 0) >= 0.94) &&
       pokemonMatch.status !== "accepted"
     ) {
-      const relaxedPokemonMatch = matchDictionaryEntry(part.actorText, dictionary.pokemon, {
+      const relaxedPokemonResult = matchPokemonEntry(
+        part.actorText,
+        dictionary,
         ocrConfidence,
-        ...RELAXED_STRONG_MOVE_ACTOR_OPTIONS,
-      });
-      pushUniqueCandidate(
-        partCandidates,
-        `strong-move:${formatDictionaryCandidate("pokemon", relaxedPokemonMatch)}`,
+        RELAXED_STRONG_MOVE_ACTOR_OPTIONS,
+      );
+      const relaxedPokemonMatch = relaxedPokemonResult.match;
+      relaxedPokemonResult.candidateMatches.forEach((candidate) =>
+        pushUniqueCandidate(partCandidates, `strong-move:${candidate}`),
       );
 
       if (relaxedPokemonMatch.status === "accepted") {
@@ -911,6 +1198,73 @@ function formatConstrainedCandidateMatch(match: ConstrainedTemplateMatch) {
     `templateId=${encodeCandidateValue(match.rule.id)}`,
     `score=${match.confidenceScore.toFixed(3)}`,
   ].join(";");
+}
+
+function formatPartialTemplateCandidate(input: {
+  eventType: BattleEventType;
+  actorName: string | null;
+  actorSide: BattleEvent["actor"]["side"];
+  templateId: string;
+  surfaceId: string;
+}) {
+  return [
+    "partial-template",
+    `eventType=${encodeCandidateValue(input.eventType)}`,
+    `actorName=${encodeCandidateValue(input.actorName)}`,
+    `actorSide=${encodeCandidateValue(input.actorSide)}`,
+    `templateId=${encodeCandidateValue(input.templateId)}`,
+    `surface=${encodeCandidateValue(input.surfaceId)}`,
+  ].join(";");
+}
+
+function detectPartialTemplateCandidates(
+  surfaces: readonly MatchSurface[],
+  dictionary: BattleMessageDictionary,
+  ocrConfidence: number | null | undefined,
+) {
+  const candidateMatches: string[] = [];
+
+  for (const surface of surfaces) {
+    if (!surface.matchText.endsWith("の")) {
+      continue;
+    }
+
+    const side = surface.matchText.startsWith(OPPONENT_PREFIX) ? "opponent" : null;
+    const actorText = (side === "opponent"
+      ? surface.matchText.slice(OPPONENT_PREFIX.length)
+      : surface.matchText
+    ).slice(0, -1);
+
+    if (countCharacters(actorText) < 2 || countCharacters(actorText) > 12) {
+      continue;
+    }
+
+    const { match, candidateMatches: pokemonCandidates } = matchPokemonEntry(
+      actorText,
+      dictionary,
+      ocrConfidence,
+    );
+    pokemonCandidates.forEach((candidate) =>
+      pushUniqueCandidate(candidateMatches, `partial-template:${candidate}`),
+    );
+
+    if (match.status !== "accepted") {
+      continue;
+    }
+
+    pushUniqueCandidate(
+      candidateMatches,
+      formatPartialTemplateCandidate({
+        eventType: "move",
+        actorName: match.best,
+        actorSide: side,
+        templateId: side === "opponent" ? "champout_move_1pbrfiv" : "champout_move_1oj9w2v",
+        surfaceId: surface.id,
+      }),
+    );
+  }
+
+  return candidateMatches;
 }
 
 function parseConstrainedTemplateEvent(
@@ -1149,6 +1503,7 @@ export function parseBattleMessage(
   dictionary: BattleMessageDictionary = BATTLE_DICTIONARY,
   options: BattleMessageParserOptions = {},
 ): BattleMessageParseResult {
+  const runtimeDictionary = createRuntimeDictionary(dictionary, options);
   const rawText = typeof input === "string" ? input : input.rawText;
   const ocrConfidence = typeof input === "string" ? null : input.ocrConfidence;
   const lines = typeof input === "string" ? undefined : input.lines;
@@ -1166,6 +1521,7 @@ export function parseBattleMessage(
     matchText,
     ocrConfidence,
     surfaces,
+    runtimeDictionary,
   );
 
   if (contextEvent) {
@@ -1178,7 +1534,7 @@ export function parseBattleMessage(
     normalizedText,
     matchText,
     ocrConfidence,
-    dictionary,
+    runtimeDictionary,
     surfaces,
     activeTemplateRules,
   );
@@ -1192,7 +1548,7 @@ export function parseBattleMessage(
     normalizedText,
     matchText,
     ocrConfidence,
-    dictionary,
+    runtimeDictionary,
     surfaces,
     activeTemplateRules,
   );
@@ -1206,7 +1562,7 @@ export function parseBattleMessage(
     normalizedText,
     matchText,
     ocrConfidence,
-    dictionary,
+    runtimeDictionary,
     surfaces,
   );
 
@@ -1219,7 +1575,7 @@ export function parseBattleMessage(
     normalizedText,
     matchText,
     ocrConfidence,
-    dictionary,
+    runtimeDictionary,
     surfaces,
   );
 
@@ -1239,6 +1595,12 @@ export function parseBattleMessage(
     return switchInCallFallback;
   }
 
+  const partialTemplateCandidates = detectPartialTemplateCandidates(
+    surfaces,
+    runtimeDictionary,
+    ocrConfidence,
+  );
+
   return createUnknownResult(
     rawText,
     normalizedText,
@@ -1247,6 +1609,7 @@ export function parseBattleMessage(
       ...constrainedTemplateEvent.candidateMatches,
       ...hpLossEvent.candidateMatches,
       ...(moveEvent?.candidateMatches ?? []),
+      ...partialTemplateCandidates,
     ],
   );
 }

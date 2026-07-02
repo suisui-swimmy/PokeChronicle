@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { matchDictionaryEntry, normalizedSimilarity } from "./fuzzyMatch";
+import {
+  matchDictionaryEntry,
+  normalizedOcrWeightedSimilarity,
+  normalizedSimilarity,
+} from "./fuzzyMatch";
 import { SEED_POKEMON_DICTIONARY } from "./seedBattleDictionary";
 
 describe("matchDictionaryEntry", () => {
@@ -40,5 +44,16 @@ describe("matchDictionaryEntry", () => {
 describe("normalizedSimilarity", () => {
   it("scores single-character OCR insertions near the intended label", () => {
     expect(normalizedSimilarity("マフォオクシー", "マフォクシー")).toBeGreaterThan(0.84);
+  });
+});
+
+describe("normalizedOcrWeightedSimilarity", () => {
+  it("discounts common OCR kana confusions for limited dictionary correction", () => {
+    expect(normalizedOcrWeightedSimilarity("カプリアス", "ガブリアス")).toBeGreaterThan(
+      normalizedSimilarity("カプリアス", "ガブリアス"),
+    );
+    expect(normalizedOcrWeightedSimilarity("アクアジエッツト", "アクアジェット")).toBeGreaterThan(
+      0.82,
+    );
   });
 });

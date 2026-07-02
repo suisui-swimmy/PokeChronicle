@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { renderBattleEventCanonicalText } from "../events/canonicalText";
 import { parseBattleMessage } from "./seedParser";
 
 describe("parseBattleMessage", () => {
@@ -493,6 +494,150 @@ describe("parseBattleMessage", () => {
       status: "unknown",
       reviewStatus: "unreviewed",
       classification: { method: "unknown" },
+    });
+  });
+
+  it("extracts corrected participants from noisy context effectiveness messages", () => {
+    const supereffective = parseBattleMessage({
+      rawText: "マフォプシーに効果は パツグンだ",
+      ocrConfidence: 0.88,
+    });
+    const resisted = parseBattleMessage({
+      rawText: "カプリアスに効果は いまひとつだ",
+      ocrConfidence: 0.88,
+    });
+
+    expect(supereffective).toMatchObject({
+      status: "event",
+      event: {
+        type: "supereffective",
+        target: { name: "マフォクシー" },
+      },
+    });
+    expect(
+      supereffective.status === "event"
+        ? renderBattleEventCanonicalText(supereffective.event)
+        : null,
+    ).toBe("マフォクシーに 効果は バツグンだ!");
+    expect(resisted).toMatchObject({
+      status: "event",
+      event: {
+        type: "resisted",
+        target: { name: "ガブリアス" },
+      },
+    });
+  });
+
+  it("extracts corrected actors from noisy protect context messages", () => {
+    const result = parseBattleMessage({
+      rawText: "マフォジシーは 守りの体勢に入った",
+      ocrConfidence: 0.88,
+    });
+
+    expect(result).toMatchObject({
+      status: "event",
+      event: {
+        type: "protect",
+        actor: { name: "マフォクシー" },
+      },
+    });
+  });
+
+  it("uses OCR-aware dictionary correction for noisy actor and move slots", () => {
+    const aquaJet = parseBattleMessage({
+      rawText: "相手の イヅダイトウの アクアジエッツト",
+      ocrConfidence: 0.9,
+    });
+    const heatWave = parseBattleMessage({
+      rawText: "マフォクシーの ねっぶぷう",
+      ocrConfidence: 0.9,
+    });
+    const switchIn = parseBattleMessage({
+      rawText: "ゆけつ! ガプリアス!",
+      ocrConfidence: 0.86,
+    });
+
+    expect(aquaJet).toMatchObject({
+      status: "event",
+      rawText: "相手の イヅダイトウの アクアジエッツト",
+      event: {
+        type: "move",
+        actor: { name: "イダイトウ", side: "opponent" },
+        move: "アクアジェット",
+      },
+    });
+    expect(heatWave).toMatchObject({
+      status: "event",
+      event: {
+        type: "move",
+        actor: { name: "マフォクシー" },
+        move: "ねっぷう",
+      },
+    });
+    expect(switchIn).toMatchObject({
+      status: "event",
+      event: { type: "switch_in", actor: { name: "ガブリアス" } },
+    });
+  });
+
+  it("does not accept ambiguous global dictionary candidates", () => {
+    const result = parseBattleMessage(
+      {
+        rawText: "カカカカの じしん",
+        ocrConfidence: 0.9,
+      },
+      {
+        pokemon: [
+          { id: "pokemon:test-1", label: "ガカカカ" },
+          { id: "pokemon:test-2", label: "カガカカ" },
+        ],
+        moves: [{ id: "move:test-1", label: "じしん" }],
+      },
+    );
+
+    expect(result.status).toBe("unknown");
+  });
+
+  it("uses session roster dictionary before the global pokemon dictionary", () => {
+    const result = parseBattleMessage(
+      {
+        rawText: "マフォジシーは 守りの体勢に入った",
+        ocrConfidence: 0.42,
+      },
+      undefined,
+      {
+        sessionRosterDictionary: [{ id: "session:マフォクシー", label: "マフォクシー" }],
+      },
+    );
+
+    expect(result).toMatchObject({
+      status: "event",
+      event: {
+        type: "protect",
+        actor: { name: "マフォクシー" },
+      },
+    });
+  });
+
+  it("uses observed move dictionary before the global move dictionary", () => {
+    const result = parseBattleMessage(
+      {
+        rawText: "マフォクシーの ねっぶぷう",
+        ocrConfidence: 0.42,
+      },
+      undefined,
+      {
+        observedMoveDictionary: [{ id: "observed:ねっぷう", label: "ねっぷう" }],
+      },
+    );
+
+    expect(result).toMatchObject({
+      status: "event",
+      event: {
+        type: "move",
+        actor: { name: "マフォクシー" },
+        move: "ねっぷう",
+      },
     });
   });
 });

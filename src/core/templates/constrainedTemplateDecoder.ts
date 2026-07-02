@@ -7,6 +7,8 @@ import type { BattleTemplateRule, TemplateMatchSurface } from "./types";
 interface ConstrainedTemplateDictionary {
   pokemon: readonly DictionaryEntry[];
   moves: readonly DictionaryEntry[];
+  sessionRosterDictionary?: readonly DictionaryEntry[];
+  observedMoveDictionary?: readonly DictionaryEntry[];
 }
 
 type PlaceholderKind = "pokemon" | "move" | "target" | "text";
@@ -269,24 +271,61 @@ function resolveDictionaryPlaceholder(
   start: number,
   ocrConfidence: number | null | undefined,
 ): PlaceholderResolution | null {
+  const normalizedSegmentText = createOcrMatchText(segmentText);
+  const normalizedSegmentLength = countCharacters(normalizedSegmentText);
   const entries = kind === "move" ? dictionary.moves : dictionary.pokemon;
-  let best: (PlaceholderResolution & { secondScore: number | null }) | null = null;
+  const priorityEntries =
+    kind === "move"
+      ? dictionary.observedMoveDictionary ?? []
+      : dictionary.sessionRosterDictionary ?? [];
+  let best:
+    | (PlaceholderResolution & { rankingScore: number; secondScore: number | null })
+    | null = null;
 
   for (const segment of createCandidateSegments(segmentText)) {
-    const match = matchDictionaryEntry(segment.text, entries, {
-      acceptScore: MIN_DICTIONARY_SCORE,
-      reviewScore: 0.52,
-      acceptMargin: MIN_MARGIN,
-      minOcrConfidenceForFuzzy: 0.45,
-      ocrConfidence,
-    });
+    const segmentLength = countCharacters(segment.text);
+
+    if (normalizedSegmentLength > 3 && segmentLength < 3) {
+      continue;
+    }
+
+    const priorityMatch =
+      priorityEntries.length > 0
+        ? matchDictionaryEntry(segment.text, priorityEntries, {
+            acceptScore: 0.52,
+            reviewScore: 0.48,
+            acceptMargin: 0.02,
+            minOcrConfidenceForFuzzy: 0.35,
+            ocrConfidence,
+            similarity: "ocr_weighted",
+          })
+        : null;
+    const match =
+      priorityMatch?.status === "accepted"
+        ? priorityMatch
+        : matchDictionaryEntry(segment.text, entries, {
+            acceptScore: MIN_DICTIONARY_SCORE,
+            reviewScore: 0.52,
+            acceptMargin: MIN_MARGIN,
+            minOcrConfidenceForFuzzy: 0.45,
+            ocrConfidence,
+            similarity: "ocr_weighted",
+          });
 
     if (!match.best || match.score === null || match.score < MIN_DICTIONARY_SCORE) {
       continue;
     }
 
     const margin = match.score - (match.secondScore ?? 0);
-    const resolved: PlaceholderResolution & { secondScore: number | null } = {
+    const coverageScore = normalizedSegmentLength > 0 ? segmentLength / normalizedSegmentLength : 1;
+    const rankingScore =
+      match.method === "exact"
+        ? 0.92 + Math.min(coverageScore, 1) * 0.08
+        : match.score * Math.max(0.4, coverageScore);
+    const resolved: PlaceholderResolution & {
+      rankingScore: number;
+      secondScore: number | null;
+    } = {
       kind,
       raw: kind,
       inputText: createOcrMatchText(segmentText),
@@ -298,14 +337,21 @@ function resolveDictionaryPlaceholder(
       start: start + segment.start,
       end: start + segment.end,
       evidence: formatDictionaryEvidence(kind, match, segment.text),
+      rankingScore,
       secondScore: match.secondScore,
     };
 
     if (
       !best ||
-      resolved.score > best.score ||
-      (resolved.score === best.score && resolved.margin > best.margin) ||
-      (resolved.score === best.score && resolved.margin === best.margin && resolved.matchedText.length > best.matchedText.length)
+      resolved.rankingScore > best.rankingScore ||
+      (resolved.rankingScore === best.rankingScore && resolved.score > best.score) ||
+      (resolved.rankingScore === best.rankingScore &&
+        resolved.score === best.score &&
+        resolved.margin > best.margin) ||
+      (resolved.rankingScore === best.rankingScore &&
+        resolved.score === best.score &&
+        resolved.margin === best.margin &&
+        resolved.matchedText.length > best.matchedText.length)
     ) {
       best = resolved;
     }
@@ -427,6 +473,7 @@ function isAcceptedCandidate(
       (candidate.eventType === "switch_in" || candidate.eventType === "switch_out") &&
       fuzzyResolution.kind === "pokemon" &&
       fuzzyResolution.score >= 0.78 &&
+      fuzzyResolution.margin >= MIN_FUZZY_MARGIN &&
       candidate.literalScore >= 0.62 &&
       candidate.confidenceScore >= 0.7;
     const hasStrongActorMoveShape =
@@ -435,7 +482,9 @@ function isAcceptedCandidate(
       candidate.confidenceScore >= 0.7 &&
       fuzzyResolution.score >= 0.62 &&
       ((fuzzyResolution.kind === "move" && hasExactPokemon) ||
-        (fuzzyResolution.kind === "pokemon" && hasExactMove));
+        (fuzzyResolution.kind === "pokemon" &&
+          hasExactMove &&
+          fuzzyResolution.margin >= MIN_FUZZY_MARGIN));
 
     if (hasStrongSingleSlotSwitch || hasStrongActorMoveShape) {
       return true;

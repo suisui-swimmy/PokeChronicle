@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { parseBattleMessage } from "../parser/seedParser";
 import {
+  createAcceptedEventRecord,
   createConstrainedCandidateRecord,
   createSourceFrameRef,
   createTimelineObservation,
   shouldCreateUnknownEvent,
   shouldSuppressTimelineObservation,
+  type TimelineAcceptedEventRecord,
   type TimelineConstrainedCandidateRecord,
 } from "./timeline";
 
@@ -38,6 +40,7 @@ function createObservationFromParse(
   timestampMs: number,
   ocrConfidence: number | null,
   recentConstrainedCandidates: TimelineConstrainedCandidateRecord[] = [],
+  recentAcceptedEvents: TimelineAcceptedEventRecord[] = [],
 ) {
   return createTimelineObservation({
     id,
@@ -51,6 +54,7 @@ function createObservationFromParse(
     roi,
     afterEventId: "evt_previous",
     recentConstrainedCandidates,
+    recentAcceptedEvents,
   });
 }
 
@@ -206,5 +210,30 @@ describe("timeline observation", () => {
       rawText,
     });
     expect(secondObservation.unknown).toBeNull();
+  });
+
+  it("suppresses partial template unknowns when a matching accepted event is nearby", () => {
+    const accepted = createObservation("相手の キュウコンの オーバーヒート!", "ocr-1", 1000);
+    const acceptedRecord = accepted.event ? createAcceptedEventRecord(accepted.event) : null;
+    const partialRawText = "相手の キュウコンの";
+    const partialParse = parseBattleMessage({
+      rawText: partialRawText,
+      ocrConfidence: 0.86,
+    });
+    const partial = createObservationFromParse(
+      partialRawText,
+      partialParse,
+      "ocr-2",
+      1500,
+      0.86,
+      [],
+      acceptedRecord ? [acceptedRecord] : [],
+    );
+
+    expect(partialParse).toMatchObject({ status: "unknown" });
+    expect(partialParse.candidateMatches.join("\n")).toContain("partial-template;");
+    expect(partial.event).toBeNull();
+    expect(partial.unknown).toBeNull();
+    expect(partial.ocrMessage.rawText).toBe(partialRawText);
   });
 });
