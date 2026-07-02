@@ -125,7 +125,15 @@ M7 also keeps user-selected import for additional validation and local updates:
 
 ZIP import is deferred. M7 supports selecting multiple JSON files directly.
 
-Statistics are a later milestone.
+## M8 Statistics And MVP Acceptance
+
+M8 closes the first useful MVP around observed battle-message logs:
+
+- `src/core/stats/battleStats.ts` derives MVP statistics from resolved `BattleEvent` records and reviewable `UnknownEvent` records.
+- The statistics intentionally count observed events only: observed moves, Pokemon action events, switches, faints, unknown messages/rate, effectiveness messages, and critical hits.
+- Pokemon action counts require an actor name and never infer `selected_action` from message text alone.
+- The capture workspace shows the statistics beside the review/export controls so users can judge log quality before exporting JSON or CSV.
+- Static deploy is prepared through the GitHub Pages Actions workflow, which builds the committed browser app into `dist/` without a runtime server.
 
 ## Runtime Constraints
 

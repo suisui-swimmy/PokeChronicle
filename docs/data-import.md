@@ -1,10 +1,10 @@
 # Data Import
 
-M7 supports generated standard template data plus two browser-side import/export paths:
+The MVP supports generated standard template data plus browser-side import/export paths:
 
 - Build-time generated champout template rules.
 - Battle Log JSON import/export for restoring user-owned analysis logs.
-- User-selected champout-style JSON import for template rules.
+- User-selected champout-style JSON import for template rules in the core pipeline, used for validation and local updates when that optional UI is exposed.
 
 ## Generated name dictionaries
 
@@ -101,7 +101,7 @@ The review workspace can export and import a schema-versioned Battle Log JSON do
 - bounded frame/crop evidence
 - manual corrections derived from unknown review notes and reviewed status
 
-The app validates `schemaVersion` on import, restores the review state, and saves the imported log into IndexedDB. This import path is only for PokeChronicle Battle Logs.
+The app validates `schemaVersion` on import and restores the review state on the current page. The streamlined MVP UI treats Battle Log JSON as the explicit durable handoff; it does not automatically save imported logs into IndexedDB. This import path is only for PokeChronicle Battle Logs.
 
 Events and unknown messages can also be exported as CSV. Unknown CSV includes manual review notes when present.
 

@@ -6,7 +6,7 @@ The MVP is intentionally browser-only: capture or loaded media stays local, OCR 
 
 ## Current Status
 
-M7 is complete on top of the static app foundation:
+The M8 MVP is closed on top of the static app foundation:
 
 - React + TypeScript + Vite
 - Vitest + React Testing Library
@@ -35,13 +35,14 @@ M7 is complete on top of the static app foundation:
 - Near-frame duplicate suppression for repeated timeline messages
 - Consecutive same raw OCR messages are grouped in the raw OCR tab
 - Minimal unknown review UI with reviewed status and correction notes
-- IndexedDB save/load for battle logs
+- IndexedDB storage adapters remain available internally; the MVP UI focuses on explicit Battle Log JSON restore/export
 - Schema-versioned Battle Log JSON export/import
 - Events CSV and Unknown messages CSV export
 - Bounded representative crop evidence in saved/exported logs
+- MVP statistics for observed moves, Pokemon action count, switches, faints, unknown rate, effectiveness, and critical hits
 - Browser-side champout/template JSON import support remains available in the core pipeline for validation and local updates; the streamlined MVP UI focuses on generated standard rules plus Battle Log JSON/CSV
 
-Statistics and MVP acceptance polish are later milestones described in `AGENTS.md`.
+The MVP is intentionally scoped to observed battle messages. It does not record `selected_action` unless a future UI can prove the selected action directly.
 
 ## Commands
 
@@ -88,6 +89,12 @@ For local preview with root-relative paths, run:
 ```powershell
 $env:VITE_BASE_PATH="/"; npm run build; npm run preview
 ```
+
+## GitHub Pages Deploy
+
+This repository uses the official GitHub Pages Actions workflow in `.github/workflows/pages.yml`. Push to `main` or run the workflow manually, then set GitHub Pages source to **GitHub Actions** in the repository settings.
+
+The workflow runs `npm ci`, `npm run test`, and `npm run build`, then deploys `dist/`. It does not regenerate dictionaries or champout templates in CI because those scripts depend on local `others/` reference checkouts.
 
 ## OCR Assets
 

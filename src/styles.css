@@ -98,6 +98,7 @@ button:disabled {
 .preview-frame,
 .management-summary,
 .analysis-panel,
+.stats-panel,
 .data-management-panel,
 .compact-select select,
 .range-control,
@@ -461,7 +462,8 @@ button:disabled {
 }
 
 .roi-settings-panel,
-.analysis-panel {
+.analysis-panel,
+.stats-panel {
   display: grid;
   gap: 12px;
   min-width: 0;
@@ -623,6 +625,105 @@ button:disabled {
   width: 16px;
   height: 16px;
   accent-color: var(--green);
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+}
+
+.stats-grid div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  background: #0f1218;
+}
+
+.stats-grid dt,
+.stats-grid dd {
+  min-width: 0;
+  margin: 0;
+}
+
+.stats-grid dt {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.stats-grid dd {
+  color: var(--text);
+  font-size: 1.2rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.stats-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.stats-breakdown span {
+  min-height: 26px;
+  padding: 5px 8px;
+  border: 1px solid rgb(32 217 152 / 0.2);
+  border-radius: 4px;
+  color: var(--muted);
+  background: rgb(32 217 152 / 0.08);
+  font-size: 0.72rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.pokemon-action-counts {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  max-height: 132px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.pokemon-action-counts li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  color: var(--muted);
+  background: #0f1218;
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.pokemon-action-counts span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pokemon-action-counts strong {
+  color: var(--green);
+  font-variant-numeric: tabular-nums;
 }
 
 .crop-preview-grid {

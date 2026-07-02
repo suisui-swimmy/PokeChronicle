@@ -27,6 +27,7 @@ import {
   type TimelineDeduplicationRecord,
 } from "../core/events/timeline";
 import { renderBattleEventCanonicalText } from "../core/events/canonicalText";
+import { summarizeBattleStats } from "../core/stats/battleStats";
 import type { DictionaryEntry } from "../core/dictionary/types";
 import {
   createMessageLineCropVariants,
@@ -303,6 +304,10 @@ function formatConfidence(confidence: number | null) {
   }
 
   return `${Math.round(confidence * 100)}%`;
+}
+
+function formatRate(value: number) {
+  return `${Math.round(value * 100)}%`;
 }
 
 function formatTextDensity(ratio: number) {
@@ -917,7 +922,7 @@ export function App() {
   const [importedTemplateCollection, setImportedTemplateCollection] =
     useState<ImportedTemplateCollection | null>(null);
   const [logs, setLogs] = useState<SystemLog[]>(() => [
-    createLog("M7 template import workspace initialized."),
+    createLog("M8 MVP workspace initialized."),
   ]);
   const roiRef = useRef(roi);
   const mediaModeRef = useRef(mediaMode);
@@ -1918,6 +1923,10 @@ export function App() {
 
   const latestFrameSample = frameSamples[0] ?? null;
   const latestOcrLog = ocrLogs[0] ?? null;
+  const battleStats = useMemo(
+    () => summarizeBattleStats(battleEvents, unknownEvents),
+    [battleEvents, unknownEvents],
+  );
   const reviewedUnknownCount = useMemo(
     () => unknownEvents.filter((unknown) => unknown.reviewStatus === "reviewed").length,
     [unknownEvents],
@@ -2653,6 +2662,66 @@ export function App() {
                 )}
               </ol>
             </section>
+          </section>
+
+          <section className="stats-panel" aria-label="MVP statistics">
+            <div className="panel-heading panel-heading--compact">
+              <div>
+                <h2>統計サマリー</h2>
+                <p>
+                  {battleStats.totalResolvedEventCount} events / unknown{" "}
+                  {formatRate(battleStats.unknownRate)}
+                </p>
+              </div>
+            </div>
+
+            <dl className="stats-grid">
+              <div>
+                <dt>observed moves</dt>
+                <dd>{battleStats.observedMoveCount}</dd>
+              </div>
+              <div>
+                <dt>Pokemon actions</dt>
+                <dd>{battleStats.pokemonActionCount}</dd>
+              </div>
+              <div>
+                <dt>switches</dt>
+                <dd>{battleStats.switchCount}</dd>
+              </div>
+              <div>
+                <dt>faints</dt>
+                <dd>{battleStats.faintCount}</dd>
+              </div>
+              <div>
+                <dt>unknown</dt>
+                <dd>{battleStats.unknownMessageCount}</dd>
+              </div>
+              <div>
+                <dt>critical</dt>
+                <dd>{battleStats.criticalCount}</dd>
+              </div>
+            </dl>
+
+            <div className="stats-breakdown" aria-label="effectiveness statistics">
+              <span>効果抜群 {battleStats.effectiveness.supereffective}</span>
+              <span>いまひとつ {battleStats.effectiveness.resisted}</span>
+              <span>無効 {battleStats.effectiveness.immune}</span>
+            </div>
+
+            <ol className="pokemon-action-counts" aria-label="Pokemon action counts">
+              {battleStats.pokemonActionCounts.length === 0 ? (
+                <li>行動集計なし</li>
+              ) : (
+                battleStats.pokemonActionCounts.slice(0, 5).map((entry) => (
+                  <li key={entry.key}>
+                    <span>
+                      {formatSide(entry.side)} {entry.name}
+                    </span>
+                    <strong>{entry.count}</strong>
+                  </li>
+                ))
+              )}
+            </ol>
           </section>
 
           <section className="data-management-panel" aria-label="data import export and review details">

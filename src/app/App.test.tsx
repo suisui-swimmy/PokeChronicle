@@ -195,6 +195,13 @@ describe("App", () => {
     expect(screen.getByText("バッファ空")).toBeInTheDocument();
     expect(screen.getByText("OCRログ空")).toBeInTheDocument();
     expect(screen.getByText("タイムライン空")).toBeInTheDocument();
+    const statsPanel = screen.getByLabelText("MVP statistics");
+    expect(within(statsPanel).getByRole("heading", { name: "統計サマリー" })).toBeInTheDocument();
+    expect(within(statsPanel).getByText("0 events / unknown 0%")).toBeInTheDocument();
+    expect(within(statsPanel).getByText("observed moves")).toBeInTheDocument();
+    expect(within(statsPanel).getByText("Pokemon actions")).toBeInTheDocument();
+    expect(within(statsPanel).getByText("効果抜群 0")).toBeInTheDocument();
+    expect(within(statsPanel).getByText("行動集計なし")).toBeInTheDocument();
     expect(screen.getByText(/ROI: x=0.3300 y=0.7200 w=0.3000 h=0.1400/)).toBeInTheDocument();
   });
 
@@ -243,7 +250,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("tab", { name: /System/ }));
 
     expect(screen.getByRole("heading", { name: "システムログ" })).toBeInTheDocument();
-    expect(screen.getByText("M7 template import workspace initialized.")).toBeInTheDocument();
+    expect(screen.getByText("M8 MVP workspace initialized.")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "OCR Raw" })).not.toBeInTheDocument();
   });
 
