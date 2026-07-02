@@ -65,7 +65,7 @@ The runtime app imports only the generated JSON from the repository. It never re
 
 ## champout/template import
 
-Use `Template読込` in the review panel and select one or more JSON files controlled by the user. Typical files are under a local champout checkout, for example:
+The core importer can read one or more JSON files controlled by the user when the optional validation UI is exposed. Typical files are under a local champout checkout, for example:
 
 - `rom-txt/jpn/btl_std.json`
 - `rom-txt/jpn/btl_attack_syn.json`
@@ -82,7 +82,7 @@ The importer:
 - Keeps source file name, key path, label name, and original text as rule metadata.
 - Stores the generated template pack in IndexedDB.
 - Combines imported rules with checked-in seed rules and the standard generated champout pack for live OCR parsing.
-- Exports or deletes the imported template pack from the review panel.
+- Can export or delete the imported template pack when the optional template-management UI is enabled.
 
 ZIP import is not implemented in M7. Select JSON files directly for now.
 

@@ -8,6 +8,7 @@ import { matchDictionaryEntry } from "../dictionary/fuzzyMatch";
 import { BATTLE_DICTIONARY } from "../dictionary/generatedBattleDictionary";
 import { findDictionarySpans, type DictionarySpan } from "../dictionary/spanMatch";
 import type { DictionaryEntry, DictionaryMatch } from "../dictionary/types";
+import { decodeConstrainedTemplate } from "../templates/constrainedTemplateDecoder";
 import { STANDARD_TEMPLATE_RULES } from "../templates/standardTemplateRules";
 import { matchTemplateRules } from "../templates/templateMatcher";
 import type { BattleTemplateRule } from "../templates/types";
@@ -66,6 +67,12 @@ const RELAXED_STRONG_ACTOR_MOVE_OPTIONS = {
   reviewScore: 0.68,
   acceptMargin: 0.12,
   minOcrConfidenceForFuzzy: 0.68,
+} as const;
+const RELAXED_STRONG_MOVE_ACTOR_OPTIONS = {
+  acceptScore: 0.62,
+  reviewScore: 0.58,
+  acceptMargin: 0.1,
+  minOcrConfidenceForFuzzy: 0.72,
 } as const;
 const RELAXED_HP_LOSS_ACTOR_OPTIONS = {
   acceptScore: 0.8,
@@ -569,6 +576,8 @@ function parseMoveEventFromSpans(
 
     const relationCandidate = formatSpanRelationCandidate(candidate, "accepted", "pokemon-no-move");
     const alternatives = [relationCandidate];
+    const side =
+      candidate.side ?? inferResolvedActorSide(candidate.pokemon.entry.label, surfaces);
 
     return {
       result: {
@@ -580,7 +589,7 @@ function parseMoveEventFromSpans(
           type: "move",
           actor: {
             name: candidate.pokemon.entry.label,
-            side: candidate.side,
+            side,
           },
           move: candidate.move.entry.label,
           target: null,
@@ -623,7 +632,7 @@ function parseMoveEvent(
   const candidateMatches: string[] = [];
 
   for (const part of parts) {
-    const pokemonMatch = matchDictionaryEntry(part.actorText, dictionary.pokemon, {
+    let pokemonMatch = matchDictionaryEntry(part.actorText, dictionary.pokemon, {
       ocrConfidence,
     });
     const strictMoveMatch = matchDictionaryEntry(part.moveText, dictionary.moves, {
@@ -651,6 +660,25 @@ function parseMoveEvent(
 
       if (relaxedMoveMatch.status === "accepted") {
         moveMatch = relaxedMoveMatch;
+      }
+    }
+
+    if (
+      strictMoveMatch.status === "accepted" &&
+      (strictMoveMatch.method === "exact" || (strictMoveMatch.score ?? 0) >= 0.94) &&
+      pokemonMatch.status !== "accepted"
+    ) {
+      const relaxedPokemonMatch = matchDictionaryEntry(part.actorText, dictionary.pokemon, {
+        ocrConfidence,
+        ...RELAXED_STRONG_MOVE_ACTOR_OPTIONS,
+      });
+      pushUniqueCandidate(
+        partCandidates,
+        `strong-move:${formatDictionaryCandidate("pokemon", relaxedPokemonMatch)}`,
+      );
+
+      if (relaxedPokemonMatch.status === "accepted") {
+        pokemonMatch = relaxedPokemonMatch;
       }
     }
 
@@ -724,6 +752,14 @@ function parseTemplateEvent(
     return null;
   }
 
+  const actor =
+    templateMatch.actor.name && !templateMatch.actor.side
+      ? {
+          ...templateMatch.actor,
+          side: inferResolvedActorSide(templateMatch.actor.name, surfaces) ?? templateMatch.actor.side,
+        }
+      : templateMatch.actor;
+
   return {
     status: "event",
     rawText,
@@ -731,7 +767,7 @@ function parseTemplateEvent(
     matchText,
     event: {
       type: templateMatch.rule.eventType,
-      actor: templateMatch.actor,
+      actor,
       move: templateMatch.move,
       target: templateMatch.target,
       confidence: combineConfidence(ocrConfidence, [templateMatch.confidenceScore]),
@@ -743,6 +779,217 @@ function parseTemplateEvent(
     },
     candidateMatches: [templateMatch.evidence],
   } satisfies EventParseResult;
+}
+
+function parseConstrainedTemplateEvent(
+  rawText: string,
+  normalizedText: string,
+  matchText: string,
+  ocrConfidence: number | null | undefined,
+  dictionary: BattleMessageDictionary,
+  surfaces: readonly MatchSurface[],
+  templateRules: readonly BattleTemplateRule[],
+) {
+  const constrainedRules = selectConstrainedTemplateRules(
+    matchText,
+    surfaces,
+    templateRules,
+    dictionary,
+  );
+
+  if (constrainedRules.length === 0) {
+    return { candidateMatches: [] };
+  }
+
+  const constrainedSurfaces = selectConstrainedTemplateSurfaces(surfaces, constrainedRules);
+
+  if (constrainedSurfaces.length === 0) {
+    return { candidateMatches: [] };
+  }
+
+  const constrainedMatch = decodeConstrainedTemplate({
+    surfaces: constrainedSurfaces,
+    dictionary,
+    rules: constrainedRules,
+    ocrConfidence,
+  });
+
+  if (!constrainedMatch) {
+    return { candidateMatches: [] };
+  }
+
+  if (!constrainedMatch.accepted) {
+    return {
+      candidateMatches: [`constrained-review:${constrainedMatch.evidence}`],
+    };
+  }
+
+  const actor =
+    constrainedMatch.actor.name && !constrainedMatch.actor.side
+      ? {
+          ...constrainedMatch.actor,
+          side:
+            inferResolvedActorSide(constrainedMatch.actor.name, surfaces) ??
+            constrainedMatch.actor.side,
+        }
+      : constrainedMatch.actor;
+
+  return {
+    result: {
+      status: "event",
+      rawText,
+      normalizedText,
+      matchText,
+      event: {
+        type: constrainedMatch.eventType,
+        actor,
+        move: constrainedMatch.move,
+        target: constrainedMatch.target,
+        confidence: combineConfidence(ocrConfidence, [constrainedMatch.confidenceScore]),
+        classification: createClassification(
+          "template_dictionary",
+          constrainedMatch.rule.id,
+          [constrainedMatch.evidence],
+        ),
+      },
+      candidateMatches: [constrainedMatch.evidence],
+    } satisfies EventParseResult,
+    candidateMatches: [constrainedMatch.evidence],
+  };
+}
+
+function isConstrainedMoveSurface(surfaceText: string) {
+  const possessiveIndex = surfaceText.indexOf("の");
+
+  if (possessiveIndex < 0) {
+    return false;
+  }
+
+  if (surfaceText.startsWith(OPPONENT_PREFIX)) {
+    return true;
+  }
+
+  const actorText = surfaceText.slice(0, possessiveIndex);
+  const moveText = surfaceText.slice(possessiveIndex + 1);
+
+  return (
+    actorText.length >= 2 &&
+    actorText.length <= 8 &&
+    moveText.length >= 2 &&
+    moveText.length <= 14
+  );
+}
+
+function selectConstrainedTemplateSurfaces(
+  surfaces: readonly MatchSurface[],
+  templateRules: readonly BattleTemplateRule[],
+) {
+  const eventTypes = new Set(templateRules.map((rule) => rule.eventType));
+
+  return surfaces.filter((surface) => {
+    if (eventTypes.has("move") && isConstrainedMoveSurface(surface.matchText)) {
+      return true;
+    }
+
+    if (
+      eventTypes.has("switch_in") &&
+      (surface.matchText.includes("ゆけ") ||
+        surface.matchText.includes("いけ") ||
+        surface.matchText.includes("繰り出"))
+    ) {
+      return true;
+    }
+
+    if (
+      eventTypes.has("switch_out") &&
+      (surface.matchText.includes("戻れ") ||
+        surface.matchText.includes("引っこめ") ||
+        surface.matchText.includes("ひっこめ"))
+    ) {
+      return true;
+    }
+
+    return false;
+  });
+}
+
+function inferResolvedActorSide(
+  actorName: string,
+  surfaces: readonly MatchSurface[],
+): BattleEvent["actor"]["side"] {
+  const actorMatchText = createOcrMatchText(actorName);
+
+  if (!actorMatchText) {
+    return null;
+  }
+
+  for (const surface of surfaces) {
+    let actorIndex = surface.matchText.indexOf(actorMatchText);
+
+    while (actorIndex >= 0) {
+      const prefixStart = Math.max(0, actorIndex - OPPONENT_PREFIX.length);
+      const immediatePrefix = surface.matchText.slice(prefixStart, actorIndex);
+
+      if (immediatePrefix === OPPONENT_PREFIX) {
+        return "opponent";
+      }
+
+      actorIndex = surface.matchText.indexOf(actorMatchText, actorIndex + 1);
+    }
+  }
+
+  return null;
+}
+
+function selectConstrainedTemplateRules(
+  matchText: string,
+  surfaces: readonly MatchSurface[],
+  templateRules: readonly BattleTemplateRule[],
+  dictionary: BattleMessageDictionary,
+) {
+  const surfaceTexts = [
+    matchText,
+    ...surfaces.map((surface) => surface.matchText),
+  ].filter((value, index, values) => value && values.indexOf(value) === index);
+  const hasMoveShape = surfaceTexts.some(
+    (surfaceText) =>
+      surfaceText.includes("の") &&
+      (surfaceText.includes(OPPONENT_PREFIX) ||
+        findDictionarySpans(surfaceText, dictionary.moves).length > 0 ||
+        surfaceText.length <= 24),
+  );
+  const hasSwitchInShape = surfaceTexts.some(
+    (surfaceText) =>
+      surfaceText.includes("ゆけ") ||
+      surfaceText.includes("いけ") ||
+      surfaceText.includes("繰り出"),
+  );
+  const hasSwitchOutShape = surfaceTexts.some(
+    (surfaceText) =>
+      surfaceText.includes("戻れ") ||
+      surfaceText.includes("引っこめ") ||
+      surfaceText.includes("ひっこめ"),
+  );
+
+  return templateRules.filter((rule) => {
+    if (!rule.id.startsWith("champout_")) {
+      return false;
+    }
+
+    if (rule.eventType === "move") {
+      return hasMoveShape;
+    }
+
+    if (rule.eventType === "switch_in") {
+      return hasSwitchInShape;
+    }
+
+    if (rule.eventType === "switch_out") {
+      return hasSwitchOutShape;
+    }
+
+    return false;
+  });
 }
 
 function createUnknownResult(
@@ -790,6 +1037,21 @@ export function parseBattleMessage(
     return contextEvent;
   }
 
+  const activeTemplateRules = options.templateRules ?? STANDARD_TEMPLATE_RULES;
+  const constrainedTemplateEvent = parseConstrainedTemplateEvent(
+    rawText,
+    normalizedText,
+    matchText,
+    ocrConfidence,
+    dictionary,
+    surfaces,
+    activeTemplateRules,
+  );
+
+  if (constrainedTemplateEvent.result) {
+    return constrainedTemplateEvent.result;
+  }
+
   const templateEvent = parseTemplateEvent(
     rawText,
     normalizedText,
@@ -797,7 +1059,7 @@ export function parseBattleMessage(
     ocrConfidence,
     dictionary,
     surfaces,
-    options.templateRules ?? STANDARD_TEMPLATE_RULES,
+    activeTemplateRules,
   );
 
   if (templateEvent) {
@@ -834,6 +1096,10 @@ export function parseBattleMessage(
     rawText,
     normalizedText,
     matchText,
-    [...hpLossEvent.candidateMatches, ...(moveEvent?.candidateMatches ?? [])],
+    [
+      ...constrainedTemplateEvent.candidateMatches,
+      ...hpLossEvent.candidateMatches,
+      ...(moveEvent?.candidateMatches ?? []),
+    ],
   );
 }

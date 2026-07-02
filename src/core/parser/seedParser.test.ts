@@ -10,7 +10,10 @@ describe("parseBattleMessage", () => {
       type: "move",
       actor: { name: "エルフーン" },
       move: "おいかぜ",
-      classification: { method: "seed_rule" },
+      classification: {
+        method: "template_dictionary",
+        templateId: "champout_move_1oj9w2v",
+      },
     });
   });
 
@@ -22,7 +25,10 @@ describe("parseBattleMessage", () => {
       type: "move",
       actor: { name: "マフォクシー" },
       move: "まもる",
-      classification: { method: "seed_rule" },
+      classification: {
+        method: "template_dictionary",
+        templateId: "champout_move_1oj9w2v",
+      },
     });
   });
 
@@ -51,7 +57,7 @@ describe("parseBattleMessage", () => {
       move: "ムーンフォース",
       classification: {
         method: "template_dictionary",
-        templateId: "attack_actor_move_span",
+        templateId: "champout_move_1oj9w2v",
       },
     });
   });
@@ -109,7 +115,10 @@ describe("parseBattleMessage", () => {
       type: "move",
       actor: { name: "マフォクシー" },
       move: "まもる",
-      classification: { method: "fuzzy_dictionary" },
+      classification: {
+        method: "template_dictionary",
+        templateId: "champout_move_1oj9w2v",
+      },
     });
   });
 
@@ -302,8 +311,104 @@ describe("parseBattleMessage", () => {
       type: "move",
       actor: { name: "キュウコン", side: "opponent" },
       move: "オーバーヒート",
-      classification: { method: "fuzzy_dictionary" },
+      classification: {
+        method: "template_dictionary",
+        templateId: "champout_move_1pbrfiv",
+      },
     });
+  });
+
+  it("parses noisy opponent move messages with constrained champout decoding", () => {
+    const kyukon = parseBattleMessage({
+      rawText: "相手の キュウコンの\nオーパーヒードト/",
+      lines: ["相手の キュウコンの", "オーパーヒードト/"],
+      ocrConfidence: 0.86,
+    });
+    const basculegion = parseBattleMessage({
+      rawText: "相手の イヅダイトウの\nアクアジエット/",
+      lines: ["相手の イヅダイトウの", "アクアジエット/"],
+      ocrConfidence: 0.86,
+    });
+    const delphox = parseBattleMessage({
+      rawText: "マフオォクグシーの\nまもる/",
+      lines: ["マフオォクグシーの", "まもる/"],
+      ocrConfidence: 0.88,
+    });
+
+    expect(kyukon).toMatchObject({
+      status: "event",
+      rawText: "相手の キュウコンの\nオーパーヒードト/",
+      event: {
+        type: "move",
+        actor: { name: "キュウコン", side: "opponent" },
+        move: "オーバーヒート",
+        classification: {
+          method: "template_dictionary",
+          templateId: "champout_move_1pbrfiv",
+        },
+      },
+    });
+    expect(basculegion).toMatchObject({
+      status: "event",
+      event: {
+        type: "move",
+        actor: { name: "イダイトウ", side: "opponent" },
+        move: "アクアジェット",
+      },
+    });
+    expect(delphox).toMatchObject({
+      status: "event",
+      event: {
+        type: "move",
+        actor: { name: "マフォクシー" },
+        move: "まもる",
+      },
+    });
+  });
+
+  it("parses noisy switch messages with constrained champout decoding", () => {
+    expect(
+      parseBattleMessage({
+        rawText: "ゆけつ/ ガブプリアス/",
+        ocrConfidence: 0.82,
+      }),
+    ).toMatchObject({
+      status: "event",
+      event: { type: "switch_in", actor: { name: "ガブリアス" } },
+    });
+    expect(
+      parseBattleMessage({
+        rawText: "Mercysanは 國論謀キュウコンを 繰り出した!",
+        ocrConfidence: 0.82,
+      }),
+    ).toMatchObject({
+      status: "event",
+      event: { type: "switch_in", actor: { name: "キュウコン" } },
+    });
+    expect(
+      parseBattleMessage({
+        rawText: "ドドグザフン\n戻れ/",
+        ocrConfidence: 0.84,
+      }),
+    ).toMatchObject({
+      status: "event",
+      event: { type: "switch_out", actor: { name: "ドドゲザン" } },
+    });
+  });
+
+  it("keeps weak constrained candidates unknown and reviewable", () => {
+    const result = parseBattleMessage({
+      rawText: "相手の キュウの\nオーパーヒードト/",
+      lines: ["相手の キュウの", "オーパーヒードト/"],
+      ocrConfidence: 0.42,
+    });
+
+    expect(result).toMatchObject({
+      status: "unknown",
+      rawText: "相手の キュウの\nオーパーヒードト/",
+      reviewStatus: "unreviewed",
+    });
+    expect(result.candidateMatches.join("\n")).toContain("constrained-review:");
   });
 
   it("keeps unrelated pokemon and move spans as unknown candidates", () => {

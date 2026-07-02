@@ -421,6 +421,18 @@ function patternLiteralLength(pattern) {
     .replaceAll("text", "").length;
 }
 
+function allowsShortLiteralPattern(pattern, eventType) {
+  if (eventType === "move") {
+    return pattern.includes("{pokemon}") && pattern.includes("{move}") && pattern.includes("の");
+  }
+
+  if (eventType === "switch_out") {
+    return createOcrMatchText(pattern).includes("戻れ");
+  }
+
+  return false;
+}
+
 function hashRuleId(source) {
   let hash = 2166136261;
 
@@ -454,7 +466,7 @@ function inferSideConstants(extracted, pattern) {
 function createRule(extracted, eventType, sourceCommit) {
   const pattern = replacePlaceholders(extracted.text, eventType, extracted.labelName);
 
-  if (patternLiteralLength(pattern) < 3) {
+  if (patternLiteralLength(pattern) < 3 && !allowsShortLiteralPattern(pattern, eventType)) {
     return null;
   }
 

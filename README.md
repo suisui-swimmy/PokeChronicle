@@ -28,6 +28,7 @@ M7 is complete on top of the static app foundation:
 - Seed parser coverage for observed move messages, effectiveness messages, and unknown fallback
 - Seed template matcher coverage for frequent damage, heal, weather, terrain, ability, and item messages
 - Build-time generated champout template pack for additional battle-message coverage
+- Constrained champout decoding that projects noisy OCR onto template + Pokemon dictionary + move dictionary candidates when confidence and margin are safe
 - OCR log entries show the current parser classification candidate
 - Event timeline and unknown bucket views fed by the real-time OCR stream
 - Review tabs for timeline, resolved events, unknowns, raw OCR, and system logs so the live page does not grow with every log category
@@ -38,9 +39,7 @@ M7 is complete on top of the static app foundation:
 - Schema-versioned Battle Log JSON export/import
 - Events CSV and Unknown messages CSV export
 - Bounded representative crop evidence in saved/exported logs
-- Browser-side champout/template JSON import
-- Imported template rules are stored in IndexedDB and combined with seed rules for live parsing
-- Imported template pack JSON export/delete controls
+- Browser-side champout/template JSON import support remains available in the core pipeline for validation and local updates; the streamlined MVP UI focuses on generated standard rules plus Battle Log JSON/CSV
 
 Statistics and MVP acceptance polish are later milestones described in `AGENTS.md`.
 
@@ -76,9 +75,9 @@ npm run generate:champout-templates
 
 The runtime app imports only the generated JSON. It does not read `others/champout`, and it does not bundle the full raw dump. Third-party source, license, commit, and notice details are recorded in `THIRD_PARTY_NOTICES.md`.
 
-Use `Template読込` in the review panel to add or test extra user-controlled champout-style JSON files, such as `rom-txt/jpn/btl_std.json` or `rom-txt/jpn/btl_attack_syn.json`.
+The core importer can add or test extra user-controlled champout-style JSON files, such as `rom-txt/jpn/btl_std.json` or `rom-txt/jpn/btl_attack_syn.json`, when that validation UI is exposed.
 
-The app extracts text in the browser, generates safe template candidates, stores only the imported template pack in IndexedDB, and can export/delete that pack. ZIP import is not implemented yet; select JSON files directly.
+The app extracts selected JSON text in the browser, generates safe template candidates, and stores only the imported template pack in IndexedDB. ZIP import is not implemented yet; select JSON files directly when using this path.
 
 ## GitHub Pages Base Path
 

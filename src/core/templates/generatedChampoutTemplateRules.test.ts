@@ -18,18 +18,36 @@ describe("generated champout template rules", () => {
     expect(CHAMPOUT_TEMPLATE_STATS).toMatchObject({
       sourceFileCount: 2,
       extractedTextCount: 117,
-      generatedRuleCount: 85,
+      generatedRuleCount: 87,
     });
-    expect(CHAMPOUT_TEMPLATE_RULES.length).toBe(85);
+    expect(CHAMPOUT_TEMPLATE_RULES.length).toBe(87);
     expect(CHAMPOUT_TEMPLATE_RULES[0].source).toMatchObject({
       fileName: "btl_attack_syn.json",
-      keyPath: "mSDataSet[1].OriginalText",
-      labelName: "ATKMSG_E_0001_syn",
+      keyPath: "mSDataSet[0].OriginalText",
+      labelName: "ATKMSG_M_0001_syn",
       sourceCommit: "d2885a864f041744df1de1b35f4ab3d2e52cf4db",
     });
   });
 
   it("uses stable generated rule ids for known source labels", () => {
+    expect(
+      CHAMPOUT_TEMPLATE_RULES.find(
+        (rule) => rule.source?.labelName === "ATKMSG_M_0001_syn",
+      ),
+    ).toMatchObject({
+      id: "champout_move_1oj9w2v",
+      eventType: "move",
+      patterns: ["{pokemon}の{move}!"],
+    });
+    expect(
+      CHAMPOUT_TEMPLATE_RULES.find(
+        (rule) => rule.source?.labelName === "BTL_STRID_STD_BackChange2",
+      ),
+    ).toMatchObject({
+      id: "champout_switch_out_1n5e30m",
+      eventType: "switch_out",
+      patterns: ["{pokemon}戻れ!"],
+    });
     expect(
       CHAMPOUT_TEMPLATE_RULES.find(
         (rule) => rule.source?.labelName === "BTL_STRID_STD_AffSGood_syn",

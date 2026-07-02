@@ -17,9 +17,9 @@
   "stats": {
     "sourceFileCount": 2,
     "extractedTextCount": 117,
-    "battleCandidateCount": 89,
-    "generatedRuleCount": 85,
-    "skippedTextCount": 32,
+    "battleCandidateCount": 91,
+    "generatedRuleCount": 87,
+    "skippedTextCount": 30,
     "duplicateRuleCount": 4,
     "maxGeneratedRules": 600,
     "perFile": [
@@ -27,19 +27,37 @@
         "fileName": "btl_attack_syn.json",
         "extractedTextCount": 2,
         "battleCandidateCount": 2,
-        "generatedRuleCount": 1,
-        "skippedTextCount": 1
+        "generatedRuleCount": 2,
+        "skippedTextCount": 0
       },
       {
         "fileName": "btl_std.json",
         "extractedTextCount": 115,
         "battleCandidateCount": 89,
-        "generatedRuleCount": 88,
-        "skippedTextCount": 27
+        "generatedRuleCount": 89,
+        "skippedTextCount": 26
       }
     ]
   },
   "rules": [
+    {
+      "id": "champout_move_1oj9w2v",
+      "eventType": "move",
+      "priority": 58,
+      "patterns": [
+        "{pokemon}の{move}!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_attack_syn.json",
+        "keyPath": "mSDataSet[0].OriginalText",
+        "labelName": "ATKMSG_M_0001_syn",
+        "originalText": "{0}の{1}!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
     {
       "id": "champout_move_1pbrfiv",
       "eventType": "move",
@@ -130,6 +148,24 @@
         "keyPath": "mSDataSet[3].OriginalText",
         "labelName": "BTL_STRID_STD_PutDouble_Player",
         "originalText": "{0}は {1}と{2}を 繰り出した!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_switch_out_1n5e30m",
+      "eventType": "switch_out",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}戻れ!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_std.json",
+        "keyPath": "mSDataSet[4].OriginalText",
+        "labelName": "BTL_STRID_STD_BackChange2",
+        "originalText": "{0}戻れ!",
         "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
       }
     },
