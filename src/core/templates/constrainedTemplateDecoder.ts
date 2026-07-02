@@ -48,6 +48,8 @@ export interface ConstrainedTemplateMatch {
   margin: number;
   accepted: boolean;
   evidence: string;
+  identity: string;
+  suffixNoise: string | null;
   placeholderResolutions: PlaceholderResolution[];
   literalScore: number;
   dictionaryScore: number;
@@ -76,6 +78,7 @@ const MIN_DOUBLE_FUZZY_MARGIN = 0.08;
 const MIN_OCR_CONFIDENCE_FOR_DOUBLE_FUZZY = 0.6;
 const MIN_OCR_CONFIDENCE_FOR_FUZZY_ACCEPT = 0.65;
 const OPPONENT_PREFIX = "相手の";
+const MAX_SUFFIX_NOISE_LENGTH = 10;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -410,10 +413,52 @@ function isAcceptedCandidate(
   }
 
   if (fuzzyDictionaryResolutions.length === 1) {
-    return fuzzyDictionaryResolutions[0].margin >= MIN_FUZZY_MARGIN;
+    const [fuzzyResolution] = fuzzyDictionaryResolutions;
+    const exactDictionaryResolutions = allDictionaryResolutions.filter(
+      (resolution) => resolution.method === "exact",
+    );
+    const hasExactPokemon = exactDictionaryResolutions.some(
+      (resolution) => resolution.kind === "pokemon" || resolution.kind === "target",
+    );
+    const hasExactMove = exactDictionaryResolutions.some(
+      (resolution) => resolution.kind === "move",
+    );
+    const hasStrongSingleSlotSwitch =
+      (candidate.eventType === "switch_in" || candidate.eventType === "switch_out") &&
+      fuzzyResolution.kind === "pokemon" &&
+      fuzzyResolution.score >= 0.78 &&
+      candidate.literalScore >= 0.62 &&
+      candidate.confidenceScore >= 0.7;
+    const hasStrongActorMoveShape =
+      candidate.eventType === "move" &&
+      candidate.literalScore >= 0.62 &&
+      candidate.confidenceScore >= 0.7 &&
+      fuzzyResolution.score >= 0.62 &&
+      ((fuzzyResolution.kind === "move" && hasExactPokemon) ||
+        (fuzzyResolution.kind === "pokemon" && hasExactMove));
+
+    if (hasStrongSingleSlotSwitch || hasStrongActorMoveShape) {
+      return true;
+    }
+
+    return fuzzyResolution.margin >= MIN_FUZZY_MARGIN;
   }
 
   return true;
+}
+
+function countCharacters(value: string) {
+  return Array.from(value).length;
+}
+
+function isTolerableSuffixNoise(value: string) {
+  const suffixText = createOcrMatchText(value);
+
+  if (!suffixText) {
+    return true;
+  }
+
+  return countCharacters(suffixText) <= MAX_SUFFIX_NOISE_LENGTH;
 }
 
 function inferSideFromPlaceholderPosition(
@@ -430,17 +475,35 @@ function inferSideFromPlaceholderPosition(
   return immediatePrefix === OPPONENT_PREFIX ? "opponent" : null;
 }
 
+export function createConstrainedCandidateIdentity(
+  candidate: Pick<ConstrainedTemplateMatch, "eventType" | "actor" | "move" | "target" | "rule">,
+) {
+  return [
+    candidate.eventType,
+    candidate.actor.name ?? "",
+    candidate.actor.side ?? "",
+    candidate.move ?? "",
+    candidate.target?.name ?? "",
+    candidate.target?.side ?? "",
+    candidate.rule.id,
+  ].join("|");
+}
+
 function createEvidence(
   candidate: Omit<ConstrainedTemplateMatch, "accepted" | "evidence">,
 ) {
   return [
     `constrained:${candidate.rule.id}`,
+    `identity=${candidate.identity}`,
     `surface=${candidate.surface.id}`,
     `pattern=${createOcrMatchText(candidate.pattern)}`,
     `score=${candidate.confidenceScore.toFixed(2)}`,
     `margin=${candidate.margin.toFixed(2)}`,
+    candidate.suffixNoise ? `suffixNoise=${candidate.suffixNoise}` : null,
     ...candidate.placeholderResolutions.map((resolution) => resolution.evidence),
-  ].join(":");
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join(":");
 }
 
 function tryDecodePattern(
@@ -500,7 +563,13 @@ function tryDecodePattern(
     }
 
     placeholderResolutions.push({ ...resolution, raw: token.raw });
-    cursor = segment.nextCursor;
+    cursor = nextLiteral ? segment.nextCursor : resolution.end;
+  }
+
+  const suffixNoise = createOcrMatchText(text.slice(cursor));
+
+  if (!isTolerableSuffixNoise(suffixNoise)) {
+    return null;
   }
 
   const dictionaryResolutions = placeholderResolutions.filter(
@@ -531,24 +600,32 @@ function tryDecodePattern(
   const actorSide =
     rule.constants?.["actor.side"] ??
     inferSideFromPlaceholderPosition(surface.matchText, pokemonResolution);
-
-  return {
+  const actor = {
+    name: pokemonResolution?.value ?? null,
+    side: actorSide,
+  };
+  const target = targetResolution?.value
+    ? {
+        name: targetResolution.value,
+        side: rule.constants?.["target.side"] ?? null,
+      }
+    : null;
+  const move = moveResolution?.value ?? null;
+  const candidate = {
     rule,
     pattern,
     eventType: rule.eventType,
-    actor: {
-      name: pokemonResolution?.value ?? null,
-      side: actorSide,
-    },
-    target: targetResolution?.value
-      ? {
-          name: targetResolution.value,
-          side: rule.constants?.["target.side"] ?? null,
-        }
-      : null,
-    move: moveResolution?.value ?? null,
+    actor,
+    target,
+    move,
+  };
+
+  return {
+    ...candidate,
     confidenceScore,
     margin: 0,
+    identity: createConstrainedCandidateIdentity(candidate),
+    suffixNoise: suffixNoise || null,
     placeholderResolutions,
     literalScore,
     dictionaryScore,
@@ -582,25 +659,29 @@ export function decodeConstrainedTemplate({
       right.literalScore - left.literalScore ||
       right.dictionaryScore - left.dictionaryScore,
   );
-  const best = sortedCandidates[0];
-
-  if (!best) {
+  if (sortedCandidates.length === 0) {
     return null;
   }
 
-  const margin = best.confidenceScore - (sortedCandidates[1]?.confidenceScore ?? 0);
-  const withMargin = {
-    ...best,
-    margin,
-  };
-  const dictionaryResolutions = withMargin.placeholderResolutions.filter(
-    (resolution) => resolution.kind !== "text",
-  );
-  const accepted = isAcceptedCandidate(withMargin, dictionaryResolutions, ocrConfidence);
+  const evaluatedCandidates = sortedCandidates.map((candidate, index) => {
+    const withMargin = {
+      ...candidate,
+      margin: candidate.confidenceScore - (sortedCandidates[index + 1]?.confidenceScore ?? 0),
+    };
+    const dictionaryResolutions = withMargin.placeholderResolutions.filter(
+      (resolution) => resolution.kind !== "text",
+    );
+
+    return {
+      ...withMargin,
+      accepted: isAcceptedCandidate(withMargin, dictionaryResolutions, ocrConfidence),
+    };
+  });
+  const best =
+    evaluatedCandidates.find((candidate) => candidate.accepted) ?? evaluatedCandidates[0];
 
   return {
-    ...withMargin,
-    accepted,
-    evidence: createEvidence(withMargin),
+    ...best,
+    evidence: createEvidence(best),
   };
 }

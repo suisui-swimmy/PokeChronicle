@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { parseBattleMessage } from "../parser/seedParser";
 import {
+  createConstrainedCandidateRecord,
   createSourceFrameRef,
   createTimelineObservation,
   shouldCreateUnknownEvent,
   shouldSuppressTimelineObservation,
+  type TimelineConstrainedCandidateRecord,
 } from "./timeline";
 
 const roi = { x: 0.1, y: 0.7, w: 0.8, h: 0.2 };
@@ -26,6 +28,29 @@ function createObservation(
     timestampMs,
     roi,
     afterEventId: "evt_previous",
+  });
+}
+
+function createObservationFromParse(
+  rawText: string,
+  parseResult: ReturnType<typeof parseBattleMessage>,
+  id: string,
+  timestampMs: number,
+  ocrConfidence: number | null,
+  recentConstrainedCandidates: TimelineConstrainedCandidateRecord[] = [],
+) {
+  return createTimelineObservation({
+    id,
+    battleId: "battle_test",
+    rawText,
+    parseResult,
+    ocrConfidence,
+    lines: [{ text: rawText, confidence: ocrConfidence, bbox: null }],
+    frameIndex: 12,
+    timestampMs,
+    roi,
+    afterEventId: "evt_previous",
+    recentConstrainedCandidates,
   });
 }
 
@@ -141,5 +166,45 @@ describe("timeline observation", () => {
     const noisy = createObservation("効果は パツグンだ", "ocr-2", 1600);
 
     expect(first.dedupe?.key).toBe(noisy.dedupe?.key);
+  });
+
+  it("promotes repeated constrained review candidates within the duplicate window", () => {
+    const rawText = "相手の キュウコンの\nオーパーヒードト/";
+    const firstParse = parseBattleMessage({
+      rawText,
+      lines: ["相手の キュウコンの", "オーパーヒードト/"],
+      ocrConfidence: 0.5,
+    });
+    const firstObservation = createObservationFromParse(
+      rawText,
+      firstParse,
+      "ocr-1",
+      1000,
+      0.5,
+    );
+    const record = createConstrainedCandidateRecord(firstParse, 1000, 12);
+    const secondParse = parseBattleMessage({
+      rawText,
+      lines: ["相手の キュウコンの", "オーパーヒードト/"],
+      ocrConfidence: 0.5,
+    });
+    const secondObservation = createObservationFromParse(
+      rawText,
+      secondParse,
+      "ocr-2",
+      1600,
+      0.5,
+      record ? [record] : [],
+    );
+
+    expect(firstObservation.event).toBeNull();
+    expect(record?.identity).toContain("キュウコン");
+    expect(secondObservation.event).toMatchObject({
+      type: "move",
+      actor: { name: "キュウコン", side: "opponent" },
+      move: "オーバーヒート",
+      rawText,
+    });
+    expect(secondObservation.unknown).toBeNull();
   });
 });

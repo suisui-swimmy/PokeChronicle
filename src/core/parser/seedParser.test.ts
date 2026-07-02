@@ -276,6 +276,25 @@ describe("parseBattleMessage", () => {
       status: "event",
       event: { type: "unboost" },
     });
+    expect(parseBattleMessage("マフォクシーの 特攻が がくっと 下がった/")).toMatchObject({
+      status: "event",
+      event: { type: "unboost" },
+    });
+  });
+
+  it("parses protect and side-end context OCR variants", () => {
+    expect(parseBattleMessage("マフォクシーは 守りの体勢に入った/")).toMatchObject({
+      status: "event",
+      event: { type: "protect" },
+    });
+    expect(parseBattleMessage("追い風が 止んだ/")).toMatchObject({
+      status: "event",
+      event: { type: "side_end" },
+    });
+    expect(parseBattleMessage("追い風か 止んだ/")).toMatchObject({
+      status: "event",
+      event: { type: "side_end" },
+    });
   });
 
   it("parses faint and battle-end OCR variants", () => {
@@ -366,6 +385,29 @@ describe("parseBattleMessage", () => {
     });
   });
 
+  it("trims short suffix noise without mixing it into actor or move slots", () => {
+    const result = parseBattleMessage({
+      rawText: "相手の キュウコンの オームーヒードヒ/ bh、亜",
+      ocrConfidence: 0.86,
+    });
+
+    expect(result).toMatchObject({
+      status: "event",
+      rawText: "相手の キュウコンの オームーヒードヒ/ bh、亜",
+      event: {
+        type: "move",
+        actor: { name: "キュウコン", side: "opponent" },
+        move: "オーバーヒート",
+      },
+    });
+
+    if (result.status === "event") {
+      expect(result.event.actor.name).not.toContain("bh");
+      expect(result.event.move).toBe("オーバーヒート");
+      expect(result.event.classification.alternatives.join("\n")).toContain("suffixNoise");
+    }
+  });
+
   it("parses noisy switch messages with constrained champout decoding", () => {
     expect(
       parseBattleMessage({
@@ -388,6 +430,28 @@ describe("parseBattleMessage", () => {
     expect(
       parseBattleMessage({
         rawText: "ドドグザフン\n戻れ/",
+        ocrConfidence: 0.84,
+      }),
+    ).toMatchObject({
+      status: "event",
+      event: { type: "switch_out", actor: { name: "ドドゲザン" } },
+    });
+  });
+
+  it("parses switch messages from terminator-trimmed noisy surfaces", () => {
+    expect(
+      parseBattleMessage({
+        rawText: "ゆけつ/ ガプリアス/ eとー貝",
+        ocrConfidence: 0.84,
+      }),
+    ).toMatchObject({
+      status: "event",
+      rawText: "ゆけつ/ ガプリアス/ eとー貝",
+      event: { type: "switch_in", actor: { name: "ガブリアス" } },
+    });
+    expect(
+      parseBattleMessage({
+        rawText: "ドドグザン 戻れ/ -思霜いa",
         ocrConfidence: 0.84,
       }),
     ).toMatchObject({

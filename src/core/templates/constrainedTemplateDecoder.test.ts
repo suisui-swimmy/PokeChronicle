@@ -81,6 +81,25 @@ describe("decodeConstrainedTemplate", () => {
     });
   });
 
+  it("keeps short suffix noise as evidence without contaminating placeholders", () => {
+    const result = decodeConstrainedTemplate({
+      surfaces: [surface("相手の キュウコンの オームーヒードヒ/ bh、亜")],
+      dictionary: BATTLE_DICTIONARY,
+      rules: STANDARD_TEMPLATE_RULES,
+      ocrConfidence: 0.86,
+    });
+
+    expect(result).toMatchObject({
+      accepted: true,
+      eventType: "move",
+      actor: { name: "キュウコン", side: "opponent" },
+      move: "オーバーヒート",
+      suffixNoise: expect.stringContaining("bh"),
+    });
+    expect(result?.identity).toContain("キュウコン");
+    expect(result?.evidence).toContain("suffixNoise=");
+  });
+
   it("keeps weak fuzzy candidates reviewable instead of accepted", () => {
     const result = decodeConstrainedTemplate({
       surfaces: [surface("相手の キュウの\nオーパーヒードト/")],

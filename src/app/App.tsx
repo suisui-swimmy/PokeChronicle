@@ -17,12 +17,15 @@ import {
   type UnknownEvent,
 } from "../core/events/schema";
 import {
+  createConstrainedCandidateRecord,
   createSourceFrameRef,
   createTimelineObservation,
   shouldSuppressTimelineObservation,
+  type TimelineConstrainedCandidateRecord,
   type TimelineDeduplicationRecord,
 } from "../core/events/timeline";
 import {
+  createMessageLineCropVariants,
   preprocessMessageImageDataWithMetrics,
   type MessagePreprocessOptions,
 } from "../core/preprocess/messagePreprocess";
@@ -133,9 +136,24 @@ type RoiField = keyof NormalizedRoi;
 
 type FrameSourceElement = HTMLVideoElement | HTMLImageElement;
 
+type ProcessedLineCropPreview = {
+  id: string;
+  processedDataUrl: string;
+  cropWidth: number;
+  cropHeight: number;
+  sourceY: number;
+  lineCount: number;
+  foregroundPixelRatio: number;
+};
+
 type CapturedFrameImages = {
   rawDataUrl: string;
   processedDataUrl: string;
+  ocrDataUrl: string;
+  ocrVariantId: string;
+  ocrForegroundPixelRatio: number;
+  lineBandCount: number;
+  lineCropVariants: ProcessedLineCropPreview[];
   sourceWidth: number;
   sourceHeight: number;
   cropWidth: number;
@@ -610,6 +628,33 @@ function getFrameDisplayDimensions(source: FrameSourceElement, sourceWidth: numb
   return { width: rect.width, height: rect.height };
 }
 
+function imageDataToScaledDataUrl(imageData: ImageData, scale: number) {
+  const sourceCanvas = document.createElement("canvas");
+  sourceCanvas.width = imageData.width;
+  sourceCanvas.height = imageData.height;
+  const sourceContext = sourceCanvas.getContext("2d");
+
+  if (!sourceContext) {
+    return null;
+  }
+
+  sourceContext.putImageData(imageData, 0, 0);
+
+  const scaledCanvas = document.createElement("canvas");
+  scaledCanvas.width = imageData.width * scale;
+  scaledCanvas.height = imageData.height * scale;
+  const scaledContext = scaledCanvas.getContext("2d");
+
+  if (!scaledContext) {
+    return null;
+  }
+
+  scaledContext.imageSmoothingEnabled = false;
+  scaledContext.drawImage(sourceCanvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
+
+  return scaledCanvas.toDataURL("image/png");
+}
+
 function captureRoiFrame(
   source: FrameSourceElement,
   roi: NormalizedRoi,
@@ -658,33 +703,58 @@ function captureRoiFrame(
     rawImageData,
     preprocess,
   );
-  const processedCanvas = document.createElement("canvas");
-  processedCanvas.width = crop.width;
-  processedCanvas.height = crop.height;
-  const processedContext = processedCanvas.getContext("2d");
-
-  if (!processedContext) {
-    return null;
-  }
-
-  processedContext.putImageData(processedImageData, 0, 0);
-
   const scale = Math.max(1, Math.round(upscaleFactor));
-  const scaledCanvas = document.createElement("canvas");
-  scaledCanvas.width = crop.width * scale;
-  scaledCanvas.height = crop.height * scale;
-  const scaledContext = scaledCanvas.getContext("2d");
+  const processedDataUrl = imageDataToScaledDataUrl(processedImageData, scale);
 
-  if (!scaledContext) {
+  if (!processedDataUrl) {
     return null;
   }
 
-  scaledContext.imageSmoothingEnabled = false;
-  scaledContext.drawImage(processedCanvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
+  const lineCropVariants = createMessageLineCropVariants(processedImageData, preprocess);
+  const lineCropPreviews: ProcessedLineCropPreview[] = [];
+
+  for (const variant of lineCropVariants) {
+    const dataUrl = variant.id === "full"
+      ? processedDataUrl
+      : imageDataToScaledDataUrl(variant.imageData, scale);
+
+    if (!dataUrl) {
+      continue;
+    }
+
+    lineCropPreviews.push({
+      id: variant.id,
+      processedDataUrl: dataUrl,
+      cropWidth: variant.imageData.width,
+      cropHeight: variant.imageData.height,
+      sourceY: variant.y,
+      lineCount: variant.lineCount,
+      foregroundPixelRatio: variant.metrics.foregroundPixelRatio,
+    });
+  }
+
+  const detectedLineCount = lineCropVariants[0]?.lineCount ?? 0;
+  const preferredLineCount = Math.min(3, detectedLineCount);
+  const preferredVariant =
+    lineCropPreviews.find((variant) => variant.id === `top-${preferredLineCount}-lines`) ??
+    lineCropPreviews[0] ?? {
+      id: "full",
+      processedDataUrl,
+      cropWidth: crop.width,
+      cropHeight: crop.height,
+      sourceY: 0,
+      lineCount: detectedLineCount,
+      foregroundPixelRatio: metrics.foregroundPixelRatio,
+    };
 
   return {
     rawDataUrl: rawCanvas.toDataURL("image/png"),
-    processedDataUrl: scaledCanvas.toDataURL("image/png"),
+    processedDataUrl,
+    ocrDataUrl: preferredVariant.processedDataUrl,
+    ocrVariantId: preferredVariant.id,
+    ocrForegroundPixelRatio: preferredVariant.foregroundPixelRatio,
+    lineBandCount: detectedLineCount,
+    lineCropVariants: lineCropPreviews,
     sourceWidth,
     sourceHeight,
     cropWidth: crop.width,
@@ -711,6 +781,7 @@ export function App() {
   const ocrWorkerRef = useRef<Worker | null>(null);
   const cropEvidenceBySourceRef = useRef<Map<string, CropEvidence>>(new Map());
   const lastTimelineDeduplicationRef = useRef<TimelineDeduplicationRecord | null>(null);
+  const recentConstrainedCandidateRecordsRef = useRef<TimelineConstrainedCandidateRecord[]>([]);
   const lastAcceptedEventIdRef = useRef<string | null>(null);
   const frameIndexRef = useRef(0);
   const ocrJobCounterRef = useRef(0);
@@ -875,12 +946,29 @@ export function App() {
           timestampMs: response.meta.timestampMs,
           roi: response.meta.roi,
           afterEventId: lastAcceptedEventIdRef.current,
+          recentConstrainedCandidates: recentConstrainedCandidateRecordsRef.current,
+          candidatePromotionWindowMs: TIMELINE_DUPLICATE_WINDOW_MS,
         });
+        const constrainedCandidateRecord = createConstrainedCandidateRecord(
+          parseResult,
+          response.meta.timestampMs,
+          response.meta.frameIndex,
+        );
         const suppressTimelineItem = shouldSuppressTimelineObservation(
           lastTimelineDeduplicationRef.current,
           observation.dedupe,
           TIMELINE_DUPLICATE_WINDOW_MS,
         );
+
+        if (constrainedCandidateRecord) {
+          const minTimestampMs = response.meta.timestampMs - TIMELINE_DUPLICATE_WINDOW_MS;
+          recentConstrainedCandidateRecordsRef.current = [
+            constrainedCandidateRecord,
+            ...recentConstrainedCandidateRecordsRef.current.filter(
+              (record) => record.timestampMs >= minTimestampMs,
+            ),
+          ].slice(0, 12);
+        }
 
         setOcrLogs((currentLogs) => [nextEntry, ...currentLogs].slice(0, MAX_OCR_LOGS));
         setOcrMessages((currentMessages) =>
@@ -1020,11 +1108,11 @@ export function App() {
       }
 
       if (
-        sample.foregroundPixelRatio < MIN_TEXT_PIXEL_RATIO ||
-        sample.foregroundPixelRatio > MAX_TEXT_PIXEL_RATIO
+        sample.ocrForegroundPixelRatio < MIN_TEXT_PIXEL_RATIO ||
+        sample.ocrForegroundPixelRatio > MAX_TEXT_PIXEL_RATIO
       ) {
         setOcrStatusLabel(
-          `OCR skipped: text density gate (${formatTextDensity(sample.foregroundPixelRatio)})`,
+          `OCR skipped: text density gate (${formatTextDensity(sample.ocrForegroundPixelRatio)})`,
         );
         return;
       }
@@ -1047,7 +1135,7 @@ export function App() {
       const message: OCRWorkerRequest = {
         type: "recognize",
         jobId,
-        imageDataUrl: sample.processedDataUrl,
+        imageDataUrl: sample.ocrDataUrl,
         meta,
         config: OCR_WORKER_CONFIG,
       };
@@ -1635,6 +1723,7 @@ export function App() {
     setSuppressedTimelineCount(0);
     cropEvidenceBySourceRef.current.clear();
     lastTimelineDeduplicationRef.current = null;
+    recentConstrainedCandidateRecordsRef.current = [];
     lastAcceptedEventIdRef.current = null;
     setOcrProgress(0);
     setOcrStatusLabel("OCR準備中");
@@ -2317,7 +2406,7 @@ export function App() {
                   <span>preprocessed</span>
                   <span>
                     {latestFrameSample
-                      ? `${latestFrameSample.upscaleFactor}x / ${latestFrameSample.preprocess.whiteThreshold} / text ${formatTextDensity(latestFrameSample.foregroundPixelRatio)}`
+                      ? `${latestFrameSample.upscaleFactor}x / ${latestFrameSample.preprocess.whiteThreshold} / text ${formatTextDensity(latestFrameSample.foregroundPixelRatio)} / OCR ${latestFrameSample.ocrVariantId} ${formatTextDensity(latestFrameSample.ocrForegroundPixelRatio)}`
                       : "未生成"}
                   </span>
                 </figcaption>

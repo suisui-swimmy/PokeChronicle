@@ -8,7 +8,10 @@ import { matchDictionaryEntry } from "../dictionary/fuzzyMatch";
 import { BATTLE_DICTIONARY } from "../dictionary/generatedBattleDictionary";
 import { findDictionarySpans, type DictionarySpan } from "../dictionary/spanMatch";
 import type { DictionaryEntry, DictionaryMatch } from "../dictionary/types";
-import { decodeConstrainedTemplate } from "../templates/constrainedTemplateDecoder";
+import {
+  decodeConstrainedTemplate,
+  type ConstrainedTemplateMatch,
+} from "../templates/constrainedTemplateDecoder";
 import { STANDARD_TEMPLATE_RULES } from "../templates/standardTemplateRules";
 import { matchTemplateRules } from "../templates/templateMatcher";
 import type { BattleTemplateRule } from "../templates/types";
@@ -163,6 +166,60 @@ function createSurface(id: string, text: string, priority: number): MatchSurface
   };
 }
 
+function countCharacters(value: string) {
+  return Array.from(value).length;
+}
+
+function looksLikeShortSuffixNoise(value: string) {
+  const matchText = createOcrMatchText(value);
+
+  if (!matchText) {
+    return true;
+  }
+
+  return countCharacters(matchText) <= 10;
+}
+
+function createTerminatorTrimmedTexts(text: string) {
+  const normalizedText = normalizeOcrText(text);
+  const variants: string[] = [];
+
+  for (let index = 0; index < normalizedText.length; index += 1) {
+    if (normalizedText[index] !== "!") {
+      continue;
+    }
+
+    const prefix = normalizedText.slice(0, index + 1).trim();
+    const suffix = normalizedText.slice(index + 1).trim();
+
+    if (!prefix || !suffix || !looksLikeShortSuffixNoise(suffix)) {
+      continue;
+    }
+
+    variants.push(prefix);
+  }
+
+  return variants;
+}
+
+function createSuffixTrimmedTexts(text: string) {
+  const normalizedText = normalizeOcrText(text);
+  const variants: string[] = [];
+  const trailingChunkMatch = normalizedText.match(/^(.+?)[\s　]+([A-Za-z0-9ぁ-んァ-ヶー一-龯]{1,10})$/u);
+
+  if (!trailingChunkMatch) {
+    return variants;
+  }
+
+  const [, prefix, suffix] = trailingChunkMatch;
+
+  if (prefix && suffix && looksLikeShortSuffixNoise(suffix)) {
+    variants.push(prefix.trim());
+  }
+
+  return variants;
+}
+
 function createMatchSurfaces(rawText: string, lines?: readonly string[]) {
   const surfaces: MatchSurface[] = [];
   const seen = new Set<string>();
@@ -191,6 +248,28 @@ function createMatchSurfaces(rawText: string, lines?: readonly string[]) {
           `lines:${start + 1}-${start + windowSize}`,
           sourceLines.slice(start, start + windowSize).join(""),
           10 + windowSize + start,
+        ),
+      );
+    }
+  }
+
+  for (const surface of [...surfaces]) {
+    for (const [variantIndex, variantText] of createTerminatorTrimmedTexts(surface.text).entries()) {
+      addSurface(
+        createSurface(
+          `${surface.id}:terminator:${variantIndex + 1}`,
+          variantText,
+          surface.priority + 30 + variantIndex,
+        ),
+      );
+    }
+
+    for (const [variantIndex, variantText] of createSuffixTrimmedTexts(surface.text).entries()) {
+      addSurface(
+        createSurface(
+          `${surface.id}:suffix-trimmed:${variantIndex + 1}`,
+          variantText,
+          surface.priority + 34 + variantIndex,
         ),
       );
     }
@@ -291,12 +370,27 @@ function parseContextEvent(
     ["immune", "effect_immune", ["効果がない", "効果はない"]],
     ["critical", "critical_hit", ["急所"]],
     ["boost", "stat_boost", ["上がった"]],
-    ["unboost", "stat_unboost", ["下がった", "下かった", "下がっだ"]],
+    [
+      "unboost",
+      "stat_unboost",
+      [
+        "下がった",
+        "下かった",
+        "下がっだ",
+        "がくっと下がった",
+        "攻撃ががくっと下がった",
+        "防御ががくっと下がった",
+        "特攻ががくっと下がった",
+        "特防ががくっと下がった",
+        "素早さががくっと下がった",
+      ],
+    ],
     ["miss", "move_miss", ["外れた", "あたらなかった"]],
     ["fail", "move_fail", ["失敗", "うまく決まらない"]],
-    ["protect", "protect", ["身を守った", "守られた"]],
+    ["protect", "protect", ["身を守った", "守られた", "守りの体勢に入った"]],
     ["faint", "faint", ["倒れた", "たおれた", "たおれだ", "だたおれだ", "ひんし"]],
     ["switch_out", "switch_out", ["引っこめた", "ひっこめた"]],
+    ["side_end", "tailwind_end", ["追い風が止んだ", "追い風か止んだ"]],
     ["battle_end", "battle_end_surrender", ["降参が選ばれました", "降参が選はばれました"]],
     ["battle_end", "battle_end_loss", ["勝負に負けた", "勝負に口けた"]],
   ];
@@ -312,18 +406,37 @@ function parseContextEvent(
     }
   }
 
-  if (surfaceMatchTexts.some((surfaceText) => surfaceText.startsWith("ゆけっ") || surfaceText.startsWith("いけっ"))) {
-    return createSimpleEvent(
-      "switch_in",
-      normalizedText,
-      matchText,
-      rawText,
-      ocrConfidence,
-      "switch_in_call",
-    );
+  return null;
+}
+
+function parseSwitchInCallFallback(
+  rawText: string,
+  normalizedText: string,
+  matchText: string,
+  ocrConfidence: number | null | undefined,
+  surfaces: readonly MatchSurface[],
+) {
+  const surfaceMatchTexts = [
+    matchText,
+    ...surfaces.map((surface) => surface.matchText),
+  ].filter((value, index, values) => value && values.indexOf(value) === index);
+
+  if (
+    !surfaceMatchTexts.some(
+      (surfaceText) => surfaceText.startsWith("ゆけっ") || surfaceText.startsWith("いけっ"),
+    )
+  ) {
+    return null;
   }
 
-  return null;
+  return createSimpleEvent(
+    "switch_in",
+    normalizedText,
+    matchText,
+    rawText,
+    ocrConfidence,
+    "switch_in_call",
+  );
 }
 
 function createEventFromDictionaryActor(
@@ -781,6 +894,25 @@ function parseTemplateEvent(
   } satisfies EventParseResult;
 }
 
+function encodeCandidateValue(value: string | null | undefined) {
+  return encodeURIComponent(value ?? "");
+}
+
+function formatConstrainedCandidateMatch(match: ConstrainedTemplateMatch) {
+  return [
+    "constrained-candidate",
+    `identity=${encodeCandidateValue(match.identity)}`,
+    `eventType=${encodeCandidateValue(match.eventType)}`,
+    `actorName=${encodeCandidateValue(match.actor.name)}`,
+    `actorSide=${encodeCandidateValue(match.actor.side)}`,
+    `move=${encodeCandidateValue(match.move)}`,
+    `targetName=${encodeCandidateValue(match.target?.name)}`,
+    `targetSide=${encodeCandidateValue(match.target?.side)}`,
+    `templateId=${encodeCandidateValue(match.rule.id)}`,
+    `score=${match.confidenceScore.toFixed(3)}`,
+  ].join(";");
+}
+
 function parseConstrainedTemplateEvent(
   rawText: string,
   normalizedText: string,
@@ -820,7 +952,10 @@ function parseConstrainedTemplateEvent(
 
   if (!constrainedMatch.accepted) {
     return {
-      candidateMatches: [`constrained-review:${constrainedMatch.evidence}`],
+      candidateMatches: [
+        `constrained-review:${constrainedMatch.evidence}`,
+        formatConstrainedCandidateMatch(constrainedMatch),
+      ],
     };
   }
 
@@ -1090,6 +1225,18 @@ export function parseBattleMessage(
 
   if (moveEvent?.result) {
     return moveEvent.result;
+  }
+
+  const switchInCallFallback = parseSwitchInCallFallback(
+    rawText,
+    normalizedText,
+    matchText,
+    ocrConfidence,
+    surfaces,
+  );
+
+  if (switchInCallFallback) {
+    return switchInCallFallback;
   }
 
   return createUnknownResult(
