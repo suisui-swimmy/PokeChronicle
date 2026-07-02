@@ -2644,11 +2644,7 @@ export function App() {
           </footer>
         </div>
 
-        <aside className="log-panel resolved-log-panel" aria-labelledby="log-title">
-          <div className="log-panel-heading">
-            <h1 id="log-title">ログ</h1>
-            <span>{battleEvents.length} resolved</span>
-          </div>
+        <aside className="log-panel resolved-log-panel" aria-label="解決済みログ">
           <ol className="resolved-text-log" aria-label="resolved text log">
             {battleEvents.length === 0 ? (
               <li className="resolved-text-log-empty">解決ログ空</li>

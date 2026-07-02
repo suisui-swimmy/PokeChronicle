@@ -124,7 +124,9 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "停止" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "ファイル" })).toBeInTheDocument();
     expect(screen.getByLabelText("preview placeholder")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "ログ" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "ログ" })).not.toBeInTheDocument();
+    expect(screen.queryByText("0 resolved")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("解決済みログ")).toBeInTheDocument();
     expect(within(screen.getByLabelText("resolved text log")).getByText("解決ログ空")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "レビュー" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("project status")).not.toBeInTheDocument();

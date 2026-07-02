@@ -818,61 +818,33 @@ button:disabled {
 }
 
 .resolved-log-panel {
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 14px;
-}
-
-.log-panel-heading {
-  display: grid;
-  gap: 6px;
-  align-content: center;
-  min-height: 120px;
-  text-align: center;
-}
-
-.log-panel-heading h1 {
-  margin: 0;
-  color: var(--text);
-  font-size: 1.7rem;
-  line-height: 1.2;
-}
-
-.log-panel-heading span {
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 900;
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .resolved-text-log {
   display: grid;
   align-content: start;
-  gap: 8px;
   min-height: 0;
   margin: 0;
-  padding: 0;
+  padding: 10px 0;
   overflow: auto;
   list-style: none;
 }
 
 .resolved-text-log li {
   min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid rgb(32 217 152 / 0.22);
-  border-radius: 4px;
+  padding: 8px 0;
   color: var(--text);
-  background: rgb(32 217 152 / 0.055);
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   font-weight: 850;
-  line-height: 1.45;
+  line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
 .resolved-text-log-empty {
-  display: grid;
-  place-items: center;
-  min-height: 120px;
+  padding-top: 0;
   color: var(--faint) !important;
-  background: transparent !important;
+  font-weight: 800;
 }
 
 .panel-heading {
