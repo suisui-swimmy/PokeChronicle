@@ -30,8 +30,8 @@
   --accent: #e53170;
   --accent-foreground: #fffffe;
   --destructive: #f25f4c;
-  --border: #000000;
-  --input: #000000;
+  --border: rgb(167 169 190 / 0.32);
+  --input: rgb(167 169 190 / 0.32);
   --ring: #ff8906;
   --chart-1: #ff8906;
   --chart-2: #e53170;
@@ -45,7 +45,7 @@
   --sidebar-primary-foreground: #fffffe;
   --sidebar-accent: #e53170;
   --sidebar-accent-foreground: #fffffe;
-  --sidebar-border: #000000;
+  --sidebar-border: rgb(167 169 190 / 0.32);
   --sidebar-ring: #ff8906;
 }
 
@@ -100,8 +100,8 @@ button:disabled {
   --bg: #0f0e17;
   --panel: #0f0e17;
   --panel-strong: #0f0e17;
-  --border: #000000;
-  --border-soft: #000000;
+  --border: rgb(167 169 190 / 0.32);
+  --border-soft: rgb(167 169 190 / 0.22);
   --text: #fffffe;
   --muted: #a7a9be;
   --faint: rgb(167 169 190 / 0.72);
@@ -113,10 +113,10 @@ button:disabled {
   --tertiary: #e53170;
   --stroke: #000000;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  height: 100dvh;
+  grid-template-rows: auto auto;
+  height: auto;
   min-height: 100vh;
-  overflow: hidden;
+  overflow: visible;
   background: var(--bg);
 }
 
@@ -136,7 +136,6 @@ button:disabled {
 .device-select select,
 .icon-button,
 .storage-button,
-.capture-statusbar,
 .log-panel,
 .preview-frame,
 .management-summary,
@@ -280,37 +279,44 @@ button:disabled {
 
 .capture-main {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(280px, 22vw, 380px);
+  grid-template-columns: minmax(0, 1fr) clamp(220px, 22vw, 320px);
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "preview log"
+    "management management";
   gap: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .preview-column {
+  grid-area: preview;
   display: grid;
-  grid-template-rows: auto auto auto;
-  align-content: start;
+  place-items: center;
   min-width: 0;
   min-height: 0;
-  overflow: auto;
-  padding: 28px 20px 0;
+  overflow: hidden;
+  padding: 18px;
 }
 
 .preview-frame {
-  --preview-frame-block-extra: 22px;
-  --preview-surface-height: clamp(240px, 44dvh, 560px);
   display: grid;
-  align-items: center;
-  min-height: calc(var(--preview-surface-height) + var(--preview-frame-block-extra));
+  width: 100%;
+  max-width: calc((100dvh - 190px) * 16 / 9);
+  max-height: 100%;
+  aspect-ratio: 16 / 9;
+  align-items: stretch;
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
-  padding: 10px;
+  padding: 8px;
   background: var(--panel-strong);
 }
 
 .preview-surface {
   position: relative;
   width: 100%;
-  height: var(--preview-surface-height);
+  height: 100%;
   aspect-ratio: 16 / 9;
   overflow: hidden;
   background: #000000;
@@ -318,9 +324,11 @@ button:disabled {
 }
 
 .management-panel {
+  grid-area: management;
   display: grid;
   min-width: 0;
-  margin-top: 14px;
+  overflow: visible;
+  border-top: 1px solid var(--border-soft);
 }
 
 .management-summary {
@@ -392,24 +400,19 @@ button:disabled {
   place-items: center;
   color: rgb(255 255 255 / 0.82);
   font-weight: 800;
-  background:
-    linear-gradient(90deg, #fffffe 0 12.5%, #ff8906 12.5% 25%, #a7a9be 25% 37.5%, #f25f4c 37.5% 50%, #e53170 50% 62.5%, #f25f4c 62.5% 75%, #a7a9be 75% 87.5%, #000000 87.5% 100%);
+  background: rgb(167 169 190 / 0.12);
 }
 
 .test-pattern::after {
-  position: absolute;
-  inset: 0;
-  content: "";
-  background: linear-gradient(180deg, transparent 62%, rgb(0 0 0 / 0.42));
+  content: none;
 }
 
 .test-pattern span {
   z-index: 1;
   display: inline-flex;
   padding: 8px 12px;
-  border: 1px solid rgb(255 255 255 / 0.26);
-  border-radius: 5px;
-  background: rgb(8 10 14 / 0.68);
+  border: 0;
+  background: transparent;
 }
 
 .roi-layer {
@@ -487,26 +490,6 @@ button:disabled {
   right: -9px;
   bottom: -9px;
   cursor: nwse-resize;
-}
-
-.capture-statusbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 18px;
-  align-items: center;
-  min-height: 52px;
-  margin-top: 14px;
-  padding: 10px 14px;
-  border-right: 0;
-  border-left: 0;
-  color: var(--muted);
-  font-size: 0.84rem;
-}
-
-.capture-statusbar span {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
 }
 
 .roi-settings-panel,
@@ -1015,15 +998,17 @@ button:disabled {
 }
 
 .log-panel {
+  grid-area: log;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  padding: 28px 20px;
+  padding: 18px;
   border-top: 0;
   border-right: 0;
   border-bottom: 0;
+  border-left: 1px solid var(--border-soft);
   background: #0f0e17;
 }
 
@@ -1432,12 +1417,6 @@ button:disabled {
 }
 
 @media (max-width: 1040px) {
-  .capture-shell {
-    height: auto;
-    min-height: 100dvh;
-    overflow: visible;
-  }
-
   .capture-toolbar {
     grid-template-columns: 1fr;
   }
@@ -1447,13 +1426,11 @@ button:disabled {
   }
 
   .capture-main {
-    grid-template-columns: 1fr;
-    overflow: visible;
+    grid-template-columns: minmax(0, 1fr) clamp(190px, 28vw, 260px);
   }
 
   .preview-column {
-    overflow: visible;
-    padding: 16px;
+    padding: 14px;
   }
 
   .preprocess-controls {
@@ -1465,11 +1442,7 @@ button:disabled {
   }
 
   .log-panel {
-    min-height: min(70dvh, 640px);
-    max-height: min(70dvh, 640px);
-    padding: 18px 16px;
-    border-top: 1px solid var(--border-soft);
-    border-left: 0;
+    padding: 14px;
   }
 
   .review-panel {
@@ -1523,12 +1496,10 @@ button:disabled {
   }
 
   .preview-column {
-    padding: 12px;
+    padding: 10px;
   }
 
   .preview-frame {
-    --preview-frame-block-extra: 14px;
-    --preview-surface-height: clamp(180px, 38dvh, 320px);
     padding: 6px;
   }
 
@@ -1540,10 +1511,6 @@ button:disabled {
 
   .sample-buffer li {
     grid-template-columns: repeat(2, max-content);
-  }
-
-  .capture-statusbar {
-    font-size: 0.72rem;
   }
 
   .log-entry {
@@ -1565,6 +1532,35 @@ button:disabled {
 
   .timeline-evidence {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .capture-shell {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  .capture-main {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(260px, 42dvh) auto;
+    grid-template-areas:
+      "preview"
+      "log"
+      "management";
+    overflow: visible;
+  }
+
+  .preview-frame {
+    max-width: 100%;
+  }
+
+  .log-panel {
+    min-height: 260px;
+    max-height: none;
+    border-top: 1px solid var(--border-soft);
+    border-left: 0;
   }
 }
 
@@ -1627,8 +1623,8 @@ button:disabled {
   --accent: #e53170;
   --accent-foreground: #fffffe;
   --destructive: #f25f4c;
-  --border: #000000;
-  --input: #000000;
+  --border: rgb(167 169 190 / 0.32);
+  --input: rgb(167 169 190 / 0.32);
   --ring: #ff8906;
   --chart-1: #ff8906;
   --chart-2: #e53170;
@@ -1641,7 +1637,7 @@ button:disabled {
   --sidebar-primary-foreground: #fffffe;
   --sidebar-accent: #e53170;
   --sidebar-accent-foreground: #fffffe;
-  --sidebar-border: #000000;
+  --sidebar-border: rgb(167 169 190 / 0.32);
   --sidebar-ring: #ff8906;
 }
 

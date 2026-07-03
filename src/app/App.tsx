@@ -2226,8 +2226,8 @@ export function App() {
         </div>
         <div className="device-selects" aria-label="input device selectors">
           <label className="device-select">
-            <span>映像ソース</span>
             <select
+              aria-label="映像ソース"
               value={selectedVideoDeviceId}
               onChange={(event) => setSelectedVideoDeviceId(event.target.value)}
               disabled={mediaMode === "device"}
@@ -2243,8 +2243,8 @@ export function App() {
             </select>
           </label>
           <label className="device-select">
-            <span>音声ソース</span>
             <select
+              aria-label="音声ソース"
               value={selectedAudioDeviceId}
               onChange={(event) => setSelectedAudioDeviceId(event.target.value)}
               disabled={mediaMode === "device"}
@@ -2347,6 +2347,7 @@ export function App() {
               {isRoiVisible ? <RoiOverlay roi={roi} onChange={setRoi} /> : null}
             </div>
           </section>
+        </div>
 
           <details className="management-panel" aria-label="analysis and data management">
             <summary className="management-summary">
@@ -3072,24 +3073,6 @@ export function App() {
             </div>
           </section>
           </details>
-
-          <footer className="capture-statusbar" aria-label="media status">
-            <span>
-              <span className={`status-dot status-dot--${statusTone}`} aria-hidden="true" />
-              {statusLabel}
-            </span>
-            <span>映像: {activeVideoLabel}</span>
-            <span>音声: {activeAudioLabel}</span>
-            <span>解像度: {formatResolution(metadata)}</span>
-            <span>{formatFps(metadata.frameRate)}</span>
-            <span>サンプル: {isSampling ? `${sampleFps}fps` : "停止中"}</span>
-            <span>OCR: {isOcrEnabled ? ocrStatusLabel : "停止中"}</span>
-            <span>
-              ROI: x={roi.x.toFixed(4)} y={roi.y.toFixed(4)} w={roi.w.toFixed(4)} h=
-              {roi.h.toFixed(4)}
-            </span>
-          </footer>
-        </div>
 
         <aside className="log-panel resolved-log-panel" aria-label="解決済みログ">
           <ol className="resolved-text-log" aria-label="resolved text log">

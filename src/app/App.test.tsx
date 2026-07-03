@@ -124,8 +124,11 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "開始" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "停止" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "ファイル" })).toBeInTheDocument();
+    expect(screen.queryByText("映像ソース")).not.toBeInTheDocument();
+    expect(screen.queryByText("音声ソース")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "ROIを初期位置へ戻す" })).not.toBeInTheDocument();
     expect(screen.getByLabelText("preview placeholder")).toBeInTheDocument();
+    expect(screen.queryByLabelText("media status")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "ログ" })).not.toBeInTheDocument();
     expect(screen.queryByText("0 resolved")).not.toBeInTheDocument();
     expect(screen.getByLabelText("解決済みログ")).toBeInTheDocument();
@@ -202,7 +205,7 @@ describe("App", () => {
     expect(within(statsPanel).getByText("Pokemon actions")).toBeInTheDocument();
     expect(within(statsPanel).getByText("効果抜群 0")).toBeInTheDocument();
     expect(within(statsPanel).getByText("行動集計なし")).toBeInTheDocument();
-    expect(screen.getByText(/ROI: x=0.3300 y=0.7200 w=0.3000 h=0.1400/)).toBeInTheDocument();
+    expect(screen.getByText(/x=0.3300 y=0.7200 w=0.3000 h=0.1400/)).toBeInTheDocument();
   });
 
   it("switches management review tabs without rendering every log category at once", async () => {
@@ -308,7 +311,15 @@ describe("App", () => {
         },
       });
     });
-    expect(await screen.findByText(/再生中/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText("解析・データ管理"));
+    fireEvent.click(screen.getByRole("tab", { name: /System/ }));
+    await waitFor(() => {
+      expect(
+        within(screen.getByRole("tabpanel", { name: /System/ })).getByText(
+          /入力を開始しました: USB3\. 0 capture \(534d:2109\) \/ デジタル オーディオ インターフェイス/,
+        ),
+      ).toBeInTheDocument();
+    });
   });
 
   it("configures ROI from analysis and data management", async () => {
@@ -322,7 +333,7 @@ describe("App", () => {
       target: { value: "0.1" },
     });
     expect(screen.getByRole("spinbutton", { name: "ROI X" })).toHaveValue(0.1);
-    expect(screen.getByText(/ROI: x=0.1000 y=0.7200 w=0.3000 h=0.1400/)).toBeInTheDocument();
+    expect(screen.getByText(/x=0.1000 y=0.7200 w=0.3000 h=0.1400/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("checkbox", { name: "ROI表示" }));
     expect(screen.queryByLabelText("ROI adjustment layer")).not.toBeInTheDocument();
