@@ -7,6 +7,7 @@ import {
   type ChangeEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { Button } from "@/components/ui/button";
 import {
   type BattleLogDocument,
   type BattleLogFrameEvidence,
@@ -2258,42 +2259,46 @@ export function App() {
           </label>
         </div>
         <div className="toolbar-actions" aria-label="input actions">
-          <button
+          <Button
             type="button"
+            variant="outline"
             className="icon-button"
             onClick={() => void refreshDevices()}
             disabled={mediaMode === "device"}
           >
             <span aria-hidden="true">↻</span>
             <span>更新</span>
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="default"
             className="icon-button"
             onClick={handleStartCapture}
             disabled={videoDevices.length === 0 || mediaMode === "device"}
           >
             <span aria-hidden="true">▶</span>
             <span>開始</span>
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="secondary"
             className="icon-button"
             onClick={handleStopCapture}
             disabled={mediaMode === "idle"}
           >
             <span aria-hidden="true">■</span>
             <span>停止</span>
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="outline"
             className="icon-button"
             onClick={() => fileInputRef.current?.click()}
             disabled={mediaMode === "device"}
           >
             <span aria-hidden="true">↥</span>
             <span>ファイル</span>
-          </button>
+          </Button>
           <input
             ref={fileInputRef}
             className="visually-hidden"
@@ -2370,14 +2375,15 @@ export function App() {
                   />
                   <span>ROI表示</span>
                 </label>
-                <button
+                <Button
                   type="button"
+                  variant="outline"
                   className="icon-button icon-button--compact"
                   onClick={handleResetRoi}
                 >
                   <span aria-hidden="true">↺</span>
                   <span>ROIリセット</span>
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -2443,24 +2449,26 @@ export function App() {
                 </span>
               </div>
               <div className="analysis-actions">
-                <button
+                <Button
                   type="button"
+                  variant="default"
                   className="icon-button icon-button--compact"
                   onClick={handleStartSampling}
                   disabled={mediaMode === "idle" || isSampling}
                 >
                   <span aria-hidden="true">▶</span>
                   <span>サンプル開始</span>
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  variant="secondary"
                   className="icon-button icon-button--compact"
                   onClick={handleStopSampling}
                   disabled={!isSampling}
                 >
                   <span aria-hidden="true">■</span>
                   <span>サンプル停止</span>
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -2598,24 +2606,26 @@ export function App() {
                   </span>
                 </div>
                 <div className="analysis-actions">
-                  <button
+                  <Button
                     type="button"
+                    variant="default"
                     className="icon-button icon-button--compact"
                     onClick={handleStartOcr}
                     disabled={mediaMode === "idle" || isOcrEnabled}
                   >
                     <span aria-hidden="true">▶</span>
                     <span>OCR開始</span>
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
+                    variant="secondary"
                     className="icon-button icon-button--compact"
                     onClick={handleStopOcr}
                     disabled={!isOcrEnabled && pendingOcrJobs === 0}
                   >
                     <span aria-hidden="true">■</span>
                     <span>OCR停止</span>
-                  </button>
+                  </Button>
                 </div>
               </div>
 
@@ -2733,22 +2743,38 @@ export function App() {
             </div>
 
             <div className="storage-actions" aria-label="battle log storage actions">
-              <button type="button" className="storage-button" onClick={handleExportBattleLogJson}>
-                ログJSON出力
-              </button>
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                className="storage-button"
+                onClick={handleExportBattleLogJson}
+              >
+                ログJSON出力
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
                 className="storage-button"
                 onClick={() => battleLogImportInputRef.current?.click()}
               >
                 ログJSON読込
-              </button>
-              <button type="button" className="storage-button" onClick={handleExportEventsCsv}>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="storage-button"
+                onClick={handleExportEventsCsv}
+              >
                 イベントCSV出力
-              </button>
-              <button type="button" className="storage-button" onClick={handleExportUnknownsCsv}>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="storage-button"
+                onClick={handleExportUnknownsCsv}
+              >
                 Unknown CSV出力
-              </button>
+              </Button>
               <input
                 ref={battleLogImportInputRef}
                 className="visually-hidden"
@@ -2760,9 +2786,11 @@ export function App() {
 
             <div className="review-tabs" role="tablist" aria-label="review views">
               {REVIEW_TABS.map((tab) => (
-                <button
+                <Button
                   key={tab.id}
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   role="tab"
                   id={`review-tab-${tab.id}`}
                   aria-controls={`review-panel-${tab.id}`}
@@ -2776,7 +2804,7 @@ export function App() {
                   {tab.id === "unknown" ? <strong>{unknownEvents.length}</strong> : null}
                   {tab.id === "ocr" ? <strong>{ocrLogGroups.length}</strong> : null}
                   {tab.id === "system" ? <strong>{logs.length}</strong> : null}
-                </button>
+                </Button>
               ))}
             </div>
 
@@ -2951,14 +2979,15 @@ export function App() {
                                 : "候補なし"}
                             </code>
                           </details>
-                          <button
+                          <Button
                             type="button"
+                            variant="outline"
                             className="review-button"
                             onClick={() => handleUnknownReview(unknown.id)}
                             disabled={unknown.reviewStatus === "reviewed"}
                           >
                             reviewedにする
-                          </button>
+                          </Button>
                         </li>
                       ))
                     )}
