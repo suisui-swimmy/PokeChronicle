@@ -8,6 +8,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   type BattleLogDocument,
   type BattleLogFrameEvidence,
@@ -28,7 +29,6 @@ import {
   type TimelineDeduplicationRecord,
 } from "../core/events/timeline";
 import { renderBattleEventCanonicalText } from "../core/events/canonicalText";
-import { summarizeBattleStats } from "../core/stats/battleStats";
 import type { DictionaryEntry } from "../core/dictionary/types";
 import {
   createMessageLineCropVariants,
@@ -305,10 +305,6 @@ function formatConfidence(confidence: number | null) {
   }
 
   return `${Math.round(confidence * 100)}%`;
-}
-
-function formatRate(value: number) {
-  return `${Math.round(value * 100)}%`;
 }
 
 function formatTextDensity(ratio: number) {
@@ -1924,10 +1920,6 @@ export function App() {
 
   const latestFrameSample = frameSamples[0] ?? null;
   const latestOcrLog = ocrLogs[0] ?? null;
-  const battleStats = useMemo(
-    () => summarizeBattleStats(battleEvents, unknownEvents),
-    [battleEvents, unknownEvents],
-  );
   const reviewedUnknownCount = useMemo(
     () => unknownEvents.filter((unknown) => unknown.reviewStatus === "reviewed").length,
     [unknownEvents],
@@ -2358,6 +2350,17 @@ export function App() {
               </strong>
             </summary>
 
+          <Tabs defaultValue="roi" className="management-tabs">
+            <TabsList className="management-tab-list" variant="line" aria-label="analysis tabs">
+              <TabsTrigger value="roi">ROI</TabsTrigger>
+              <TabsTrigger value="sampler">サンプラー</TabsTrigger>
+              <TabsTrigger value="ocr">OCR</TabsTrigger>
+              <TabsTrigger value="stats">統計</TabsTrigger>
+              <TabsTrigger value="data">データ</TabsTrigger>
+              <TabsTrigger value="logs">ログ</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="roi" className="management-tab-panel">
           <section className="roi-settings-panel" aria-label="ROI settings">
             <div className="roi-settings-header">
               <div>
@@ -2388,6 +2391,8 @@ export function App() {
               </div>
             </div>
 
+            <details className="roi-detail-panel">
+              <summary>詳細調整</summary>
             <div className="roi-number-grid" aria-label="ROI numeric settings">
               <label className="roi-number-control">
                 <span>X</span>
@@ -2438,8 +2443,11 @@ export function App() {
                 />
               </label>
             </div>
+            </details>
           </section>
+            </TabsContent>
 
+            <TabsContent value="sampler" className="management-tab-panel">
           <section className="analysis-panel" aria-label="frame sampling and preprocessing">
             <div className="analysis-header">
               <div>
@@ -2595,7 +2603,10 @@ export function App() {
                 ))
               )}
             </ol>
+          </section>
+            </TabsContent>
 
+            <TabsContent value="ocr" className="management-tab-panel">
             <section className="ocr-panel" aria-label="realtime OCR log">
               <div className="ocr-header">
                 <div>
@@ -2673,68 +2684,11 @@ export function App() {
                 )}
               </ol>
             </section>
-          </section>
+            </TabsContent>
 
-          <section className="stats-panel" aria-label="MVP statistics">
-            <div className="panel-heading panel-heading--compact">
-              <div>
-                <h2>統計サマリー</h2>
-                <p>
-                  {battleStats.totalResolvedEventCount} events / unknown{" "}
-                  {formatRate(battleStats.unknownRate)}
-                </p>
-              </div>
-            </div>
+            <TabsContent value="stats" className="management-tab-panel management-tab-panel--empty" />
 
-            <dl className="stats-grid">
-              <div>
-                <dt>observed moves</dt>
-                <dd>{battleStats.observedMoveCount}</dd>
-              </div>
-              <div>
-                <dt>Pokemon actions</dt>
-                <dd>{battleStats.pokemonActionCount}</dd>
-              </div>
-              <div>
-                <dt>switches</dt>
-                <dd>{battleStats.switchCount}</dd>
-              </div>
-              <div>
-                <dt>faints</dt>
-                <dd>{battleStats.faintCount}</dd>
-              </div>
-              <div>
-                <dt>unknown</dt>
-                <dd>{battleStats.unknownMessageCount}</dd>
-              </div>
-              <div>
-                <dt>critical</dt>
-                <dd>{battleStats.criticalCount}</dd>
-              </div>
-            </dl>
-
-            <div className="stats-breakdown" aria-label="effectiveness statistics">
-              <span>効果抜群 {battleStats.effectiveness.supereffective}</span>
-              <span>いまひとつ {battleStats.effectiveness.resisted}</span>
-              <span>無効 {battleStats.effectiveness.immune}</span>
-            </div>
-
-            <ol className="pokemon-action-counts" aria-label="Pokemon action counts">
-              {battleStats.pokemonActionCounts.length === 0 ? (
-                <li>行動集計なし</li>
-              ) : (
-                battleStats.pokemonActionCounts.slice(0, 5).map((entry) => (
-                  <li key={entry.key}>
-                    <span>
-                      {formatSide(entry.side)} {entry.name}
-                    </span>
-                    <strong>{entry.count}</strong>
-                  </li>
-                ))
-              )}
-            </ol>
-          </section>
-
+            <TabsContent value="data" className="management-tab-panel">
           <section className="data-management-panel" aria-label="data import export and review details">
             <div className="panel-heading panel-heading--compact">
               <div>
@@ -2784,7 +2738,11 @@ export function App() {
                 onChange={(event) => void handleBattleLogImportChange(event)}
               />
             </div>
+          </section>
+            </TabsContent>
 
+            <TabsContent value="logs" className="management-tab-panel">
+          <section className="log-review-panel" aria-label="log review details">
             <div className="review-tabs" role="tablist" aria-label="review views">
               {REVIEW_TABS.map((tab) => (
                 <Button
@@ -3072,6 +3030,8 @@ export function App() {
               ) : null}
             </div>
           </section>
+            </TabsContent>
+          </Tabs>
           </details>
 
         <aside className="log-panel resolved-log-panel" aria-label="解決済みログ">
