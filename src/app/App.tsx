@@ -12,6 +12,12 @@ import {
 } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import fullscreenExitIconUrl from "../assets/icons/fullscreen-exit.svg";
+import fullscreenIconUrl from "../assets/icons/fullscreen.svg";
+import reloadIconUrl from "../assets/icons/reload.svg";
+import uploadIconUrl from "../assets/icons/upload.svg";
+import volumeMutedIconUrl from "../assets/icons/volume-muted.svg";
+import volumeIconUrl from "../assets/icons/volume.svg";
 import {
   type BattleLogDocument,
   type BattleLogFrameEvidence,
@@ -89,6 +95,7 @@ const MIN_RESOLVED_LOG_PANEL_WIDTH = 180;
 const MAX_RESOLVED_LOG_PANEL_WIDTH = 520;
 const MIN_PREVIEW_PANEL_WIDTH = 360;
 const WORKSPACE_RESIZER_WIDTH = 12;
+const DEFAULT_AUDIO_VOLUME = 1;
 const RESOLVED_LOG_RESIZE_STEP = 24;
 const MAX_PENDING_OCR_JOBS = 1;
 const OCR_JOB_TIMEOUT_MS = 60_000;
@@ -650,7 +657,7 @@ function createDeviceOptions(devices: MediaDeviceInfo[], kind: InputDevice["kind
         kind,
         label:
           device.label ||
-          (kind === "videoinput" ? `映像ソース ${deviceIndex}` : `音声ソース ${deviceIndex}`),
+          (kind === "videoinput" ? `映像デバイス ${deviceIndex}` : `音声デバイス ${deviceIndex}`),
       };
     });
 }
@@ -943,6 +950,9 @@ export function App() {
     frameRate: null,
   });
   const [audioReady, setAudioReady] = useState(false);
+  const [audioVolume, setAudioVolume] = useState(DEFAULT_AUDIO_VOLUME);
+  const [isAudioMuted, setIsAudioMuted] = useState(false);
+  const [isVolumePanelOpen, setIsVolumePanelOpen] = useState(false);
   const [roi, setRoi] = useState<NormalizedRoi>(DEFAULT_ROI);
   const [isRoiVisible, setIsRoiVisible] = useState(true);
   const [sampleFps, setSampleFps] = useState(DEFAULT_SAMPLE_FPS);
@@ -963,6 +973,7 @@ export function App() {
   const [suppressedTimelineCount, setSuppressedTimelineCount] = useState(0);
   const [resolvedLogPanelWidth, setResolvedLogPanelWidth] = useState<number | null>(null);
   const [isResizingResolvedLogPanel, setIsResizingResolvedLogPanel] = useState(false);
+  const [isWorkspaceExpanded, setIsWorkspaceExpanded] = useState(false);
   const [activeManagementTab, setActiveManagementTab] = useState<ManagementTab | null>(null);
   const [activeReviewTab, setActiveReviewTab] = useState<ReviewTab>("timeline");
   const [templateImportStatusLabel, setTemplateImportStatusLabel] = useState("Template未読込");
@@ -1594,6 +1605,14 @@ export function App() {
     videoRef.current.srcObject = stream;
   }, [stream]);
 
+  const effectiveAudioVolume = isAudioMuted ? 0 : audioVolume;
+
+  useEffect(() => {
+    if (audioGainNodeRef.current) {
+      audioGainNodeRef.current.gain.value = effectiveAudioVolume;
+    }
+  }, [effectiveAudioVolume]);
+
   const warmAudioOutput = useCallback(() => {
     const AudioContextClass = getAudioContextClass();
 
@@ -1653,7 +1672,7 @@ export function App() {
         audioSourceNodeRef.current = audioContextRef.current.createMediaStreamSource(
           new MediaStream(audioTracks),
         );
-        audioGainNodeRef.current.gain.value = 1;
+        audioGainNodeRef.current.gain.value = effectiveAudioVolume;
         audioSourceNodeRef.current.connect(audioGainNodeRef.current);
         const resumed = await resumeAudioContext();
         setAudioReady(resumed);
@@ -1669,7 +1688,7 @@ export function App() {
         return false;
       }
     },
-    [addLog, resumeAudioContext, warmAudioOutput],
+    [addLog, effectiveAudioVolume, resumeAudioContext, warmAudioOutput],
   );
 
   const requestSelectedAudioStream = useCallback(
@@ -1700,7 +1719,7 @@ export function App() {
       }
 
       if (videoDevices.length === 0) {
-        addLog("映像ソースが見つかりません。", "warn");
+        addLog("映像デバイスが見つかりません。", "warn");
         setStatusLabel("未選択");
         return false;
       }
@@ -1710,12 +1729,12 @@ export function App() {
       const selectedVideoLabel = getDeviceLabel(
         videoDevices,
         nextVideoDeviceId,
-        "選択中の映像ソース",
+        "選択中の映像デバイス",
       );
       const selectedAudioLabel =
         nextAudioDeviceId === NO_AUDIO_DEVICE_ID
           ? "音声なし"
-          : getDeviceLabel(audioDevices, nextAudioDeviceId, "選択中の音声ソース");
+          : getDeviceLabel(audioDevices, nextAudioDeviceId, "選択中の音声デバイス");
 
       try {
         setSelectedVideoDeviceId(nextVideoDeviceId);
@@ -1856,6 +1875,14 @@ export function App() {
     },
     [addLog, resetMedia],
   );
+
+  const handleToggleAppFullscreen = useCallback(() => {
+    setIsWorkspaceExpanded((currentExpanded) => {
+      const nextExpanded = !currentExpanded;
+      addLog(nextExpanded ? "ワークスペースを拡大表示しました。" : "全画面表示を解除しました。");
+      return nextExpanded;
+    });
+  }, [addLog]);
 
   const captureCurrentFrame = useCallback(
     (options?: { logFailure?: boolean }) => {
@@ -2000,6 +2027,26 @@ export function App() {
     }
   }, [stopOcr, stopSampling]);
 
+  const handleToggleAudioMuted = useCallback(() => {
+    if (isAudioMuted || audioVolume === 0) {
+      if (audioVolume === 0) {
+        setAudioVolume(DEFAULT_AUDIO_VOLUME);
+      }
+
+      setIsAudioMuted(false);
+      return;
+    }
+
+    setIsAudioMuted(true);
+  }, [audioVolume, isAudioMuted]);
+
+  const handleAudioVolumeChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const nextVolume = clamp(Number(event.target.value), 0, 1);
+
+    setAudioVolume(nextVolume);
+    setIsAudioMuted(nextVolume === 0);
+  }, []);
+
   const handleResetRoi = useCallback(() => {
     setRoi(DEFAULT_ROI);
     addLog("ROIを初期位置へ戻しました。");
@@ -2021,12 +2068,19 @@ export function App() {
     return "idle";
   }, [statusLabel]);
 
+  const isWorkspaceFullscreen = isWorkspaceExpanded;
+  const isVolumeEffectivelyMuted = isAudioMuted || audioVolume === 0;
+  const volumePercent = Math.round(effectiveAudioVolume * 100);
+  const captureShellClassName = `capture-shell${
+    isWorkspaceExpanded ? " capture-shell--fullscreen" : ""
+  }`;
+
   const activeVideoLabel = useMemo(() => {
     if (mediaMode === "video-file" || mediaMode === "image-file") {
       return "ファイルpreview";
     }
 
-    return getDeviceLabel(videoDevices, selectedVideoDeviceId, "映像ソース未選択");
+    return getDeviceLabel(videoDevices, selectedVideoDeviceId, "映像デバイス未選択");
   }, [mediaMode, selectedVideoDeviceId, videoDevices]);
 
   const activeAudioLabel = useMemo(() => {
@@ -2034,7 +2088,7 @@ export function App() {
       return "音声なし";
     }
 
-    const label = getDeviceLabel(audioDevices, selectedAudioDeviceId, "音声ソース未選択");
+    const label = getDeviceLabel(audioDevices, selectedAudioDeviceId, "音声デバイス未選択");
 
     if (mediaMode !== "device") {
       return label;
@@ -2484,16 +2538,16 @@ export function App() {
   }, []);
 
   return (
-    <main className="capture-shell">
+    <main className={captureShellClassName} aria-label="capture workspace shell">
       <header className="capture-toolbar" aria-label="capture controls">
         <div className="input-badge">
           <span className={`status-dot status-dot--${statusTone}`} aria-hidden="true" />
-          <span>入力({formatAspect(metadata)})</span>
+          <span className="input-badge-text">入力({formatAspect(metadata)})</span>
         </div>
         <div className="device-selects" aria-label="input device selectors">
           <label className="device-select">
             <select
-              aria-label="映像ソース"
+              aria-label="映像デバイス"
               value={selectedVideoDeviceId}
               onChange={handleVideoDeviceChange}
               disabled={videoDevices.length === 0}
@@ -2510,7 +2564,7 @@ export function App() {
           </label>
           <label className="device-select">
             <select
-              aria-label="音声ソース"
+              aria-label="音声デバイス"
               value={selectedAudioDeviceId}
               onChange={handleAudioDeviceChange}
             >
@@ -2528,39 +2582,100 @@ export function App() {
             type="button"
             variant="outline"
             className="icon-button"
+            aria-label="更新"
+            title="更新"
             onClick={() => void refreshDevices()}
           >
-            <span aria-hidden="true">↻</span>
-            <span>更新</span>
+            <img className="toolbar-icon" src={reloadIconUrl} alt="" aria-hidden="true" />
           </Button>
           <Button
             type="button"
             variant="default"
             className="icon-button"
+            aria-label="開始"
+            title="開始"
             onClick={() => void handleToolbarStartAnalysis()}
             disabled={isOcrEnabled || (mediaMode === "idle" && videoDevices.length === 0)}
           >
-            <span aria-hidden="true">▶</span>
-            <span>解析開始</span>
+            <span className="toolbar-glyph" aria-hidden="true">▶</span>
           </Button>
           <Button
             type="button"
             variant="secondary"
             className="icon-button"
+            aria-label="停止"
+            title="停止"
             onClick={handleToolbarStopAnalysis}
             disabled={!isSampling && !isOcrEnabled && pendingOcrJobs === 0}
           >
-            <span aria-hidden="true">■</span>
-            <span>解析停止</span>
+            <span className="toolbar-glyph" aria-hidden="true">■</span>
+          </Button>
+          <div
+            className="volume-control"
+            data-state={isVolumePanelOpen ? "open" : "closed"}
+            onMouseEnter={() => setIsVolumePanelOpen(true)}
+            onMouseLeave={() => setIsVolumePanelOpen(false)}
+            onFocus={() => setIsVolumePanelOpen(true)}
+            onBlur={(event) => {
+              const nextTarget = event.relatedTarget instanceof Node ? event.relatedTarget : null;
+
+              if (!event.currentTarget.contains(nextTarget)) {
+                setIsVolumePanelOpen(false);
+              }
+            }}
+          >
+            <Button
+              type="button"
+              variant="outline"
+              className="icon-button"
+              aria-label={isVolumeEffectivelyMuted ? "音量ミュート解除" : "音量ミュート"}
+              title={isVolumeEffectivelyMuted ? "音量ミュート解除" : "音量ミュート"}
+              onClick={handleToggleAudioMuted}
+            >
+              <img
+                className="toolbar-icon"
+                src={isVolumeEffectivelyMuted ? volumeMutedIconUrl : volumeIconUrl}
+                alt=""
+                aria-hidden="true"
+              />
+            </Button>
+            <div className="volume-popover" aria-label="音量調整">
+              <input
+                className="volume-slider"
+                aria-label={`音量 ${volumePercent}%`}
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={audioVolume}
+                onChange={handleAudioVolumeChange}
+              />
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="icon-button"
+            aria-label="アップロード"
+            title="アップロード"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <img className="toolbar-icon" src={uploadIconUrl} alt="" aria-hidden="true" />
           </Button>
           <Button
             type="button"
             variant="outline"
             className="icon-button"
-            onClick={() => fileInputRef.current?.click()}
+            aria-label={isWorkspaceFullscreen ? "全画面解除" : "全画面表示"}
+            title={isWorkspaceFullscreen ? "全画面解除" : "全画面表示"}
+            onClick={() => void handleToggleAppFullscreen()}
           >
-            <span aria-hidden="true">↥</span>
-            <span>ファイル</span>
+            <img
+              className="toolbar-icon"
+              src={isWorkspaceFullscreen ? fullscreenExitIconUrl : fullscreenIconUrl}
+              alt=""
+              aria-hidden="true"
+            />
           </Button>
           <input
             ref={fileInputRef}

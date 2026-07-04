@@ -120,20 +120,35 @@ describe("App", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    const videoSourceSelect = await screen.findByRole("combobox", { name: "映像ソース" });
+    const videoSourceSelect = await screen.findByRole("combobox", { name: "映像デバイス" });
     await waitFor(() => expect(videoSourceSelect).toHaveValue("video-usb"));
-    expect(screen.getByRole("combobox", { name: "音声ソース" })).toHaveValue("none");
-    expect(screen.queryByRole("button", { name: "開始" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "停止" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "解析開始" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "解析停止" })).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "音声デバイス" })).toHaveValue("none");
+    expect(screen.getByRole("button", { name: "更新" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "開始" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "停止" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "音量ミュート" })).toBeInTheDocument();
+    expect(screen.getByRole("slider", { name: "音量 100%" })).toHaveValue("1");
+    expect(screen.getByRole("button", { name: "アップロード" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "全画面表示" })).toBeInTheDocument();
+    expect(
+      within(screen.getByLabelText("input actions"))
+        .getAllByRole("button")
+        .map((button) => button.getAttribute("aria-label")),
+    ).toEqual(["更新", "開始", "停止", "音量ミュート", "アップロード", "全画面表示"]);
+    expect(screen.queryByRole("button", { name: "解析開始" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "解析停止" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "サンプル開始" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "サンプル停止" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "OCR開始" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "OCR停止" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "ファイル" })).toBeInTheDocument();
     expect(screen.queryByText("映像ソース")).not.toBeInTheDocument();
     expect(screen.queryByText("音声ソース")).not.toBeInTheDocument();
+    expect(screen.queryByText("更新")).not.toBeInTheDocument();
+    expect(screen.queryByText("開始")).not.toBeInTheDocument();
+    expect(screen.queryByText("停止")).not.toBeInTheDocument();
+    expect(screen.queryByText("音量")).not.toBeInTheDocument();
+    expect(screen.queryByText("アップロード")).not.toBeInTheDocument();
+    expect(screen.queryByText("全画面表示")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "ROIを初期位置へ戻す" })).not.toBeInTheDocument();
     expect(screen.getByLabelText("preview placeholder")).toBeInTheDocument();
     expect(screen.queryByLabelText("media status")).not.toBeInTheDocument();
@@ -289,6 +304,53 @@ describe("App", () => {
     expect(screen.getByText("タイムライン空")).toBeInTheDocument();
   });
 
+  it("toggles expanded workspace mode for fullscreen-style viewing", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    const captureShell = await screen.findByLabelText("capture workspace shell");
+    await user.click(screen.getByRole("button", { name: "全画面表示" }));
+
+    expect(captureShell).toHaveClass("capture-shell--fullscreen");
+    expect(screen.getByRole("button", { name: "全画面解除" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "全画面解除" }));
+
+    expect(captureShell).not.toHaveClass("capture-shell--fullscreen");
+    expect(screen.getByRole("button", { name: "全画面表示" })).toBeInTheDocument();
+  });
+
+  it("toggles audio mute and adjusts volume from the header control", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await screen.findByRole("combobox", { name: "映像デバイス" });
+    const volumeButton = screen.getByRole("button", { name: "音量ミュート" });
+    const volumeSlider = screen.getByRole("slider", { name: "音量 100%" });
+    const volumeControl = volumeButton.closest(".volume-control") as HTMLElement;
+
+    expect(volumeControl).toHaveAttribute("data-state", "closed");
+    fireEvent.mouseEnter(volumeControl as HTMLElement);
+    expect(volumeControl).toHaveAttribute("data-state", "open");
+    fireEvent.mouseLeave(volumeControl as HTMLElement);
+    expect(volumeControl).toHaveAttribute("data-state", "closed");
+
+    fireEvent.change(volumeSlider, { target: { value: "0.4" } });
+
+    expect(screen.getByRole("slider", { name: "音量 40%" })).toHaveValue("0.4");
+    expect(screen.getByRole("button", { name: "音量ミュート" })).toBeInTheDocument();
+
+    await user.click(volumeButton);
+
+    expect(screen.getByRole("button", { name: "音量ミュート解除" })).toBeInTheDocument();
+    expect(screen.getByRole("slider", { name: "音量 0%" })).toHaveValue("0.4");
+
+    await user.click(screen.getByRole("button", { name: "音量ミュート解除" }));
+
+    expect(screen.getByRole("button", { name: "音量ミュート" })).toBeInTheDocument();
+    expect(screen.getByRole("slider", { name: "音量 40%" })).toHaveValue("0.4");
+  });
+
   it("switches management review tabs without rendering every log category at once", async () => {
     const user = userEvent.setup();
     render(<App />);
@@ -344,7 +406,7 @@ describe("App", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    fireEvent.change(await screen.findByRole("combobox", { name: "映像ソース" }), {
+    fireEvent.change(await screen.findByRole("combobox", { name: "映像デバイス" }), {
       target: { value: "video-obs" },
     });
 
@@ -373,7 +435,7 @@ describe("App", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    fireEvent.change(await screen.findByRole("combobox", { name: "音声ソース" }), {
+    fireEvent.change(await screen.findByRole("combobox", { name: "音声デバイス" }), {
       target: { value: "audio-usb" },
     });
 
@@ -412,7 +474,7 @@ describe("App", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    expect(await screen.findByRole("combobox", { name: "映像ソース" })).toHaveValue("video-usb");
+    expect(await screen.findByRole("combobox", { name: "映像デバイス" })).toHaveValue("video-usb");
     expect(screen.getByLabelText("ROI adjustment layer")).toBeInTheDocument();
 
     expect(screen.getByLabelText("analysis and data management")).toBeInTheDocument();
