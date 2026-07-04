@@ -1554,6 +1554,7 @@ export function App() {
     stopAudioInput();
     clearObjectUrl();
     setStream(null);
+    mediaModeRef.current = "idle";
     setMediaMode("idle");
     setFilePreviewUrl(null);
     setFrameSamples([]);
@@ -1687,102 +1688,144 @@ export function App() {
     [addLog],
   );
 
-  const handleStartCapture = useCallback(async () => {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      addLog("このブラウザはカメラ入力に対応していません。", "error");
-      setStatusLabel("非対応");
-      return;
-    }
-
-    if (videoDevices.length === 0) {
-      addLog("映像ソースが見つかりません。", "warn");
-      setStatusLabel("未選択");
-      return;
-    }
-
-    const selectedVideoLabel = getDeviceLabel(videoDevices, selectedVideoDeviceId, "選択中の映像ソース");
-    const selectedAudioLabel =
-      selectedAudioDeviceId === NO_AUDIO_DEVICE_ID
-        ? "音声なし"
-        : getDeviceLabel(audioDevices, selectedAudioDeviceId, "選択中の音声ソース");
-
-    try {
-      resetMedia();
-      warmAudioOutput();
-      const deviceStream = await requestPreferredVideoStream(selectedVideoDeviceId);
-
-      const [videoTrack] = deviceStream.getVideoTracks();
-      videoTrack?.addEventListener(
-        "ended",
-        () => {
-          setStream(null);
-          setMediaMode("idle");
-          setStatusLabel("停止済み");
-          addLog("入力デバイスの映像トラックが停止しました。");
-        },
-        { once: true },
-      );
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = deviceStream;
-        videoRef.current.muted = true;
-        await playVideoElement(videoRef.current);
+  const startCapture = useCallback(
+    async (
+      videoDeviceId = selectedVideoDeviceId || videoDevices[0]?.deviceId || "",
+      audioDeviceId = selectedAudioDeviceId,
+    ) => {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        addLog("このブラウザはカメラ入力に対応していません。", "error");
+        setStatusLabel("非対応");
+        return false;
       }
 
-      setStream(deviceStream);
-      setMediaMode("device");
-      setStatusLabel("キャプチャ中");
-      setMetadata(
-        videoRef.current
-          ? getVideoMetadata(videoRef.current, deviceStream)
-          : {
-              width: getVideoTrackSettings(deviceStream).width ?? null,
-              height: getVideoTrackSettings(deviceStream).height ?? null,
-              frameRate: getTrackFrameRate(deviceStream),
-            },
+      if (videoDevices.length === 0) {
+        addLog("映像ソースが見つかりません。", "warn");
+        setStatusLabel("未選択");
+        return false;
+      }
+
+      const nextVideoDeviceId = videoDeviceId || videoDevices[0]?.deviceId || "";
+      const nextAudioDeviceId = audioDeviceId || NO_AUDIO_DEVICE_ID;
+      const selectedVideoLabel = getDeviceLabel(
+        videoDevices,
+        nextVideoDeviceId,
+        "選択中の映像ソース",
       );
+      const selectedAudioLabel =
+        nextAudioDeviceId === NO_AUDIO_DEVICE_ID
+          ? "音声なし"
+          : getDeviceLabel(audioDevices, nextAudioDeviceId, "選択中の音声ソース");
 
-      if (selectedAudioDeviceId !== NO_AUDIO_DEVICE_ID) {
-        const audioStream = await requestSelectedAudioStream(selectedAudioDeviceId);
+      try {
+        setSelectedVideoDeviceId(nextVideoDeviceId);
+        setSelectedAudioDeviceId(nextAudioDeviceId);
+        resetMedia();
+        warmAudioOutput();
+        const deviceStream = await requestPreferredVideoStream(nextVideoDeviceId);
 
-        if (audioStream) {
-          audioInputStreamRef.current = audioStream;
-          const nextAudioReady = await setupAudioPlayback(audioStream);
+        const [videoTrack] = deviceStream.getVideoTracks();
+        videoTrack?.addEventListener(
+          "ended",
+          () => {
+            setStream(null);
+            mediaModeRef.current = "idle";
+            setMediaMode("idle");
+            setStatusLabel("停止済み");
+            addLog("入力デバイスの映像トラックが停止しました。");
+          },
+          { once: true },
+        );
 
-          if (!nextAudioReady) {
-            stopAudioInput();
+        if (videoRef.current) {
+          videoRef.current.srcObject = deviceStream;
+          videoRef.current.muted = true;
+          await playVideoElement(videoRef.current);
+        }
+
+        setStream(deviceStream);
+        mediaModeRef.current = "device";
+        setMediaMode("device");
+        setStatusLabel("キャプチャ中");
+        setMetadata(
+          videoRef.current
+            ? getVideoMetadata(videoRef.current, deviceStream)
+            : {
+                width: getVideoTrackSettings(deviceStream).width ?? null,
+                height: getVideoTrackSettings(deviceStream).height ?? null,
+                frameRate: getTrackFrameRate(deviceStream),
+              },
+        );
+
+        if (nextAudioDeviceId !== NO_AUDIO_DEVICE_ID) {
+          const audioStream = await requestSelectedAudioStream(nextAudioDeviceId);
+
+          if (audioStream) {
+            audioInputStreamRef.current = audioStream;
+            const nextAudioReady = await setupAudioPlayback(audioStream);
+
+            if (!nextAudioReady) {
+              stopAudioInput();
+            }
           }
         }
+
+        await refreshDevices({ silent: true });
+        addLog(`入力を開始しました: ${selectedVideoLabel} / ${selectedAudioLabel}`);
+        return true;
+      } catch (error) {
+        const message =
+          error instanceof DOMException && error.name === "NotAllowedError"
+            ? "カメラまたはマイクの権限が拒否されました。"
+            : "入力デバイスの開始に失敗しました。";
+        addLog(message, "error");
+        setStatusLabel("開始失敗");
+        return false;
       }
+    },
+    [
+      addLog,
+      audioDevices,
+      refreshDevices,
+      requestSelectedAudioStream,
+      resetMedia,
+      selectedAudioDeviceId,
+      selectedVideoDeviceId,
+      setupAudioPlayback,
+      stopAudioInput,
+      videoDevices,
+      warmAudioOutput,
+    ],
+  );
 
-      await refreshDevices({ silent: true });
-      addLog(`入力を開始しました: ${selectedVideoLabel} / ${selectedAudioLabel}`);
-    } catch (error) {
-      const message =
-        error instanceof DOMException && error.name === "NotAllowedError"
-          ? "カメラまたはマイクの権限が拒否されました。"
-          : "入力デバイスの開始に失敗しました。";
-      addLog(message, "error");
-      setStatusLabel("開始失敗");
-    }
-  }, [
-    addLog,
-    audioDevices,
-    refreshDevices,
-    requestSelectedAudioStream,
-    resetMedia,
-    selectedAudioDeviceId,
-    selectedVideoDeviceId,
-    setupAudioPlayback,
-    stopAudioInput,
-    videoDevices,
-    warmAudioOutput,
-  ]);
+  const handleVideoDeviceChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      const nextVideoDeviceId = event.target.value;
 
-  const handleStopCapture = useCallback(() => {
-    resetMedia();
-    addLog("入力を停止しました。");
-  }, [addLog, resetMedia]);
+      setSelectedVideoDeviceId(nextVideoDeviceId);
+
+      if (nextVideoDeviceId || videoDevices.length > 0) {
+        void startCapture(nextVideoDeviceId, selectedAudioDeviceId);
+      }
+    },
+    [selectedAudioDeviceId, startCapture, videoDevices.length],
+  );
+
+  const handleAudioDeviceChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      const nextAudioDeviceId = event.target.value;
+
+      setSelectedAudioDeviceId(nextAudioDeviceId);
+
+      if (selectedVideoDeviceId || videoDevices.length > 0) {
+        void startCapture(
+          selectedVideoDeviceId || videoDevices[0]?.deviceId || "",
+          nextAudioDeviceId,
+        );
+      }
+    },
+    [selectedVideoDeviceId, startCapture, videoDevices],
+  );
 
   const handleLoadedMetadata = useCallback(() => {
     if (!videoRef.current) {
@@ -1804,7 +1847,9 @@ export function App() {
       const objectUrl = URL.createObjectURL(file);
       objectUrlRef.current = objectUrl;
       setFilePreviewUrl(objectUrl);
-      setMediaMode(file.type.startsWith("image/") ? "image-file" : "video-file");
+      const nextMediaMode = file.type.startsWith("image/") ? "image-file" : "video-file";
+      mediaModeRef.current = nextMediaMode;
+      setMediaMode(nextMediaMode);
       setStatusLabel("ファイル表示中");
       addLog(`ファイルを読み込みました: ${file.name}`);
       event.target.value = "";
@@ -1924,6 +1969,29 @@ export function App() {
   const handleStopOcr = useCallback(() => {
     stopOcr("リアルタイムOCRログを停止しました。");
   }, [stopOcr]);
+
+  const ensureMediaForProcessing = useCallback(async () => {
+    if (mediaModeRef.current !== "idle") {
+      return true;
+    }
+
+    return startCapture(
+      selectedVideoDeviceId || videoDevices[0]?.deviceId || "",
+      selectedAudioDeviceId,
+    );
+  }, [selectedAudioDeviceId, selectedVideoDeviceId, startCapture, videoDevices]);
+
+  const handleToolbarStartSampling = useCallback(async () => {
+    if (await ensureMediaForProcessing()) {
+      handleStartSampling();
+    }
+  }, [ensureMediaForProcessing, handleStartSampling]);
+
+  const handleToolbarStartOcr = useCallback(async () => {
+    if (await ensureMediaForProcessing()) {
+      handleStartOcr();
+    }
+  }, [ensureMediaForProcessing, handleStartOcr]);
 
   const handleResetRoi = useCallback(() => {
     setRoi(DEFAULT_ROI);
@@ -2420,8 +2488,8 @@ export function App() {
             <select
               aria-label="映像ソース"
               value={selectedVideoDeviceId}
-              onChange={(event) => setSelectedVideoDeviceId(event.target.value)}
-              disabled={mediaMode === "device"}
+              onChange={handleVideoDeviceChange}
+              disabled={videoDevices.length === 0}
             >
               {videoDevices.length === 0 ? (
                 <option value="">映像デバイスが見つかりません</option>
@@ -2437,8 +2505,7 @@ export function App() {
             <select
               aria-label="音声ソース"
               value={selectedAudioDeviceId}
-              onChange={(event) => setSelectedAudioDeviceId(event.target.value)}
-              disabled={mediaMode === "device"}
+              onChange={handleAudioDeviceChange}
             >
               <option value={NO_AUDIO_DEVICE_ID}>音声なし</option>
               {audioDevices.map((device) => (
@@ -2455,7 +2522,6 @@ export function App() {
             variant="outline"
             className="icon-button"
             onClick={() => void refreshDevices()}
-            disabled={mediaMode === "device"}
           >
             <span aria-hidden="true">↻</span>
             <span>更新</span>
@@ -2464,28 +2530,47 @@ export function App() {
             type="button"
             variant="default"
             className="icon-button"
-            onClick={handleStartCapture}
-            disabled={videoDevices.length === 0 || mediaMode === "device"}
+            onClick={() => void handleToolbarStartSampling()}
+            disabled={isSampling || (mediaMode === "idle" && videoDevices.length === 0)}
           >
             <span aria-hidden="true">▶</span>
-            <span>開始</span>
+            <span>サンプル開始</span>
           </Button>
           <Button
             type="button"
             variant="secondary"
             className="icon-button"
-            onClick={handleStopCapture}
-            disabled={mediaMode === "idle"}
+            onClick={handleStopSampling}
+            disabled={!isSampling}
           >
             <span aria-hidden="true">■</span>
-            <span>停止</span>
+            <span>サンプル停止</span>
+          </Button>
+          <Button
+            type="button"
+            variant="default"
+            className="icon-button"
+            onClick={() => void handleToolbarStartOcr()}
+            disabled={isOcrEnabled || (mediaMode === "idle" && videoDevices.length === 0)}
+          >
+            <span aria-hidden="true">▶</span>
+            <span>OCR開始</span>
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            className="icon-button"
+            onClick={handleStopOcr}
+            disabled={!isOcrEnabled && pendingOcrJobs === 0}
+          >
+            <span aria-hidden="true">■</span>
+            <span>OCR停止</span>
           </Button>
           <Button
             type="button"
             variant="outline"
             className="icon-button"
             onClick={() => fileInputRef.current?.click()}
-            disabled={mediaMode === "device"}
           >
             <span aria-hidden="true">↥</span>
             <span>ファイル</span>

@@ -137,7 +137,6 @@ button:disabled {
 .icon-button,
 .storage-button,
 .log-panel,
-.preview-frame,
 .analysis-panel,
 .data-management-panel,
 .log-review-panel,
@@ -302,21 +301,22 @@ button:disabled {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  padding: 18px;
+  padding: 0;
 }
 
 .preview-frame {
   display: grid;
   width: 100%;
-  max-width: calc((100dvh - 190px) * 16 / 9);
-  max-height: 100%;
+  max-width: none;
+  max-height: none;
   aspect-ratio: 16 / 9;
   align-items: stretch;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  padding: 8px;
-  background: var(--panel-strong);
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .preview-surface {
@@ -326,7 +326,7 @@ button:disabled {
   aspect-ratio: 16 / 9;
   overflow: hidden;
   background: #000000;
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.05);
+  box-shadow: none;
 }
 
 .workspace-resizer {
@@ -399,7 +399,7 @@ button:disabled {
   display: grid;
   gap: 14px;
   min-width: 0;
-  padding: 0 14px 14px;
+  padding: 0 0 14px;
 }
 
 .management-tab-list {
@@ -1502,7 +1502,7 @@ button:disabled {
   border-color: rgb(242 95 76 / 0.54);
 }
 
-@media (max-width: 1040px) {
+@media (max-width: 1280px) {
   .capture-toolbar {
     grid-template-columns: 1fr;
   }
@@ -1516,7 +1516,7 @@ button:disabled {
   }
 
   .preview-column {
-    padding: 14px;
+    padding: 0;
   }
 
   .preprocess-controls {
@@ -1543,7 +1543,7 @@ button:disabled {
   }
 
   .management-tabs {
-    padding: 0 10px 10px;
+    padding: 0 0 10px;
   }
 
   .management-tab-list {
@@ -1595,11 +1595,11 @@ button:disabled {
   }
 
   .preview-column {
-    padding: 10px;
+    padding: 0;
   }
 
   .preview-frame {
-    padding: 6px;
+    padding: 0;
   }
 
   .preprocess-controls,

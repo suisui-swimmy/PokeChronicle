@@ -123,8 +123,12 @@ describe("App", () => {
     const videoSourceSelect = await screen.findByRole("combobox", { name: "映像ソース" });
     await waitFor(() => expect(videoSourceSelect).toHaveValue("video-usb"));
     expect(screen.getByRole("combobox", { name: "音声ソース" })).toHaveValue("none");
-    expect(screen.getByRole("button", { name: "開始" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "停止" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "開始" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "停止" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "サンプル開始" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "サンプル停止" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "OCR開始" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "OCR停止" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "ファイル" })).toBeInTheDocument();
     expect(screen.queryByText("映像ソース")).not.toBeInTheDocument();
     expect(screen.queryByText("音声ソース")).not.toBeInTheDocument();
@@ -178,7 +182,7 @@ describe("App", () => {
     expect(screen.queryByText(/x=0.3300 y=0.7200 w=0.3000 h=0.1400/)).not.toBeInTheDocument();
     expect(screen.queryByText("詳細調整")).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: "fps" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "OCR開始" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("realtime OCR log")).not.toBeInTheDocument();
     expect(screen.queryByText("Battle Log JSON / CSV")).not.toBeInTheDocument();
     expect(screen.queryByText("タイムライン空")).not.toBeInTheDocument();
 
@@ -213,12 +217,24 @@ describe("App", () => {
     expect(screen.getByRole("combobox", { name: "背景" })).toHaveValue("black");
     expect(screen.getByRole("combobox", { name: "拡大" })).toHaveValue("2");
     expect(screen.getByRole("checkbox", { name: "反転" })).not.toBeChecked();
-    expect(screen.getByRole("button", { name: "サンプル開始" })).toBeDisabled();
+    expect(
+      within(screen.getByLabelText("frame sampling and preprocessing")).getByRole("button", {
+        name: "サンプル開始",
+      }),
+    ).toBeDisabled();
     expect(screen.getByText("バッファ空")).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "OCR" }));
-    expect(screen.getByRole("button", { name: "OCR開始" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "OCR停止" })).toBeDisabled();
+    expect(
+      within(screen.getByLabelText("realtime OCR log")).getByRole("button", {
+        name: "OCR開始",
+      }),
+    ).toBeDisabled();
+    expect(
+      within(screen.getByLabelText("realtime OCR log")).getByRole("button", {
+        name: "OCR停止",
+      }),
+    ).toBeDisabled();
     expect(screen.getByRole("heading", { name: "リアルタイムOCR" })).toBeInTheDocument();
     expect(screen.getByText("OCRログ空")).toBeInTheDocument();
 
@@ -322,19 +338,19 @@ describe("App", () => {
     expect(screen.queryByRole("heading", { name: "OCR Raw" })).not.toBeInTheDocument();
   });
 
-  it("starts selected video input with audio disabled when no audio is selected", async () => {
+  it("starts selected video input automatically with audio disabled when no audio is selected", async () => {
     const user = userEvent.setup();
     render(<App />);
 
-    expect(await screen.findByRole("combobox", { name: "映像ソース" })).toHaveValue("video-usb");
-
-    fireEvent.click(screen.getByRole("button", { name: "開始" }));
+    fireEvent.change(await screen.findByRole("combobox", { name: "映像ソース" }), {
+      target: { value: "video-obs" },
+    });
 
     await waitFor(() => {
       expect(getUserMedia).toHaveBeenCalledWith({
         audio: false,
         video: {
-          deviceId: { exact: "video-usb" },
+          deviceId: { exact: "video-obs" },
           width: { exact: 1920 },
           height: { exact: 1080 },
         },
@@ -351,14 +367,13 @@ describe("App", () => {
     });
   });
 
-  it("starts selected audio input through a separate audio stream", async () => {
+  it("starts selected audio input automatically through a separate audio stream", async () => {
     const user = userEvent.setup();
     render(<App />);
 
     fireEvent.change(await screen.findByRole("combobox", { name: "音声ソース" }), {
       target: { value: "audio-usb" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "開始" }));
 
     await waitFor(() => {
       expect(getUserMedia).toHaveBeenNthCalledWith(1, {
