@@ -125,10 +125,12 @@ describe("App", () => {
     expect(screen.getByRole("combobox", { name: "音声ソース" })).toHaveValue("none");
     expect(screen.queryByRole("button", { name: "開始" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "停止" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "サンプル開始" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "サンプル停止" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "OCR開始" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "OCR停止" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "解析開始" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "解析停止" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "サンプル開始" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "サンプル停止" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "OCR開始" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "OCR停止" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "ファイル" })).toBeInTheDocument();
     expect(screen.queryByText("映像ソース")).not.toBeInTheDocument();
     expect(screen.queryByText("音声ソース")).not.toBeInTheDocument();

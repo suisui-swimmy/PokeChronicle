@@ -1981,17 +1981,24 @@ export function App() {
     );
   }, [selectedAudioDeviceId, selectedVideoDeviceId, startCapture, videoDevices]);
 
-  const handleToolbarStartSampling = useCallback(async () => {
-    if (await ensureMediaForProcessing()) {
-      handleStartSampling();
-    }
-  }, [ensureMediaForProcessing, handleStartSampling]);
-
-  const handleToolbarStartOcr = useCallback(async () => {
+  const handleToolbarStartAnalysis = useCallback(async () => {
     if (await ensureMediaForProcessing()) {
       handleStartOcr();
     }
   }, [ensureMediaForProcessing, handleStartOcr]);
+
+  const handleToolbarStopAnalysis = useCallback(() => {
+    const shouldStopOcr = isOcrEnabledRef.current || pendingOcrJobsRef.current > 0;
+    const shouldStopSampling = samplingTimerRef.current !== null;
+
+    if (shouldStopOcr) {
+      stopOcr("リアルタイムOCRログを停止しました。");
+    }
+
+    if (shouldStopSampling) {
+      stopSampling("フレームサンプリングを停止しました。");
+    }
+  }, [stopOcr, stopSampling]);
 
   const handleResetRoi = useCallback(() => {
     setRoi(DEFAULT_ROI);
@@ -2530,41 +2537,21 @@ export function App() {
             type="button"
             variant="default"
             className="icon-button"
-            onClick={() => void handleToolbarStartSampling()}
-            disabled={isSampling || (mediaMode === "idle" && videoDevices.length === 0)}
-          >
-            <span aria-hidden="true">▶</span>
-            <span>サンプル開始</span>
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            className="icon-button"
-            onClick={handleStopSampling}
-            disabled={!isSampling}
-          >
-            <span aria-hidden="true">■</span>
-            <span>サンプル停止</span>
-          </Button>
-          <Button
-            type="button"
-            variant="default"
-            className="icon-button"
-            onClick={() => void handleToolbarStartOcr()}
+            onClick={() => void handleToolbarStartAnalysis()}
             disabled={isOcrEnabled || (mediaMode === "idle" && videoDevices.length === 0)}
           >
             <span aria-hidden="true">▶</span>
-            <span>OCR開始</span>
+            <span>解析開始</span>
           </Button>
           <Button
             type="button"
             variant="secondary"
             className="icon-button"
-            onClick={handleStopOcr}
-            disabled={!isOcrEnabled && pendingOcrJobs === 0}
+            onClick={handleToolbarStopAnalysis}
+            disabled={!isSampling && !isOcrEnabled && pendingOcrJobs === 0}
           >
             <span aria-hidden="true">■</span>
-            <span>OCR停止</span>
+            <span>解析停止</span>
           </Button>
           <Button
             type="button"

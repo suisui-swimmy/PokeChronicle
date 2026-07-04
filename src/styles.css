@@ -351,8 +351,7 @@ button:disabled {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
   pointer-events: none;
 }
 
@@ -362,11 +361,9 @@ button:disabled {
 }
 
 .workspace-resizer::after {
-  width: 10px;
+  width: 1px;
   opacity: 0;
-  background:
-    linear-gradient(90deg, transparent 0 3px, rgb(255 137 6 / 0.56) 3px 4px, transparent 4px 6px, rgb(255 137 6 / 0.56) 6px 7px, transparent 7px),
-    rgb(255 137 6 / 0.08);
+  background: rgb(255 137 6 / 0.74);
   transition: opacity 120ms ease;
 }
 
@@ -1502,7 +1499,7 @@ button:disabled {
   border-color: rgb(242 95 76 / 0.54);
 }
 
-@media (max-width: 1280px) {
+@media (max-width: 1040px) {
   .capture-toolbar {
     grid-template-columns: 1fr;
   }
