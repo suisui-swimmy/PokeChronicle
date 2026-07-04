@@ -5,6 +5,8 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
@@ -82,6 +84,12 @@ const MAX_TIMELINE_ITEMS = 48;
 const MAX_UNKNOWN_EVENTS = 48;
 const MAX_CROP_EVIDENCE = 80;
 const OCR_RAW_GROUP_LIMIT = 30;
+const DEFAULT_RESOLVED_LOG_PANEL_WIDTH = 260;
+const MIN_RESOLVED_LOG_PANEL_WIDTH = 180;
+const MAX_RESOLVED_LOG_PANEL_WIDTH = 520;
+const MIN_PREVIEW_PANEL_WIDTH = 360;
+const WORKSPACE_RESIZER_WIDTH = 12;
+const RESOLVED_LOG_RESIZE_STEP = 24;
 const MAX_PENDING_OCR_JOBS = 1;
 const OCR_JOB_TIMEOUT_MS = 60_000;
 const TIMELINE_DUPLICATE_WINDOW_MS = 2500;
@@ -221,6 +229,11 @@ type OCRLogGroup = {
   entry: OCRLogEntry;
   count: number;
 };
+type ResolvedLogResizeSession = {
+  startX: number;
+  startWidth: number;
+  containerWidth: number | null;
+};
 
 const REVIEW_TABS: Array<{ id: ReviewTab; label: string }> = [
   { id: "timeline", label: "Timeline" },
@@ -315,6 +328,35 @@ function formatTextDensity(ratio: number) {
 
 function formatProgress(progress: number) {
   return `${Math.round(clamp(progress, 0, 1) * 100)}%`;
+}
+
+function getResolvedLogPanelWidthBounds(containerWidth: number | null) {
+  if (!containerWidth) {
+    return {
+      minWidth: MIN_RESOLVED_LOG_PANEL_WIDTH,
+      maxWidth: MAX_RESOLVED_LOG_PANEL_WIDTH,
+    };
+  }
+
+  const maxWidthFromContainer =
+    containerWidth - MIN_PREVIEW_PANEL_WIDTH - WORKSPACE_RESIZER_WIDTH;
+
+  return {
+    minWidth: MIN_RESOLVED_LOG_PANEL_WIDTH,
+    maxWidth: Math.max(
+      MIN_RESOLVED_LOG_PANEL_WIDTH,
+      Math.min(MAX_RESOLVED_LOG_PANEL_WIDTH, maxWidthFromContainer),
+    ),
+  };
+}
+
+function clampResolvedLogPanelWidth(width: number, containerWidth: number | null) {
+  const { minWidth, maxWidth } = getResolvedLogPanelWidthBounds(containerWidth);
+  return Math.round(clamp(width, minWidth, maxWidth));
+}
+
+function getPositiveWidthOrNull(width: number | undefined) {
+  return width && width > 0 ? width : null;
 }
 
 function formatEventType(type: string) {
@@ -862,7 +904,10 @@ export function App() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const battleLogImportInputRef = useRef<HTMLInputElement | null>(null);
   const templateImportInputRef = useRef<HTMLInputElement | null>(null);
+  const captureMainRef = useRef<HTMLElement | null>(null);
   const previewColumnRef = useRef<HTMLDivElement | null>(null);
+  const resolvedLogPanelRef = useRef<HTMLElement | null>(null);
+  const resolvedLogResizeSessionRef = useRef<ResolvedLogResizeSession | null>(null);
   const objectUrlRef = useRef<string | null>(null);
   const audioInputStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -916,6 +961,8 @@ export function App() {
   const [unknownEvents, setUnknownEvents] = useState<UnknownEvent[]>([]);
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
   const [suppressedTimelineCount, setSuppressedTimelineCount] = useState(0);
+  const [resolvedLogPanelWidth, setResolvedLogPanelWidth] = useState<number | null>(null);
+  const [isResizingResolvedLogPanel, setIsResizingResolvedLogPanel] = useState(false);
   const [activeManagementTab, setActiveManagementTab] = useState<ManagementTab | null>(null);
   const [activeReviewTab, setActiveReviewTab] = useState<ReviewTab>("timeline");
   const [templateImportStatusLabel, setTemplateImportStatusLabel] = useState("Template未読込");
@@ -1945,6 +1992,148 @@ export function App() {
     () => groupOcrLogs(ocrLogs, OCR_RAW_GROUP_LIMIT),
     [ocrLogs],
   );
+  const captureMainStyle = useMemo(
+    () =>
+      resolvedLogPanelWidth === null
+        ? undefined
+        : ({
+            "--resolved-log-width": `${resolvedLogPanelWidth}px`,
+          } as CSSProperties),
+    [resolvedLogPanelWidth],
+  );
+  const captureMainClassName = `capture-main${
+    isResizingResolvedLogPanel ? " capture-main--resizing" : ""
+  }`;
+  const resolvedLogPanelWidthValue =
+    resolvedLogPanelWidth ?? DEFAULT_RESOLVED_LOG_PANEL_WIDTH;
+  const updateResolvedLogPanelWidth = useCallback((width: number, containerWidth?: number | null) => {
+    const nextContainerWidth =
+      containerWidth === undefined
+        ? (captureMainRef.current?.getBoundingClientRect().width ?? null)
+        : containerWidth;
+    setResolvedLogPanelWidth(clampResolvedLogPanelWidth(width, nextContainerWidth));
+  }, []);
+  const beginResolvedLogResize = useCallback(
+    (clientX: number) => {
+      const containerRect = captureMainRef.current?.getBoundingClientRect();
+      const logPanelRect = resolvedLogPanelRef.current?.getBoundingClientRect();
+      resolvedLogResizeSessionRef.current = {
+        startX: clientX,
+        startWidth:
+          resolvedLogPanelWidth ??
+          getPositiveWidthOrNull(logPanelRect?.width) ??
+          DEFAULT_RESOLVED_LOG_PANEL_WIDTH,
+        containerWidth: getPositiveWidthOrNull(containerRect?.width),
+      };
+      setIsResizingResolvedLogPanel(true);
+    },
+    [resolvedLogPanelWidth],
+  );
+  const handleResolvedLogResizePointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0) {
+        return;
+      }
+
+      beginResolvedLogResize(event.clientX);
+      event.currentTarget.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    },
+    [beginResolvedLogResize],
+  );
+  const handleResolvedLogResizeMouseDown = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (event.button !== 0 || resolvedLogResizeSessionRef.current) {
+        return;
+      }
+
+      beginResolvedLogResize(event.clientX);
+      event.preventDefault();
+    },
+    [beginResolvedLogResize],
+  );
+  const handleResolvedLogResizePointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const resizeSession = resolvedLogResizeSessionRef.current;
+
+      if (!resizeSession) {
+        return;
+      }
+
+      const nextWidth = resizeSession.startWidth - (event.clientX - resizeSession.startX);
+      updateResolvedLogPanelWidth(nextWidth, resizeSession.containerWidth);
+      event.preventDefault();
+    },
+    [updateResolvedLogPanelWidth],
+  );
+  const finishResolvedLogResize = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    resolvedLogResizeSessionRef.current = null;
+    setIsResizingResolvedLogPanel(false);
+  }, []);
+  useEffect(() => {
+    if (!isResizingResolvedLogPanel) {
+      return;
+    }
+
+    const handleWindowMouseMove = (event: MouseEvent) => {
+      const resizeSession = resolvedLogResizeSessionRef.current;
+
+      if (!resizeSession) {
+        return;
+      }
+
+      const nextWidth = resizeSession.startWidth - (event.clientX - resizeSession.startX);
+      updateResolvedLogPanelWidth(nextWidth, resizeSession.containerWidth);
+    };
+    const handleWindowMouseUp = () => {
+      resolvedLogResizeSessionRef.current = null;
+      setIsResizingResolvedLogPanel(false);
+    };
+
+    window.addEventListener("mousemove", handleWindowMouseMove);
+    window.addEventListener("mouseup", handleWindowMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handleWindowMouseMove);
+      window.removeEventListener("mouseup", handleWindowMouseUp);
+    };
+  }, [isResizingResolvedLogPanel, updateResolvedLogPanelWidth]);
+  const handleResolvedLogResizeKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLDivElement>) => {
+      const containerWidth = getPositiveWidthOrNull(
+        captureMainRef.current?.getBoundingClientRect().width,
+      );
+      const currentWidth =
+        resolvedLogPanelWidth ??
+        getPositiveWidthOrNull(resolvedLogPanelRef.current?.getBoundingClientRect().width) ??
+        DEFAULT_RESOLVED_LOG_PANEL_WIDTH;
+      const step = event.shiftKey ? RESOLVED_LOG_RESIZE_STEP * 2 : RESOLVED_LOG_RESIZE_STEP;
+      const bounds = getResolvedLogPanelWidthBounds(containerWidth);
+      let nextWidth: number | null = null;
+
+      if (event.key === "ArrowLeft") {
+        nextWidth = currentWidth + step;
+      } else if (event.key === "ArrowRight") {
+        nextWidth = currentWidth - step;
+      } else if (event.key === "Home") {
+        nextWidth = bounds.minWidth;
+      } else if (event.key === "End") {
+        nextWidth = bounds.maxWidth;
+      }
+
+      if (nextWidth === null) {
+        return;
+      }
+
+      updateResolvedLogPanelWidth(nextWidth, containerWidth);
+      event.preventDefault();
+    },
+    [resolvedLogPanelWidth, updateResolvedLogPanelWidth],
+  );
   const handleManagementTabClick = useCallback(
     (event: ReactMouseEvent<HTMLButtonElement>, tab: ManagementTab) => {
       event.preventDefault();
@@ -2311,7 +2500,12 @@ export function App() {
         </div>
       </header>
 
-      <section className="capture-main" aria-label="M1 capture workspace">
+      <section
+        ref={captureMainRef}
+        className={captureMainClassName}
+        style={captureMainStyle}
+        aria-label="M1 capture workspace"
+      >
         <div ref={previewColumnRef} className="preview-column">
           <section className="preview-frame" aria-label="capture preview">
             <div className="preview-surface">
@@ -2350,6 +2544,24 @@ export function App() {
             </div>
           </section>
         </div>
+
+        <div
+          className="workspace-resizer"
+          role="separator"
+          aria-label="プレビューとログの幅を変更"
+          aria-orientation="vertical"
+          aria-valuemin={MIN_RESOLVED_LOG_PANEL_WIDTH}
+          aria-valuemax={MAX_RESOLVED_LOG_PANEL_WIDTH}
+          aria-valuenow={Math.round(resolvedLogPanelWidthValue)}
+          tabIndex={0}
+          title="ドラッグでプレビューとログの幅を変更"
+          onKeyDown={handleResolvedLogResizeKeyDown}
+          onMouseDown={handleResolvedLogResizeMouseDown}
+          onPointerCancel={finishResolvedLogResize}
+          onPointerDown={handleResolvedLogResizePointerDown}
+          onPointerMove={handleResolvedLogResizePointerMove}
+          onPointerUp={finishResolvedLogResize}
+        />
 
           <section className="management-panel" aria-label="analysis and data management">
             <Tabs value={activeManagementTab ?? "closed"} className="management-tabs">
@@ -3066,7 +3278,11 @@ export function App() {
           </Tabs>
           </section>
 
-        <aside className="log-panel resolved-log-panel" aria-label="解決済みログ">
+        <aside
+          ref={resolvedLogPanelRef}
+          className="log-panel resolved-log-panel"
+          aria-label="解決済みログ"
+        >
           <ol className="resolved-text-log" aria-label="resolved text log">
             {battleEvents.length === 0 ? (
               <li className="resolved-text-log-empty">解決ログ空</li>

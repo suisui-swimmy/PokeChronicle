@@ -133,6 +133,29 @@ describe("App", () => {
     expect(screen.queryByLabelText("media status")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "ログ" })).not.toBeInTheDocument();
     expect(screen.queryByText("0 resolved")).not.toBeInTheDocument();
+    const captureWorkspace = screen.getByLabelText("M1 capture workspace");
+    const workspaceResizer = screen.getByRole("separator", {
+      name: "プレビューとログの幅を変更",
+    });
+    expect(workspaceResizer).toHaveAttribute("aria-orientation", "vertical");
+    expect(workspaceResizer).toHaveAttribute("aria-valuenow", "260");
+    workspaceResizer.focus();
+    await user.keyboard("{ArrowLeft}");
+    expect(workspaceResizer).toHaveAttribute("aria-valuenow", "284");
+    expect(captureWorkspace).toHaveAttribute(
+      "style",
+      expect.stringContaining("--resolved-log-width: 284px"),
+    );
+    await user.keyboard("{ArrowRight}");
+    expect(workspaceResizer).toHaveAttribute("aria-valuenow", "260");
+    fireEvent.mouseDown(workspaceResizer, { button: 0, clientX: 642 });
+    fireEvent.mouseMove(window, { clientX: 542 });
+    expect(workspaceResizer).toHaveAttribute("aria-valuenow", "360");
+    expect(captureWorkspace).toHaveAttribute(
+      "style",
+      expect.stringContaining("--resolved-log-width: 360px"),
+    );
+    fireEvent.mouseUp(window);
     expect(screen.getByLabelText("解決済みログ")).toBeInTheDocument();
     expect(within(screen.getByLabelText("resolved text log")).getByText("解決ログ空")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "レビュー" })).not.toBeInTheDocument();

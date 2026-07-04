@@ -277,15 +277,22 @@ button:disabled {
 }
 
 .capture-main {
+  --resolved-log-width: clamp(220px, 22vw, 320px);
+  --workspace-resizer-width: 12px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(220px, 22vw, 320px);
+  grid-template-columns: minmax(0, 1fr) var(--workspace-resizer-width) var(--resolved-log-width);
   grid-template-rows: minmax(0, 1fr) auto;
   grid-template-areas:
-    "preview log"
-    "management management";
+    "preview resizer log"
+    "management management management";
   gap: 0;
   min-height: 0;
   overflow: visible;
+}
+
+.capture-main--resizing {
+  cursor: ew-resize;
+  user-select: none;
 }
 
 .preview-column {
@@ -320,6 +327,64 @@ button:disabled {
   overflow: hidden;
   background: #000000;
   box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.05);
+}
+
+.workspace-resizer {
+  grid-area: resizer;
+  position: relative;
+  z-index: 2;
+  display: block;
+  width: var(--workspace-resizer-width);
+  min-width: var(--workspace-resizer-width);
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.workspace-resizer::before,
+.workspace-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.workspace-resizer::before {
+  width: 1px;
+  background: var(--border-soft);
+}
+
+.workspace-resizer::after {
+  width: 10px;
+  opacity: 0;
+  background:
+    linear-gradient(90deg, transparent 0 3px, rgb(255 137 6 / 0.56) 3px 4px, transparent 4px 6px, rgb(255 137 6 / 0.56) 6px 7px, transparent 7px),
+    rgb(255 137 6 / 0.08);
+  transition: opacity 120ms ease;
+}
+
+.workspace-resizer:hover::before,
+.workspace-resizer:focus-visible::before,
+.capture-main--resizing .workspace-resizer::before {
+  background: rgb(255 137 6 / 0.64);
+}
+
+.workspace-resizer:hover::after,
+.workspace-resizer:focus-visible::after,
+.capture-main--resizing .workspace-resizer::after {
+  opacity: 1;
+}
+
+.workspace-resizer:focus-visible {
+  outline: 2px solid rgb(255 137 6 / 0.7);
+  outline-offset: -2px;
 }
 
 .management-panel {
@@ -1029,7 +1094,7 @@ button:disabled {
   border-top: 0;
   border-right: 0;
   border-bottom: 0;
-  border-left: 1px solid var(--border-soft);
+  border-left: 0;
   background: #0f0e17;
 }
 
@@ -1447,7 +1512,7 @@ button:disabled {
   }
 
   .capture-main {
-    grid-template-columns: minmax(0, 1fr) clamp(190px, 28vw, 260px);
+    --resolved-log-width: clamp(190px, 28vw, 260px);
   }
 
   .preview-column {
@@ -1584,6 +1649,10 @@ button:disabled {
       "log"
       "management";
     overflow: visible;
+  }
+
+  .workspace-resizer {
+    display: none;
   }
 
   .preview-frame {
