@@ -33,10 +33,34 @@ function createMockAudioStream() {
 
 const enumerateDevices = vi.fn();
 const getUserMedia = vi.fn();
+const requestFullscreen = vi.fn();
+const exitFullscreen = vi.fn();
 
 describe("App", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.defineProperty(document, "fullscreenElement", {
+      configurable: true,
+      value: null,
+    });
+    requestFullscreen.mockImplementation(function (this: Element) {
+      Object.defineProperty(document, "fullscreenElement", {
+        configurable: true,
+        value: this,
+      });
+      document.dispatchEvent(new Event("fullscreenchange"));
+
+      return Promise.resolve();
+    });
+    exitFullscreen.mockImplementation(() => {
+      Object.defineProperty(document, "fullscreenElement", {
+        configurable: true,
+        value: null,
+      });
+      document.dispatchEvent(new Event("fullscreenchange"));
+
+      return Promise.resolve();
+    });
     enumerateDevices.mockResolvedValue([
       {
         deviceId: "video-usb",
@@ -66,6 +90,16 @@ describe("App", () => {
     Object.defineProperty(window, "scrollTo", {
       configurable: true,
       value: vi.fn(),
+    });
+
+    Object.defineProperty(HTMLElement.prototype, "requestFullscreen", {
+      configurable: true,
+      value: requestFullscreen,
+    });
+
+    Object.defineProperty(document, "exitFullscreen", {
+      configurable: true,
+      value: exitFullscreen,
     });
 
     Object.defineProperty(globalThis, "MediaStream", {
@@ -304,19 +338,23 @@ describe("App", () => {
     expect(screen.getByText("タイムライン空")).toBeInTheDocument();
   });
 
-  it("toggles expanded workspace mode for fullscreen-style viewing", async () => {
+  it("uses the Fullscreen API for monitor fullscreen viewing", async () => {
     const user = userEvent.setup();
     render(<App />);
 
     const captureShell = await screen.findByLabelText("capture workspace shell");
     await user.click(screen.getByRole("button", { name: "全画面表示" }));
 
-    expect(captureShell).toHaveClass("capture-shell--fullscreen");
+    expect(requestFullscreen).toHaveBeenCalledTimes(1);
+    expect(requestFullscreen.mock.contexts[0]).toBe(captureShell);
+    expect(captureShell).not.toHaveClass("capture-shell--fullscreen");
+    expect(document.fullscreenElement).toBe(captureShell);
     expect(screen.getByRole("button", { name: "全画面解除" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "全画面解除" }));
 
-    expect(captureShell).not.toHaveClass("capture-shell--fullscreen");
+    expect(exitFullscreen).toHaveBeenCalledTimes(1);
+    expect(document.fullscreenElement).toBeNull();
     expect(screen.getByRole("button", { name: "全画面表示" })).toBeInTheDocument();
   });
 

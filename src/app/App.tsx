@@ -906,6 +906,7 @@ function captureRoiFrame(
 }
 
 export function App() {
+  const captureShellRef = useRef<HTMLElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const imagePreviewRef = useRef<HTMLImageElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -973,7 +974,7 @@ export function App() {
   const [suppressedTimelineCount, setSuppressedTimelineCount] = useState(0);
   const [resolvedLogPanelWidth, setResolvedLogPanelWidth] = useState<number | null>(null);
   const [isResizingResolvedLogPanel, setIsResizingResolvedLogPanel] = useState(false);
-  const [isWorkspaceExpanded, setIsWorkspaceExpanded] = useState(false);
+  const [isWorkspaceFullscreen, setIsWorkspaceFullscreen] = useState(false);
   const [activeManagementTab, setActiveManagementTab] = useState<ManagementTab | null>(null);
   const [activeReviewTab, setActiveReviewTab] = useState<ReviewTab>("timeline");
   const [templateImportStatusLabel, setTemplateImportStatusLabel] = useState("Template未読込");
@@ -1876,13 +1877,41 @@ export function App() {
     [addLog, resetMedia],
   );
 
-  const handleToggleAppFullscreen = useCallback(() => {
-    setIsWorkspaceExpanded((currentExpanded) => {
-      const nextExpanded = !currentExpanded;
-      addLog(nextExpanded ? "ワークスペースを拡大表示しました。" : "全画面表示を解除しました。");
-      return nextExpanded;
-    });
+  const handleToggleAppFullscreen = useCallback(async () => {
+    const shell = captureShellRef.current;
+
+    if (!shell) {
+      return;
+    }
+
+    try {
+      if (document.fullscreenElement === shell) {
+        await document.exitFullscreen();
+        setIsWorkspaceFullscreen(false);
+        addLog("全画面表示を解除しました。");
+        return;
+      }
+
+      await shell.requestFullscreen();
+      setIsWorkspaceFullscreen(true);
+      addLog("ワークスペースを全画面表示しました。");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Fullscreen APIの実行に失敗しました。";
+      addLog(`全画面表示に失敗しました: ${message}`, "error");
+      setIsWorkspaceFullscreen(document.fullscreenElement === shell);
+    }
   }, [addLog]);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsWorkspaceFullscreen(document.fullscreenElement === captureShellRef.current);
+    };
+
+    handleFullscreenChange();
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  }, []);
 
   const captureCurrentFrame = useCallback(
     (options?: { logFailure?: boolean }) => {
@@ -2068,12 +2097,8 @@ export function App() {
     return "idle";
   }, [statusLabel]);
 
-  const isWorkspaceFullscreen = isWorkspaceExpanded;
   const isVolumeEffectivelyMuted = isAudioMuted || audioVolume === 0;
   const volumePercent = Math.round(effectiveAudioVolume * 100);
-  const captureShellClassName = `capture-shell${
-    isWorkspaceExpanded ? " capture-shell--fullscreen" : ""
-  }`;
 
   const activeVideoLabel = useMemo(() => {
     if (mediaMode === "video-file" || mediaMode === "image-file") {
@@ -2538,7 +2563,7 @@ export function App() {
   }, []);
 
   return (
-    <main className={captureShellClassName} aria-label="capture workspace shell">
+    <main ref={captureShellRef} className="capture-shell" aria-label="capture workspace shell">
       <header className="capture-toolbar" aria-label="capture controls">
         <div className="input-badge">
           <span className={`status-dot status-dot--${statusTone}`} aria-hidden="true" />

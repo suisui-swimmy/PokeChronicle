@@ -406,8 +406,7 @@ button:disabled {
   background: transparent;
 }
 
-.capture-shell:fullscreen,
-.capture-shell--fullscreen {
+.capture-shell:fullscreen {
   width: 100vw;
   height: 100vh;
   min-height: 0;
@@ -415,14 +414,7 @@ button:disabled {
   background: var(--bg);
 }
 
-.capture-shell--fullscreen {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-}
-
-.capture-shell:fullscreen .capture-main,
-.capture-shell--fullscreen .capture-main {
+.capture-shell:fullscreen .capture-main {
   min-height: calc(100vh - 55px);
 }
 
