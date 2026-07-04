@@ -138,7 +138,6 @@ button:disabled {
 .storage-button,
 .log-panel,
 .preview-frame,
-.management-summary,
 .analysis-panel,
 .data-management-panel,
 .log-review-panel,
@@ -331,61 +330,11 @@ button:disabled {
   border-top: 1px solid var(--border-soft);
 }
 
-.management-summary {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
-  min-height: 42px;
-  padding: 0 12px;
-  border-radius: 4px;
-  color: var(--text);
-  cursor: pointer;
-  font-weight: 900;
-  list-style: none;
-}
-
-.management-summary::-webkit-details-marker {
-  display: none;
-}
-
-.management-summary:focus-visible {
-  border-color: rgb(255 137 6 / 0.74);
-  outline: none;
-  box-shadow: 0 0 0 3px rgb(255 137 6 / 0.16);
-}
-
-.management-summary-icon {
-  width: 10px;
-  height: 10px;
-  border-right: 2px solid var(--green);
-  border-bottom: 2px solid var(--green);
-  transform: rotate(-45deg);
-  transition: transform 140ms ease;
-}
-
-.management-panel[open] .management-summary-icon {
-  transform: rotate(45deg);
-}
-
-.management-summary span:nth-child(2) {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.management-summary strong {
-  color: var(--muted);
-  font-size: 0.72rem;
-  white-space: nowrap;
-}
-
 .management-tabs {
   display: grid;
   gap: 14px;
   min-width: 0;
-  padding: 14px;
+  padding: 0 14px 14px;
 }
 
 .management-tab-list {
@@ -1529,7 +1478,7 @@ button:disabled {
   }
 
   .management-tabs {
-    padding: 10px;
+    padding: 0 10px 10px;
   }
 
   .management-tab-list {

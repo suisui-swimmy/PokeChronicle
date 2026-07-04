@@ -116,7 +116,7 @@ describe("App", () => {
     });
   });
 
-  it("renders the M7.5 capture-first shell with hidden management controls", async () => {
+  it("renders the M7.5 capture-first shell with footer management tabs", async () => {
     const user = userEvent.setup();
     render(<App />);
 
@@ -138,12 +138,11 @@ describe("App", () => {
     expect(screen.queryByRole("heading", { name: "レビュー" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("project status")).not.toBeInTheDocument();
     const managementPanel = screen.getByLabelText("analysis and data management");
-    expect(managementPanel).not.toHaveAttribute("open");
+    expect(managementPanel).toBeInTheDocument();
+    expect(managementPanel.tagName).toBe("SECTION");
+    expect(screen.queryByText("解析・データ管理")).not.toBeInTheDocument();
 
-    await user.click(screen.getByText("解析・データ管理"));
-    expect(managementPanel).toHaveAttribute("open");
-
-    expect(screen.getByRole("tab", { name: "ROI" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "ROI" })).toHaveAttribute("aria-selected", "false");
     expect(screen.getByRole("tab", { name: "サンプラー" })).toHaveAttribute(
       "aria-selected",
       "false",
@@ -152,20 +151,33 @@ describe("App", () => {
     expect(screen.getByRole("tab", { name: "統計" })).toHaveAttribute("aria-selected", "false");
     expect(screen.getByRole("tab", { name: "データ" })).toHaveAttribute("aria-selected", "false");
     expect(screen.getByRole("tab", { name: "ログ" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.queryByRole("heading", { name: "ROI設定" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/x=0.3300 y=0.7200 w=0.3000 h=0.1400/)).not.toBeInTheDocument();
+    expect(screen.queryByText("詳細調整")).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "fps" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "OCR開始" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Battle Log JSON / CSV")).not.toBeInTheDocument();
+    expect(screen.queryByText("タイムライン空")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "ROI" }));
+    expect(screen.getByRole("tab", { name: "ROI" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("heading", { name: "ROI設定" })).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "ROI表示" })).toBeChecked();
     expect(screen.getByText(/x=0.3300 y=0.7200 w=0.3000 h=0.1400/)).toBeInTheDocument();
     const roiDetailPanel = screen.getByText("詳細調整").closest("details");
     expect(roiDetailPanel).not.toHaveAttribute("open");
     expect(screen.getByText("詳細調整")).toBeInTheDocument();
-    expect(screen.queryByRole("combobox", { name: "fps" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "OCR開始" })).not.toBeInTheDocument();
-    expect(screen.queryByText("Battle Log JSON / CSV")).not.toBeInTheDocument();
-    expect(screen.queryByText("タイムライン空")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "統計サマリー" })).not.toBeInTheDocument();
 
+    await user.click(screen.getByRole("tab", { name: "ROI" }));
+    expect(screen.getByRole("tab", { name: "ROI" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.queryByRole("heading", { name: "ROI設定" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "ROI" }));
+
     await user.click(screen.getByText("詳細調整"));
-    expect(roiDetailPanel).toHaveAttribute("open");
+    const reopenedRoiDetailPanel = screen.getByText("詳細調整").closest("details");
+    expect(reopenedRoiDetailPanel).toHaveAttribute("open");
     expect(screen.getByRole("spinbutton", { name: "ROI X" })).toHaveValue(0.33);
     expect(screen.getByRole("spinbutton", { name: "ROI Y" })).toHaveValue(0.72);
     expect(screen.getByRole("spinbutton", { name: "ROI W" })).toHaveValue(0.3);
@@ -240,7 +252,7 @@ describe("App", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByText("解析・データ管理"));
+    await screen.findByLabelText("analysis and data management");
     await user.click(screen.getByRole("tab", { name: "ログ" }));
 
     expect(await screen.findByRole("tab", { name: /Timeline/ })).toHaveAttribute(
@@ -306,7 +318,7 @@ describe("App", () => {
       });
     });
     expect(await screen.findByText("入力(16:9)")).toBeInTheDocument();
-    await user.click(screen.getByText("解析・データ管理"));
+    expect(screen.getByLabelText("analysis and data management")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "ログ" }));
     await user.click(screen.getByRole("tab", { name: /System/ }));
     await waitFor(() => {
@@ -344,7 +356,7 @@ describe("App", () => {
         },
       });
     });
-    await user.click(screen.getByText("解析・データ管理"));
+    expect(screen.getByLabelText("analysis and data management")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "ログ" }));
     await user.click(screen.getByRole("tab", { name: /System/ }));
     await waitFor(() => {
@@ -363,7 +375,8 @@ describe("App", () => {
     expect(await screen.findByRole("combobox", { name: "映像ソース" })).toHaveValue("video-usb");
     expect(screen.getByLabelText("ROI adjustment layer")).toBeInTheDocument();
 
-    await user.click(screen.getByText("解析・データ管理"));
+    expect(screen.getByLabelText("analysis and data management")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "ROI" }));
     await user.click(screen.getByText("詳細調整"));
     fireEvent.change(screen.getByRole("spinbutton", { name: "ROI X" }), {
       target: { value: "0.1" },

@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { Button } from "@/components/ui/button";
@@ -213,6 +214,7 @@ type CropEvidence = {
 type TimelineItem =
   | { kind: "event"; event: BattleEvent }
   | { kind: "unknown"; unknown: UnknownEvent };
+type ManagementTab = "roi" | "sampler" | "ocr" | "stats" | "data" | "logs";
 type ReviewTab = "timeline" | "resolved" | "unknown" | "ocr" | "system";
 type OCRLogGroup = {
   key: string;
@@ -914,6 +916,7 @@ export function App() {
   const [unknownEvents, setUnknownEvents] = useState<UnknownEvent[]>([]);
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
   const [suppressedTimelineCount, setSuppressedTimelineCount] = useState(0);
+  const [activeManagementTab, setActiveManagementTab] = useState<ManagementTab | null>(null);
   const [activeReviewTab, setActiveReviewTab] = useState<ReviewTab>("timeline");
   const [templateImportStatusLabel, setTemplateImportStatusLabel] = useState("Template未読込");
   const [importedTemplateCollection, setImportedTemplateCollection] =
@@ -1942,6 +1945,13 @@ export function App() {
     () => groupOcrLogs(ocrLogs, OCR_RAW_GROUP_LIMIT),
     [ocrLogs],
   );
+  const handleManagementTabClick = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>, tab: ManagementTab) => {
+      event.preventDefault();
+      setActiveManagementTab((currentTab) => (currentTab === tab ? null : tab));
+    },
+    [],
+  );
 
   const buildCurrentBattleLogDocument = useCallback(() => {
     const sourceKind: BattleLogMediaMetadata["sourceKind"] =
@@ -2341,24 +2351,46 @@ export function App() {
           </section>
         </div>
 
-          <details className="management-panel" aria-label="analysis and data management">
-            <summary className="management-summary">
-              <span className="management-summary-icon" aria-hidden="true" />
-              <span>解析・データ管理</span>
-              <strong>
-                OCR {isOcrEnabled ? "実行中" : "停止中"} / {battleEvents.length} resolved
-              </strong>
-            </summary>
-
-          <Tabs defaultValue="roi" className="management-tabs">
-            <TabsList className="management-tab-list" variant="line" aria-label="analysis tabs">
-              <TabsTrigger value="roi">ROI</TabsTrigger>
-              <TabsTrigger value="sampler">サンプラー</TabsTrigger>
-              <TabsTrigger value="ocr">OCR</TabsTrigger>
-              <TabsTrigger value="stats">統計</TabsTrigger>
-              <TabsTrigger value="data">データ</TabsTrigger>
-              <TabsTrigger value="logs">ログ</TabsTrigger>
-            </TabsList>
+          <section className="management-panel" aria-label="analysis and data management">
+            <Tabs value={activeManagementTab ?? "closed"} className="management-tabs">
+              <TabsList className="management-tab-list" variant="line" aria-label="analysis tabs">
+                <TabsTrigger
+                  value="roi"
+                  onClick={(event) => handleManagementTabClick(event, "roi")}
+                >
+                  ROI
+                </TabsTrigger>
+                <TabsTrigger
+                  value="sampler"
+                  onClick={(event) => handleManagementTabClick(event, "sampler")}
+                >
+                  サンプラー
+                </TabsTrigger>
+                <TabsTrigger
+                  value="ocr"
+                  onClick={(event) => handleManagementTabClick(event, "ocr")}
+                >
+                  OCR
+                </TabsTrigger>
+                <TabsTrigger
+                  value="stats"
+                  onClick={(event) => handleManagementTabClick(event, "stats")}
+                >
+                  統計
+                </TabsTrigger>
+                <TabsTrigger
+                  value="data"
+                  onClick={(event) => handleManagementTabClick(event, "data")}
+                >
+                  データ
+                </TabsTrigger>
+                <TabsTrigger
+                  value="logs"
+                  onClick={(event) => handleManagementTabClick(event, "logs")}
+                >
+                  ログ
+                </TabsTrigger>
+              </TabsList>
 
             <TabsContent value="roi" className="management-tab-panel">
           <section className="roi-settings-panel" aria-label="ROI settings">
@@ -3032,7 +3064,7 @@ export function App() {
           </section>
             </TabsContent>
           </Tabs>
-          </details>
+          </section>
 
         <aside className="log-panel resolved-log-panel" aria-label="解決済みログ">
           <ol className="resolved-text-log" aria-label="resolved text log">
