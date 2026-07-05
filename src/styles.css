@@ -113,10 +113,10 @@ button:disabled {
   --tertiary: #e53170;
   --stroke: #000000;
   display: grid;
-  grid-template-rows: auto auto;
-  height: auto;
-  min-height: 100vh;
-  overflow: visible;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
   background: var(--bg);
 }
 
@@ -394,8 +394,9 @@ button:disabled {
     "preview resizer log"
     "management management management";
   gap: 0;
+  height: 100%;
   min-height: 0;
-  overflow: visible;
+  overflow: hidden;
 }
 
 .capture-main--resizing {
@@ -406,6 +407,7 @@ button:disabled {
 .preview-column {
   grid-area: preview;
   display: grid;
+  container-type: size;
   place-items: center;
   min-width: 0;
   min-height: 0;
@@ -416,6 +418,7 @@ button:disabled {
 .preview-frame {
   display: grid;
   width: 100%;
+  height: 100%;
   max-width: none;
   max-height: none;
   aspect-ratio: 16 / 9;
@@ -426,6 +429,13 @@ button:disabled {
   padding: 0;
   border: 0;
   background: transparent;
+}
+
+@supports (width: 100cqw) {
+  .preview-frame {
+    width: min(100cqw, calc(100cqh * 16 / 9));
+    height: min(100cqh, calc(100cqw * 9 / 16));
+  }
 }
 
 .capture-shell:fullscreen {
@@ -509,7 +519,8 @@ button:disabled {
   grid-area: management;
   display: grid;
   min-width: 0;
-  overflow: visible;
+  min-height: 0;
+  overflow: hidden;
   border-top: 1px solid var(--border-soft);
 }
 
@@ -517,7 +528,9 @@ button:disabled {
   display: grid;
   gap: 0;
   min-width: 0;
+  min-height: 0;
   padding: 0 0 12px;
+  overflow: hidden;
 }
 
 .management-tabbar {
@@ -609,6 +622,8 @@ button:disabled {
 .management-tab-panel {
   display: grid;
   min-width: 0;
+  min-height: 0;
+  overflow: auto;
   padding: 12px 18px 0;
 }
 
