@@ -449,12 +449,14 @@ button:disabled {
   width: 100vw;
   height: 100vh;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   background: var(--bg);
 }
 
 .capture-shell:fullscreen .capture-main {
-  min-height: calc(100vh - 55px);
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .preview-surface {
@@ -536,7 +538,7 @@ button:disabled {
   gap: 0;
   min-width: 0;
   min-height: 0;
-  padding: 0 0 12px;
+  padding: 0;
   overflow: hidden;
 }
 
@@ -546,7 +548,6 @@ button:disabled {
   min-width: 0;
   min-height: 58px;
   padding: 8px 18px;
-  border-bottom: 1px solid var(--border-soft);
   background: rgb(15 14 23 / 0.98);
 }
 
@@ -698,14 +699,6 @@ button:disabled {
   background: rgb(255 137 6 / 0.16);
   box-shadow: 0 0 0 1px rgb(0 0 0 / 0.35);
   pointer-events: auto;
-}
-
-.roi-box::before {
-  position: absolute;
-  inset: 12px;
-  border: 1px dashed rgb(255 137 6 / 0.68);
-  content: "";
-  pointer-events: none;
 }
 
 .roi-move {
@@ -1848,10 +1841,6 @@ button:disabled {
     gap: 4px;
     min-height: 0;
     padding: 6px 4px;
-  }
-
-  .management-tabs {
-    padding: 0 0 10px;
   }
 
   .management-tab-list {

@@ -81,7 +81,8 @@ import {
 
 const LIVE_BATTLE_ID = "battle_live";
 const LIVE_BATTLE_TITLE = "Live OCR battle log";
-const DEFAULT_ROI: NormalizedRoi = { x: 0.33, y: 0.72, w: 0.3, h: 0.14 };
+const DEFAULT_ROI: NormalizedRoi = { x: 0.15, y: 0.72, w: 0.5, h: 0.14 };
+const DEFAULT_IS_ROI_VISIBLE = false;
 const MIN_ROI_SIZE = 0.08;
 const NO_AUDIO_DEVICE_ID = "none";
 const DEFAULT_SAMPLE_FPS = 3;
@@ -99,6 +100,7 @@ const MIN_PREVIEW_PANEL_WIDTH = 360;
 const WORKSPACE_RESIZER_WIDTH = 12;
 const DEFAULT_AUDIO_VOLUME = 1;
 const HEADER_MEDIA_SETTINGS_STORAGE_KEY = "pokechronicle:header-media-settings:v1";
+const ROI_SETTINGS_STORAGE_KEY = "pokechronicle:roi-settings:v1";
 const RESOLVED_LOG_RESIZE_STEP = 24;
 const MAX_PENDING_OCR_JOBS = 1;
 const OCR_JOB_TIMEOUT_MS = 60_000;
@@ -162,6 +164,11 @@ type HeaderMediaSettings = {
   audioDeviceId: string;
   audioVolume: number;
   isAudioMuted: boolean;
+};
+
+type RoiSettings = {
+  roi: NormalizedRoi;
+  isRoiVisible: boolean;
 };
 
 type DragMode =
@@ -356,6 +363,62 @@ function saveStoredHeaderMediaSettings(settings: HeaderMediaSettings) {
 
 function roundRoiValue(value: number) {
   return Math.round(value * 10000) / 10000;
+}
+
+function normalizeRoi(value: unknown): NormalizedRoi {
+  if (!isObjectRecord(value)) {
+    return DEFAULT_ROI;
+  }
+
+  const rawX = Number(value.x);
+  const rawY = Number(value.y);
+  const rawW = Number(value.w);
+  const rawH = Number(value.h);
+  const safeW = Number.isFinite(rawW) ? rawW : DEFAULT_ROI.w;
+  const safeH = Number.isFinite(rawH) ? rawH : DEFAULT_ROI.h;
+  const w = roundRoiValue(clamp(safeW, MIN_ROI_SIZE, 1));
+  const h = roundRoiValue(clamp(safeH, MIN_ROI_SIZE, 1));
+
+  return {
+    x: roundRoiValue(clamp(Number.isFinite(rawX) ? rawX : DEFAULT_ROI.x, 0, 1 - w)),
+    y: roundRoiValue(clamp(Number.isFinite(rawY) ? rawY : DEFAULT_ROI.y, 0, 1 - h)),
+    w,
+    h,
+  };
+}
+
+function normalizeRoiSettings(value: unknown): RoiSettings | null {
+  if (!isObjectRecord(value)) {
+    return null;
+  }
+
+  return {
+    roi: normalizeRoi(value.roi),
+    isRoiVisible:
+      typeof value.isRoiVisible === "boolean" ? value.isRoiVisible : DEFAULT_IS_ROI_VISIBLE,
+  };
+}
+
+function loadStoredRoiSettings(): RoiSettings | null {
+  try {
+    const rawSettings = window.localStorage.getItem(ROI_SETTINGS_STORAGE_KEY);
+
+    if (!rawSettings) {
+      return null;
+    }
+
+    return normalizeRoiSettings(JSON.parse(rawSettings));
+  } catch {
+    return null;
+  }
+}
+
+function saveStoredRoiSettings(settings: RoiSettings) {
+  try {
+    window.localStorage.setItem(ROI_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+  } catch {
+    // localStorage can be unavailable in private browsing or when storage is disabled.
+  }
 }
 
 function updateRoiField(currentRoi: NormalizedRoi, field: RoiField, value: number): NormalizedRoi {
@@ -1114,6 +1177,7 @@ export function App() {
   const [initialHeaderMediaSettings] = useState<HeaderMediaSettings | null>(() =>
     loadStoredHeaderMediaSettings(),
   );
+  const [initialRoiSettings] = useState<RoiSettings | null>(() => loadStoredRoiSettings());
   const captureShellRef = useRef<HTMLElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const imagePreviewRef = useRef<HTMLImageElement | null>(null);
@@ -1178,8 +1242,10 @@ export function App() {
     () => initialHeaderMediaSettings?.isAudioMuted ?? false,
   );
   const [isVolumePanelOpen, setIsVolumePanelOpen] = useState(false);
-  const [roi, setRoi] = useState<NormalizedRoi>(DEFAULT_ROI);
-  const [isRoiVisible, setIsRoiVisible] = useState(true);
+  const [roi, setRoi] = useState<NormalizedRoi>(() => initialRoiSettings?.roi ?? DEFAULT_ROI);
+  const [isRoiVisible, setIsRoiVisible] = useState(
+    () => initialRoiSettings?.isRoiVisible ?? DEFAULT_IS_ROI_VISIBLE,
+  );
   const [sampleFps, setSampleFps] = useState(DEFAULT_SAMPLE_FPS);
   const [isSampling, setIsSampling] = useState(false);
   const [preprocessOptions, setPreprocessOptions] =
@@ -1622,6 +1688,10 @@ export function App() {
   useEffect(() => {
     roiRef.current = roi;
   }, [roi]);
+
+  useEffect(() => {
+    saveStoredRoiSettings({ roi, isRoiVisible });
+  }, [isRoiVisible, roi]);
 
   useEffect(() => {
     mediaModeRef.current = mediaMode;
