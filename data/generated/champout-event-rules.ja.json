@@ -9,33 +9,101 @@
     "license": "MIT",
     "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db",
     "noticeFile": "THIRD_PARTY_NOTICES.md",
+    "configFile": "data/champout/champout-template-sources.ja.json",
     "files": [
       "btl_attack_syn.json",
-      "btl_std.json"
+      "btl_std.json",
+      "btl_set.json"
     ]
   },
   "stats": {
-    "sourceFileCount": 2,
-    "extractedTextCount": 117,
-    "battleCandidateCount": 91,
-    "generatedRuleCount": 87,
-    "skippedTextCount": 30,
+    "sourceFileCount": 3,
+    "extractedTextCount": 851,
+    "battleCandidateCount": 137,
+    "generatedRuleCount": 133,
+    "skippedTextCount": 718,
     "duplicateRuleCount": 4,
     "maxGeneratedRules": 600,
+    "eventTypeDistribution": {
+      "battle_end": 10,
+      "boost": 9,
+      "critical": 1,
+      "damage": 1,
+      "fail": 8,
+      "faint": 2,
+      "field_end": 5,
+      "field_start": 1,
+      "heal": 1,
+      "immune": 2,
+      "item": 3,
+      "move": 2,
+      "protect": 4,
+      "resisted": 2,
+      "side_end": 16,
+      "side_start": 8,
+      "status": 14,
+      "status_cure": 28,
+      "supereffective": 2,
+      "switch_in": 4,
+      "switch_out": 2,
+      "terrain_start": 1,
+      "weather_end": 4,
+      "weather_start": 3
+    },
     "perFile": [
       {
         "fileName": "btl_attack_syn.json",
+        "reason": "standard actor move messages",
         "extractedTextCount": 2,
         "battleCandidateCount": 2,
         "generatedRuleCount": 2,
-        "skippedTextCount": 0
+        "skippedTextCount": 0,
+        "eventTypeDistribution": {
+          "move": 2
+        }
       },
       {
         "fileName": "btl_std.json",
+        "reason": "standard live battle messages",
         "extractedTextCount": 115,
         "battleCandidateCount": 89,
         "generatedRuleCount": 89,
-        "skippedTextCount": 26
+        "skippedTextCount": 26,
+        "eventTypeDistribution": {
+          "battle_end": 14,
+          "boost": 9,
+          "critical": 1,
+          "damage": 1,
+          "fail": 8,
+          "field_end": 5,
+          "field_start": 1,
+          "heal": 1,
+          "item": 3,
+          "protect": 4,
+          "resisted": 2,
+          "side_end": 16,
+          "side_start": 8,
+          "supereffective": 2,
+          "switch_in": 4,
+          "switch_out": 2,
+          "terrain_start": 1,
+          "weather_end": 4,
+          "weather_start": 3
+        }
+      },
+      {
+        "fileName": "btl_set.json",
+        "reason": "narrow live battle status, faint, and no-effect messages only",
+        "extractedTextCount": 734,
+        "battleCandidateCount": 46,
+        "generatedRuleCount": 46,
+        "skippedTextCount": 688,
+        "eventTypeDistribution": {
+          "faint": 2,
+          "immune": 2,
+          "status": 14,
+          "status_cure": 28
+        }
       }
     ]
   },
@@ -1663,6 +1731,903 @@
         "keyPath": "mSDataSet[111].OriginalText",
         "labelName": "BTL_STRID_STD_Hoobaru_Failed",
         "originalText": "きのみを 持っていないので 技がだせない!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_faint_1yphd8",
+      "eventType": "faint",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}は たおれた!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[0].OriginalText",
+        "labelName": "BTL_STRID_SET_Dead",
+        "originalText": "{0}は たおれた!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_faint_1fhorgk",
+      "eventType": "faint",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}は たおれた!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[1].OriginalText",
+        "labelName": "BTL_STRID_SET_Dead_E",
+        "originalText": "相手の {0}は たおれた!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_immune_j84h1z",
+      "eventType": "immune",
+      "priority": 50,
+      "patterns": [
+        "{target}には効果が ないようだ..."
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[30].OriginalText",
+        "labelName": "BTL_STRID_SET_NoEffect",
+        "originalText": "{0}には効果が ないようだ...",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_immune_vrv6v1",
+      "eventType": "immune",
+      "priority": 50,
+      "patterns": [
+        "相手の {target}には効果が ないようだ..."
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[31].OriginalText",
+        "labelName": "BTL_STRID_SET_NoEffect_E",
+        "originalText": "相手の {0}には効果が ないようだ...",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_fy7wlz",
+      "eventType": "status",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}は毒を あびた!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[40].OriginalText",
+        "labelName": "BTL_STRID_SET_DokuGet",
+        "originalText": "{0}は毒を あびた!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_11xxvy3",
+      "eventType": "status",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}は毒を あびた!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[41].OriginalText",
+        "labelName": "BTL_STRID_SET_DokuGet_E",
+        "originalText": "相手の {0}は毒を あびた!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_cure_173iunp",
+      "eventType": "status_cure",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}の 毒はきれいさっぱり なくなった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[48].OriginalText",
+        "labelName": "BTL_STRID_SET_DokuCure",
+        "originalText": "{0}の 毒はきれいさっぱり なくなった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_cure_1eyzc1",
+      "eventType": "status_cure",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}の 毒はきれいさっぱり なくなった!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[49].OriginalText",
+        "labelName": "BTL_STRID_SET_DokuCure_E",
+        "originalText": "相手の {0}の 毒はきれいさっぱり なくなった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_x7pe38",
+      "eventType": "status",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}はやけどを 負った!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[54].OriginalText",
+        "labelName": "BTL_STRID_SET_YakedoGet",
+        "originalText": "{0}はやけどを 負った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_1um06yo",
+      "eventType": "status",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}はやけどを 負った!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[55].OriginalText",
+        "labelName": "BTL_STRID_SET_YakedoGet_E",
+        "originalText": "相手の {0}はやけどを 負った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_cure_1m8v8t6",
+      "eventType": "status_cure",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}のやけどが 治った!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[60].OriginalText",
+        "labelName": "BTL_STRID_SET_YakedoCure",
+        "originalText": "{0}のやけどが 治った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_cure_oyr09e",
+      "eventType": "status_cure",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}のやけどが 治った!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[61].OriginalText",
+        "labelName": "BTL_STRID_SET_YakedoCure_E",
+        "originalText": "相手の {0}のやけどが 治った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_12g7wp4",
+      "eventType": "status",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}は まひして技が でにくくなった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[66].OriginalText",
+        "labelName": "BTL_STRID_SET_MahiGet",
+        "originalText": "{0}は まひして技が でにくくなった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_ds87ts",
+      "eventType": "status",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}は まひして技が でにくくなった!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[67].OriginalText",
+        "labelName": "BTL_STRID_SET_MahiGet_E",
+        "originalText": "相手の {0}は まひして技が でにくくなった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_cure_1e2bknl",
+      "eventType": "status_cure",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}のしびれが とれた!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[70].OriginalText",
+        "labelName": "BTL_STRID_SET_MahiCure",
+        "originalText": "{0}のしびれが とれた!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_cure_u2mhw9",
+      "eventType": "status_cure",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}のしびれが とれた!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[71].OriginalText",
+        "labelName": "BTL_STRID_SET_MahiCure_E",
+        "originalText": "相手の {0}のしびれが とれた!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_rur7zk",
+      "eventType": "status",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}は凍りついた!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[76].OriginalText",
+        "labelName": "BTL_STRID_SET_KoriGet",
+        "originalText": "{0}は凍りついた!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_qnaw28",
+      "eventType": "status",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}は凍りついた!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[77].OriginalText",
+        "labelName": "BTL_STRID_SET_KoriGet_E",
+        "originalText": "相手の {0}は凍りついた!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_cure_1kf0q8b",
+      "eventType": "status_cure",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}のこおりが 溶けた!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[80].OriginalText",
+        "labelName": "BTL_STRID_SET_KoriMelt",
+        "originalText": "{0}のこおりが 溶けた!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_cure_1fcgqjf",
+      "eventType": "status_cure",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}のこおりが 溶けた!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[81].OriginalText",
+        "labelName": "BTL_STRID_SET_KoriMelt_E",
+        "originalText": "相手の {0}のこおりが 溶けた!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_nqzgza",
+      "eventType": "status",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}は眠ってしまった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[86].OriginalText",
+        "labelName": "BTL_STRID_SET_NemuriGet",
+        "originalText": "{0}は眠ってしまった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_9kl0ue",
+      "eventType": "status",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}は眠ってしまった!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[87].OriginalText",
+        "labelName": "BTL_STRID_SET_NemuriGet_E",
+        "originalText": "相手の {0}は眠ってしまった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_cure_ol14pz",
+      "eventType": "status_cure",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}は目を 覚ました!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[90].OriginalText",
+        "labelName": "BTL_STRID_SET_NemuriWake",
+        "originalText": "{0}は目を 覚ました!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_cure_1ndcn4j",
+      "eventType": "status_cure",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}は目を 覚ました!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[91].OriginalText",
+        "labelName": "BTL_STRID_SET_NemuriWake_E",
+        "originalText": "相手の {0}は目を 覚ました!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_53dyqs",
+      "eventType": "status",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}はメロメロに なった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[96].OriginalText",
+        "labelName": "BTL_STRID_SET_MeromeroGet",
+        "originalText": "{0}はメロメロに なった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_1etj53w",
+      "eventType": "status",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}はメロメロに なった!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[97].OriginalText",
+        "labelName": "BTL_STRID_SET_MeromeroGet_E",
+        "originalText": "相手の {0}はメロメロに なった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_cure_r9ycfm",
+      "eventType": "status_cure",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}はメロメロ状態が 治った!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[102].OriginalText",
+        "labelName": "BTL_STRID_SET_MeromeroCure",
+        "originalText": "{0}はメロメロ状態が 治った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_cure_18edd4e",
+      "eventType": "status_cure",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}はメロメロ状態が 治った!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[103].OriginalText",
+        "labelName": "BTL_STRID_SET_MeromeroCure_E",
+        "originalText": "相手の {0}はメロメロ状態が 治った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_1hu2k0m",
+      "eventType": "status",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}は混乱した!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[106].OriginalText",
+        "labelName": "BTL_STRID_SET_KonranGet",
+        "originalText": "{0}は混乱した!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_1x2a7hy",
+      "eventType": "status",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}は混乱した!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[107].OriginalText",
+        "labelName": "BTL_STRID_SET_KonranGet_E",
+        "originalText": "相手の {0}は混乱した!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_cure_bpyss",
+      "eventType": "status_cure",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}の混乱が 解けた!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[110].OriginalText",
+        "labelName": "BTL_STRID_SET_KonranCure",
+        "originalText": "{0}の混乱が 解けた!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_cure_877twg",
+      "eventType": "status_cure",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}の混乱が 解けた!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[111].OriginalText",
+        "labelName": "BTL_STRID_SET_KonranCure_E",
+        "originalText": "相手の {0}の混乱が 解けた!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_cure_1wbh4cj",
+      "eventType": "status_cure",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}は {text}で毒が 治った!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[393].OriginalText",
+        "labelName": "BTL_STRID_SET_UseItem_CureDoku",
+        "originalText": "{0}は {1}で毒が 治った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_cure_r1jll9",
+      "eventType": "status_cure",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}は {text}で毒が 治った!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[394].OriginalText",
+        "labelName": "BTL_STRID_SET_UseItem_CureDoku_E",
+        "originalText": "相手の {0}は {1}で毒が 治った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_cure_uk15q1",
+      "eventType": "status_cure",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}は {text}でまひが 治った!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[395].OriginalText",
+        "labelName": "BTL_STRID_SET_UseItem_CureMahi",
+        "originalText": "{0}は {1}でまひが 治った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_cure_1fgoc3n",
+      "eventType": "status_cure",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}は {text}でまひが 治った!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[396].OriginalText",
+        "labelName": "BTL_STRID_SET_UseItem_CureMahi_E",
+        "originalText": "相手の {0}は {1}でまひが 治った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_cure_ntnwgx",
+      "eventType": "status_cure",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}は {text}で目を 覚ました!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[397].OriginalText",
+        "labelName": "BTL_STRID_SET_UseItem_CureNemuri",
+        "originalText": "{0}は {1}で目を 覚ました!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_cure_1ax6mln",
+      "eventType": "status_cure",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}は {text}で目を 覚ました!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[398].OriginalText",
+        "labelName": "BTL_STRID_SET_UseItem_CureNemuri_E",
+        "originalText": "相手の {0}は {1}で目を 覚ました!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_cure_1970x4e",
+      "eventType": "status_cure",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}は {text}でこおり状態が 治った!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[399].OriginalText",
+        "labelName": "BTL_STRID_SET_UseItem_CureKoori",
+        "originalText": "{0}は {1}でこおり状態が 治った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_cure_19qv63k",
+      "eventType": "status_cure",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}は {text}でこおり状態が 治った!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[400].OriginalText",
+        "labelName": "BTL_STRID_SET_UseItem_CureKoori_E",
+        "originalText": "相手の {0}は {1}でこおり状態が 治った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_cure_11dq61v",
+      "eventType": "status_cure",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}は {text}でやけどが 治った!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[401].OriginalText",
+        "labelName": "BTL_STRID_SET_UseItem_CureYakedo",
+        "originalText": "{0}は {1}でやけどが 治った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_cure_2tx3ud",
+      "eventType": "status_cure",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}は {text}でやけどが 治った!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[402].OriginalText",
+        "labelName": "BTL_STRID_SET_UseItem_CureYakedo_E",
+        "originalText": "相手の {0}は {1}でやけどが 治った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_cure_1yr31hr",
+      "eventType": "status_cure",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}は {text}で混乱が 治った!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[403].OriginalText",
+        "labelName": "BTL_STRID_SET_UseItem_CureKonran",
+        "originalText": "{0}は {1}で混乱が 治った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_cure_1q9lchh",
+      "eventType": "status_cure",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}は {text}で混乱が 治った!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[404].OriginalText",
+        "labelName": "BTL_STRID_SET_UseItem_CureKonran_E",
+        "originalText": "相手の {0}は {1}で混乱が 治った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_cure_1pyr9um",
+      "eventType": "status_cure",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}は {text}でメロメロ状態が 治った!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[405].OriginalText",
+        "labelName": "BTL_STRID_SET_UseItem_CureMero",
+        "originalText": "{0}は {1}でメロメロ状態が 治った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_status_cure_1q0n1qs",
+      "eventType": "status_cure",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}は {text}でメロメロ状態が 治った!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[406].OriginalText",
+        "labelName": "BTL_STRID_SET_UseItem_CureMero_E",
+        "originalText": "相手の {0}は {1}でメロメロ状態が 治った!",
         "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
       }
     }

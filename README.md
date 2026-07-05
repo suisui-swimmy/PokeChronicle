@@ -40,7 +40,6 @@ The M8 MVP is closed on top of the static app foundation:
 - Events CSV and Unknown messages CSV export
 - Bounded representative crop evidence in saved/exported logs
 - MVP statistics for observed moves, Pokemon action count, switches, faints, unknown rate, effectiveness, and critical hits
-- Browser-side champout/template JSON import support remains available in the core pipeline for validation and local updates; the streamlined MVP UI focuses on generated standard rules plus Battle Log JSON/CSV
 
 The MVP is intentionally scoped to observed battle messages. It does not record `selected_action` unless a future UI can prove the selected action directly.
 
@@ -50,6 +49,7 @@ Run these from PowerShell in the repository root:
 
 ```powershell
 npm install
+npm run report:champout
 npm run generate:champout-templates
 npm run generate:dictionaries
 npm run dev
@@ -66,19 +66,18 @@ npm run preview
 - No runtime imports from `others/`.
 - No official assets, ROM dumps, official screenshots, or unverified redistributed battle-text dumps in the repository.
 
-## Template Import
+## Generated Template Pack
 
-PokeChronicle bundles a compact generated champout template pack at build time. The generator reads selected local files from `others/champout/rom-txt/jpn`, verifies the MIT license and source commit, and writes `data/generated/champout-event-rules.ja.json`.
+PokeChronicle bundles a compact generated champout template pack at build time. The report script scans local `others/champout/rom-txt/jpn/btl_*.json` files without writing raw dumps, then the generator reads only enabled source files from `data/champout/champout-template-sources.ja.json`.
 
 ```powershell
+npm run report:champout
 npm run generate:champout-templates
 ```
 
-The runtime app imports only the generated JSON. It does not read `others/champout`, and it does not bundle the full raw dump. Third-party source, license, commit, and notice details are recorded in `THIRD_PARTY_NOTICES.md`.
+The current enabled source files are `btl_attack_syn.json`, `btl_std.json`, and the narrowly selected `btl_set.json`. Add more `btl_*.json` files one at a time only after checking the scan report, label allow/deny patterns, event type distribution, parser behavior, and tests.
 
-The core importer can add or test extra user-controlled champout-style JSON files, such as `rom-txt/jpn/btl_std.json` or `rom-txt/jpn/btl_attack_syn.json`, when that validation UI is exposed.
-
-The app extracts selected JSON text in the browser, generates safe template candidates, and stores only the imported template pack in IndexedDB. ZIP import is not implemented yet; select JSON files directly when using this path.
+The runtime app imports only `data/generated/champout-event-rules.ja.json`. It does not read `others/champout`, and it does not bundle the full raw dump. Source files, source commit, license, and notice details are recorded in the generated JSON and `THIRD_PARTY_NOTICES.md`.
 
 ## GitHub Pages Base Path
 

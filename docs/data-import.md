@@ -1,10 +1,9 @@
 # Data Import
 
-The MVP supports generated standard template data plus browser-side import/export paths:
+The MVP supports generated standard template data plus Battle Log import/export paths:
 
 - Build-time generated champout template rules.
 - Battle Log JSON import/export for restoring user-owned analysis logs.
-- User-selected champout-style JSON import for template rules in the core pipeline, used for validation and local updates when that optional UI is exposed.
 
 ## Generated name dictionaries
 
@@ -43,6 +42,7 @@ These rules are hand-written seed templates, not champout-derived full dumps. Th
 The standard champout template pack is generated at development/build time:
 
 ```powershell
+npm run report:champout
 npm run generate:champout-templates
 ```
 
@@ -50,8 +50,10 @@ Inputs:
 
 - `others/champout/LICENSE`
 - `others/champout/.git/HEAD` and the current source commit
+- `data/champout/champout-template-sources.ja.json`
 - `others/champout/rom-txt/jpn/btl_attack_syn.json`
 - `others/champout/rom-txt/jpn/btl_std.json`
+- `others/champout/rom-txt/jpn/btl_set.json`
 
 Output:
 
@@ -63,28 +65,24 @@ The generator verifies the MIT license and records source commit `d2885a864f0417
 
 The runtime app imports only the generated JSON from the repository. It never reads `others/champout` directly. Third-party source and license details are recorded in `THIRD_PARTY_NOTICES.md`.
 
-## champout/template import
+## Generated pack expansion workflow
 
-The core importer can read one or more JSON files controlled by the user when the optional validation UI is exposed. Typical files are under a local champout checkout, for example:
+Use the report before adding any new champout source file:
 
-- `rom-txt/jpn/btl_std.json`
-- `rom-txt/jpn/btl_attack_syn.json`
-- other `rom-txt/jpn/btl_*.json` files
+```powershell
+npm run report:champout
+```
 
-The app does not import `others/champout` at runtime. The browser reads only files selected in the file picker.
+The report reads local `btl_*.json` files, verifies the local MIT checkout and source commit, and prints counts, label distributions, placeholder patterns, event type estimates, and risk hints. It intentionally omits raw `OriginalText` values from committed output.
 
-The importer:
+To expand the standard pack:
 
-- Parses selected JSON files in the browser.
-- Recursively extracts Japanese text strings, including `OriginalText` values.
-- Prioritizes battle-related source names, labels, and message keywords.
-- Converts numbered placeholders such as `{0}` / `{1}` into matcher placeholders such as `{pokemon}`, `{move}`, and `{text}` when the event type can be inferred safely.
-- Keeps source file name, key path, label name, and original text as rule metadata.
-- Stores the generated template pack in IndexedDB.
-- Combines imported rules with checked-in seed rules and the standard generated champout pack for live OCR parsing.
-- Can export or delete the imported template pack when the optional template-management UI is enabled.
-
-ZIP import is not implemented in M7. Select JSON files directly for now.
+- Add at most one new `btl_*.json` source at a time to `data/champout/champout-template-sources.ja.json`.
+- Prefer narrow `labelAllowPatterns` and explicit `eventTypeRules` over broad keyword inference.
+- Add `labelDenyPatterns` or `textDenyHints` for UI, tutorial, explanatory, or ambiguous text.
+- Run `npm run generate:champout-templates`; do not hand-edit `data/generated/champout-event-rules.ja.json`.
+- Update parser/decoder only for event types that can be accepted without loosening confidence or margin rules broadly.
+- Update tests and `THIRD_PARTY_NOTICES.md` so generated metadata and notice source files stay in sync.
 
 ## Battle Log export/import
 
@@ -104,7 +102,5 @@ The review workspace can export and import a schema-versioned Battle Log JSON do
 The app validates `schemaVersion` on import and restores the review state on the current page. The streamlined MVP UI treats Battle Log JSON as the explicit durable handoff; it does not automatically save imported logs into IndexedDB. This import path is only for PokeChronicle Battle Logs.
 
 Events and unknown messages can also be exported as CSV. Unknown CSV includes manual review notes when present.
-
-Imported text templates stay in browser storage or user-controlled exports unless the user intentionally exports them.
 
 Runtime code must not import from `others/`.

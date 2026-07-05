@@ -14,7 +14,7 @@ PokeChronicle includes a compact generated battle template rule pack derived at 
 
 - Source: `projectpokemon/champout`
 - Source commit: `d2885a864f041744df1de1b35f4ab3d2e52cf4db`
-- Source files used: `rom-txt/jpn/btl_attack_syn.json`, `rom-txt/jpn/btl_std.json`
+- Source files used: `rom-txt/jpn/btl_attack_syn.json`, `rom-txt/jpn/btl_std.json`, `rom-txt/jpn/btl_set.json`
 - Generated output: `data/generated/champout-event-rules.ja.json`
 - License: MIT License
 

@@ -7,6 +7,7 @@
     "dev": "vite",
     "generate:champout-templates": "node scripts/generate-champout-templates.mjs",
     "generate:dictionaries": "node scripts/generate-battle-dictionaries.mjs",
+    "report:champout": "node scripts/report-champout-files.mjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",

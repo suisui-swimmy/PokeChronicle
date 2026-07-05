@@ -461,6 +461,84 @@ describe("parseBattleMessage", () => {
     });
   });
 
+  it("parses btl_set status, cure, faint, and immune templates", () => {
+    expect(parseBattleMessage("マフォクシーはやけどを 負った!")).toMatchObject({
+      status: "event",
+      event: {
+        type: "status",
+        actor: { name: "マフォクシー" },
+        classification: {
+          method: "template_dictionary",
+          templateId: "champout_status_x7pe38",
+        },
+      },
+    });
+    expect(parseBattleMessage("相手の マフォクシーのやけどが 治った!")).toMatchObject({
+      status: "event",
+      event: {
+        type: "status_cure",
+        actor: { name: "マフォクシー", side: "opponent" },
+        classification: {
+          method: "template_dictionary",
+          templateId: "champout_status_cure_oyr09e",
+        },
+      },
+    });
+    expect(parseBattleMessage("ガブリアスは たおれた!")).toMatchObject({
+      status: "event",
+      event: {
+        type: "faint",
+        actor: { name: "ガブリアス" },
+      },
+    });
+    expect(parseBattleMessage("マフォクシーには効果が ないようだ...")).toMatchObject({
+      status: "event",
+      event: {
+        type: "immune",
+        target: { name: "マフォクシー" },
+      },
+    });
+  });
+
+  it("projects noisy btl_set status templates only inside narrow shapes", () => {
+    const burned = parseBattleMessage({
+      rawText: "マフォジシーはやけどを 負った/",
+      ocrConfidence: 0.88,
+    });
+    const cured = parseBattleMessage({
+      rawText: "相手の マフォジシーのやけどが 治った/",
+      ocrConfidence: 0.88,
+    });
+    const fainted = parseBattleMessage({
+      rawText: "ガプリアスは たおれだ/",
+      ocrConfidence: 0.86,
+    });
+
+    expect(burned).toMatchObject({
+      status: "event",
+      event: {
+        type: "status",
+        actor: { name: "マフォクシー" },
+        classification: { templateId: "champout_status_x7pe38" },
+      },
+    });
+    expect(cured).toMatchObject({
+      status: "event",
+      event: {
+        type: "status_cure",
+        actor: { name: "マフォクシー", side: "opponent" },
+        classification: { templateId: "champout_status_cure_oyr09e" },
+      },
+    });
+    expect(fainted).toMatchObject({
+      status: "event",
+      event: {
+        type: "faint",
+        actor: { name: "ガブリアス" },
+      },
+    });
+  });
+
   it("keeps weak constrained candidates unknown and reviewable", () => {
     const result = parseBattleMessage({
       rawText: "相手の キュウの\nオーパーヒードト/",
@@ -494,6 +572,10 @@ describe("parseBattleMessage", () => {
       status: "unknown",
       reviewStatus: "unreviewed",
       classification: { method: "unknown" },
+    });
+    expect(parseBattleMessage("こおりタイプの防御が1.5倍になる。")).toMatchObject({
+      status: "unknown",
+      reviewStatus: "unreviewed",
     });
   });
 

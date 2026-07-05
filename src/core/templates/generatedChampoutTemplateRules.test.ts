@@ -13,20 +13,34 @@ describe("generated champout template rules", () => {
       license: "MIT",
       language: "jpn",
       sourceCommit: "d2885a864f041744df1de1b35f4ab3d2e52cf4db",
-      files: ["btl_attack_syn.json", "btl_std.json"],
+      configFile: "data/champout/champout-template-sources.ja.json",
+      files: ["btl_attack_syn.json", "btl_std.json", "btl_set.json"],
     });
     expect(CHAMPOUT_TEMPLATE_STATS).toMatchObject({
-      sourceFileCount: 2,
-      extractedTextCount: 117,
-      generatedRuleCount: 87,
+      sourceFileCount: 3,
+      extractedTextCount: 851,
+      generatedRuleCount: 133,
+      eventTypeDistribution: {
+        status: 14,
+        status_cure: 28,
+        faint: 2,
+        immune: 2,
+      },
     });
-    expect(CHAMPOUT_TEMPLATE_RULES.length).toBe(87);
+    expect(CHAMPOUT_TEMPLATE_RULES.length).toBe(133);
     expect(CHAMPOUT_TEMPLATE_RULES[0].source).toMatchObject({
       fileName: "btl_attack_syn.json",
       keyPath: "mSDataSet[0].OriginalText",
       labelName: "ATKMSG_M_0001_syn",
       sourceCommit: "d2885a864f041744df1de1b35f4ab3d2e52cf4db",
     });
+    expect(CHAMPOUT_TEMPLATE_STATS.perFile).toContainEqual(
+      expect.objectContaining({
+        fileName: "btl_set.json",
+        reason: "narrow live battle status, faint, and no-effect messages only",
+        generatedRuleCount: 46,
+      }),
+    );
   });
 
   it("uses stable generated rule ids for known source labels", () => {
@@ -65,14 +79,35 @@ describe("generated champout template rules", () => {
       id: "champout_fail_mr3t98",
       eventType: "fail",
     });
+    expect(
+      CHAMPOUT_TEMPLATE_RULES.find(
+        (rule) => rule.source?.labelName === "BTL_STRID_SET_YakedoGet",
+      ),
+    ).toMatchObject({
+      id: "champout_status_x7pe38",
+      eventType: "status",
+      patterns: ["{pokemon}はやけどを 負った!"],
+    });
+    expect(
+      CHAMPOUT_TEMPLATE_RULES.find(
+        (rule) => rule.source?.labelName === "BTL_STRID_SET_NoEffect",
+      ),
+    ).toMatchObject({
+      id: "champout_immune_j84h1z",
+      eventType: "immune",
+      patterns: ["{target}には効果が ないようだ..."],
+    });
   });
 
   it("does not bundle obvious non-battle UI text into active rules", () => {
     const allPatterns = CHAMPOUT_TEMPLATE_RULES.flatMap((rule) => rule.patterns).join("\n");
+    const labels = CHAMPOUT_TEMPLATE_RULES.map((rule) => rule.source?.labelName ?? "");
 
     expect(allPatterns).not.toContain("プレミアムバトルパス");
     expect(allPatterns).not.toContain("チームを編成する");
     expect(allPatterns).not.toContain("ボタン");
+    expect(allPatterns).not.toContain("こおりタイプの防御が1.5倍");
+    expect(labels.some((label) => /Already|Act$|Damage/.test(label))).toBe(false);
   });
 
   it("feeds generated rules into the parser default template set", () => {
@@ -106,10 +141,31 @@ describe("generated champout template rules", () => {
         },
       },
     });
+    expect(parseBattleMessage("マフォクシーはやけどを 負った！")).toMatchObject({
+      status: "event",
+      event: {
+        type: "status",
+        actor: { name: "マフォクシー" },
+        classification: {
+          method: "template_dictionary",
+          templateId: "champout_status_x7pe38",
+        },
+      },
+    });
+    expect(parseBattleMessage("マフォクシーには効果が ないようだ...")).toMatchObject({
+      status: "event",
+      event: {
+        type: "immune",
+        target: { name: "マフォクシー" },
+      },
+    });
   });
 
   it("leaves unrelated UI text as unknown", () => {
     expect(parseBattleMessage("プレミアムバトルパス購入")).toMatchObject({
+      status: "unknown",
+    });
+    expect(parseBattleMessage("こおりタイプの防御が1.5倍になる。")).toMatchObject({
       status: "unknown",
     });
   });

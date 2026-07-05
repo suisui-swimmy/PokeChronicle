@@ -1369,6 +1369,52 @@ function isConstrainedMoveSurface(surfaceText: string) {
   );
 }
 
+function includesAny(value: string, needles: readonly string[]) {
+  return needles.some((needle) => value.includes(needle));
+}
+
+function isConstrainedFaintSurface(surfaceText: string) {
+  return includesAny(surfaceText, ["倒れ", "たおれ", "ひんし"]);
+}
+
+function isConstrainedStatusCureSurface(surfaceText: string) {
+  return includesAny(surfaceText, [
+    "治った",
+    "なおった",
+    "回復した",
+    "なくなった",
+    "溶けた",
+    "覚ました",
+    "とれた",
+    "解けた",
+  ]);
+}
+
+function isConstrainedStatusSurface(surfaceText: string) {
+  return includesAny(surfaceText, [
+    "状態",
+    "まひ",
+    "麻痺",
+    "やけど",
+    "毒",
+    "どく",
+    "眠",
+    "ねむ",
+    "こおり",
+    "凍",
+    "混乱",
+    "メロメロ",
+  ]);
+}
+
+function isConstrainedImmuneSurface(surfaceText: string) {
+  return (
+    surfaceText.includes("効果がない") ||
+    surfaceText.includes("効果はない") ||
+    (surfaceText.includes("効果") && surfaceText.includes("ない"))
+  );
+}
+
 function selectConstrainedTemplateSurfaces(
   surfaces: readonly MatchSurface[],
   templateRules: readonly BattleTemplateRule[],
@@ -1395,6 +1441,25 @@ function selectConstrainedTemplateSurfaces(
         surface.matchText.includes("引っこめ") ||
         surface.matchText.includes("ひっこめ"))
     ) {
+      return true;
+    }
+
+    if (eventTypes.has("faint") && isConstrainedFaintSurface(surface.matchText)) {
+      return true;
+    }
+
+    if (
+      eventTypes.has("status_cure") &&
+      isConstrainedStatusCureSurface(surface.matchText)
+    ) {
+      return true;
+    }
+
+    if (eventTypes.has("status") && isConstrainedStatusSurface(surface.matchText)) {
+      return true;
+    }
+
+    if (eventTypes.has("immune") && isConstrainedImmuneSurface(surface.matchText)) {
       return true;
     }
 
@@ -1459,6 +1524,10 @@ function selectConstrainedTemplateRules(
       surfaceText.includes("引っこめ") ||
       surfaceText.includes("ひっこめ"),
   );
+  const hasFaintShape = surfaceTexts.some(isConstrainedFaintSurface);
+  const hasStatusCureShape = surfaceTexts.some(isConstrainedStatusCureSurface);
+  const hasStatusShape = surfaceTexts.some(isConstrainedStatusSurface);
+  const hasImmuneShape = surfaceTexts.some(isConstrainedImmuneSurface);
 
   return templateRules.filter((rule) => {
     if (!rule.id.startsWith("champout_")) {
@@ -1475,6 +1544,22 @@ function selectConstrainedTemplateRules(
 
     if (rule.eventType === "switch_out") {
       return hasSwitchOutShape;
+    }
+
+    if (rule.eventType === "faint") {
+      return hasFaintShape;
+    }
+
+    if (rule.eventType === "status_cure") {
+      return hasStatusCureShape;
+    }
+
+    if (rule.eventType === "status") {
+      return hasStatusShape;
+    }
+
+    if (rule.eventType === "immune") {
+      return hasImmuneShape;
     }
 
     return false;

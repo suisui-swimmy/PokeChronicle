@@ -1,0 +1,75 @@
+{
+  "schemaVersion": "0.1.0",
+  "language": "jpn",
+  "maxGeneratedRules": 600,
+  "sources": [
+    {
+      "fileName": "btl_attack_syn.json",
+      "status": "enabled",
+      "reason": "standard actor move messages",
+      "labelAllowPatterns": ["^ATKMSG_"],
+      "labelDenyPatterns": ["INFO", "TUTORIAL", "HELP", "BUTTON", "SELECT"],
+      "textDenyHints": [],
+      "eventTypeRules": [
+        {
+          "eventType": "move",
+          "when": {
+            "fileName": "btl_attack_syn.json"
+          }
+        }
+      ],
+      "placeholderPolicy": {
+        "default": ["pokemon", "move", "text"]
+      }
+    },
+    {
+      "fileName": "btl_std.json",
+      "status": "enabled",
+      "reason": "standard live battle messages",
+      "labelDenyPatterns": ["INFO", "TUTORIAL", "HELP", "BUTTON", "SELECT"],
+      "textDenyHints": [],
+      "eventTypeRules": []
+    },
+    {
+      "fileName": "btl_set.json",
+      "status": "enabled",
+      "reason": "narrow live battle status, faint, and no-effect messages only",
+      "labelAllowPatterns": [
+        "^BTL_STRID_SET_(Dead|NoEffect|DokuGet|YakedoGet|MahiGet|KoriGet|NemuriGet|MeromeroGet|KonranGet|DokuCure|YakedoCure|MahiCure|KoriMelt|NemuriWake|KonranCure|MeromeroCure|UseItem_Cure(Doku|Mahi|Nemuri|Koori|Yakedo|Konran|Mero))(_E)?$"
+      ],
+      "labelDenyPatterns": ["Already", "Act$", "Damage", "TUTORIAL", "HELP", "BUTTON", "SELECT"],
+      "textDenyHints": [],
+      "eventTypeRules": [
+        {
+          "eventType": "faint",
+          "when": {
+            "labelPatterns": ["^BTL_STRID_SET_Dead(_E)?$"]
+          }
+        },
+        {
+          "eventType": "immune",
+          "when": {
+            "labelPatterns": ["^BTL_STRID_SET_NoEffect(_E)?$"]
+          }
+        },
+        {
+          "eventType": "status_cure",
+          "when": {
+            "labelPatterns": ["^BTL_STRID_SET_(DokuCure|YakedoCure|MahiCure|KoriMelt|NemuriWake|KonranCure|MeromeroCure|UseItem_Cure(Doku|Mahi|Nemuri|Koori|Yakedo|Konran|Mero))(_E)?$"]
+          }
+        },
+        {
+          "eventType": "status",
+          "when": {
+            "labelPatterns": ["^BTL_STRID_SET_(DokuGet|YakedoGet|MahiGet|KoriGet|NemuriGet|MeromeroGet|KonranGet)(_E)?$"]
+          }
+        }
+      ],
+      "placeholderPolicy": {
+        "byEventType": {
+          "immune": ["target", "text"]
+        }
+      }
+    }
+  ]
+}

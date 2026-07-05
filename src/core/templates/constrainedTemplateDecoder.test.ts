@@ -81,6 +81,34 @@ describe("decodeConstrainedTemplate", () => {
     });
   });
 
+  it("projects noisy btl_set status and faint messages onto narrow generated templates", () => {
+    const status = decodeConstrainedTemplate({
+      surfaces: [surface("マフォジシーはやけどを 負った/")],
+      dictionary: BATTLE_DICTIONARY,
+      rules: STANDARD_TEMPLATE_RULES,
+      ocrConfidence: 0.88,
+    });
+    const faint = decodeConstrainedTemplate({
+      surfaces: [surface("ガプリアスは たおれだ/")],
+      dictionary: BATTLE_DICTIONARY,
+      rules: STANDARD_TEMPLATE_RULES,
+      ocrConfidence: 0.86,
+    });
+
+    expect(status).toMatchObject({
+      accepted: true,
+      eventType: "status",
+      actor: { name: "マフォクシー" },
+      rule: { id: "champout_status_x7pe38" },
+    });
+    expect(faint).toMatchObject({
+      accepted: true,
+      eventType: "faint",
+      actor: { name: "ガブリアス" },
+      rule: { id: "champout_faint_1yphd8" },
+    });
+  });
+
   it("keeps short suffix noise as evidence without contaminating placeholders", () => {
     const result = decodeConstrainedTemplate({
       surfaces: [surface("相手の キュウコンの オームーヒードヒ/ bh、亜")],

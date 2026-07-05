@@ -11,7 +11,7 @@ videoinput capture / video / screenshot
 -> Canvas preprocessing
 -> OCR provider
 -> text normalization
--> seed rules / generated champout templates / dictionary / imported templates
+-> seed rules / generated champout templates / dictionary
 -> battle events or unknowns
 -> review timeline
 -> statistics and export
@@ -63,7 +63,7 @@ M4 keeps classification as pure browser-side TypeScript:
 
 ## M4.5 Seed Template Boundary
 
-M4.5 adds the template matcher that later champout import can feed:
+M4.5 adds the template matcher that later generated champout rules can feed:
 
 - `data/rules/event_rules.ja.json` is the version-controlled seed rule source for frequent non-move messages.
 - `src/core/templates/templateMatcher.ts` compiles seed patterns with placeholders such as `{pokemon}`, `{move}`, and bounded `{text}`.
@@ -92,15 +92,18 @@ M6 makes the review data durable without adding a runtime server:
 - Events CSV and Unknown messages CSV exports are derived from the same Battle Log document. Unknown CSV includes review notes from durable manual corrections.
 - The app saves only bounded ROI crop evidence. It never stores the full video file or an unbounded frame stream.
 
-## M7 Template Import Boundary
+## M7 Generated Champout Pack Boundary
 
-M7 includes a standard generated champout template pack plus user-selected champout-style JSON import:
+M7 includes a standard generated champout template pack:
 
+- `scripts/report-champout-files.mjs` scans `others/champout/rom-txt/jpn/btl_*.json`, summarizes candidate counts, label prefixes, placeholder patterns, event type distribution, and risk hints, and intentionally omits raw `OriginalText` dumps from committed output.
+- `data/champout/champout-template-sources.ja.json` is the hand-reviewed source configuration. It supports `enabled`, `hold`, and `disabled` source statuses; only `enabled` files are generated into the runtime pack.
 - `scripts/generate-champout-templates.mjs` is a development/build-time Node script. It verifies the local `others/champout` MIT license and source commit, reads selected Japanese battle text files, and writes `data/generated/champout-event-rules.ja.json`.
-- The generated pack is compact: it uses `OriginalText` from `btl_attack_syn.json` and `btl_std.json`, keeps only safely classified battle-event templates, and records source file, key path, label name, original text, and source commit for each generated rule. Short but high-signal templates such as `{pokemon}の{move}!` and `{pokemon}戻れ!` are allowed because the parser constrains their placeholders to dictionaries.
+- The generated pack is compact: it currently uses `OriginalText` from `btl_attack_syn.json`, `btl_std.json`, and the narrowly allow-listed status/faint/no-effect labels from `btl_set.json`. It records source file, key path, label name, original text, and source commit for each generated rule. Short but high-signal templates such as `{pokemon}の{move}!` and `{pokemon}戻れ!` are allowed because the parser constrains their placeholders to dictionaries.
 - `src/core/templates/generatedChampoutTemplateRules.ts` imports the generated JSON. Runtime code does not read from `others/champout`.
-- `src/core/templates/standardTemplateRules.ts` combines `SEED_TEMPLATE_RULES` with generated champout rules. Imported rules are appended after that standard pack for live parsing.
+- `src/core/templates/standardTemplateRules.ts` combines `SEED_TEMPLATE_RULES` with generated champout rules for live parsing.
 - Third-party source, MIT license, source commit, and notice details are recorded in `THIRD_PARTY_NOTICES.md`.
+- Additional `btl_*.json` files must be added one at a time through scan report review, config changes, regeneration, targeted parser tests, full test/build verification, and notice updates.
 
 ## Constrained Champout Decoding
 
@@ -110,20 +113,10 @@ The parser treats generated champout rules as a constrained search problem befor
 - Fixed template text is fuzzy-aligned against the OCR surface. Placeholders are not free-form except for bounded `{text}`.
 - `{pokemon}` and `{target}` resolve only through the Pokemon dictionary. `{move}` resolves only through the move dictionary. `{text}` is capped and stored as evidence for trainer names or OCR noise; it does not decide the event type.
 - Candidate acceptance uses a combined score from literal alignment, dictionary match quality, OCR confidence, and surface priority. Fuzzy dictionary matches also require clear margin and enough OCR confidence.
+- Constrained decoding is intentionally narrow. It currently admits generated champout candidates for move, switch-in, switch-out, and tightly keyword-gated status/status-cure/faint/immune surfaces only.
 - Rejected but plausible candidates are returned as `constrained-review:` evidence so the unknown bucket remains reviewable instead of silently accepting ambiguous OCR.
 - Parsed events preserve the original `rawText`; normalized and match text remain derived values.
 - The decoder is pure TypeScript and uses no Node, OpenCV, backend, cloud OCR, uploads, or runtime `others/champout` reads.
-
-M7 also keeps user-selected import for additional validation and local updates:
-
-- `src/core/templates/importedTemplates.ts` parses selected JSON text, recursively extracts Japanese strings, infers safe battle event types, and turns those candidates into `BattleTemplateRule` entries for the existing matcher.
-- `src/storage/indexedDb.ts` stores the latest imported template collection in a separate IndexedDB object store from Battle Logs.
-- The core import/export path remains available for validation and local updates; the streamlined MVP UI keeps Battle Log JSON/CSV as the primary data-management path.
-- Imported rules are combined with the standard seed + generated champout rules and passed to `parseBattleMessage()` for live OCR classification.
-- Imported rule metadata keeps source file name, key path, label name, and original text for review/export provenance.
-- Runtime code still does not read from `others/`; optional user imports must be selected in the browser.
-
-ZIP import is deferred. M7 supports selecting multiple JSON files directly.
 
 ## M8 Statistics And MVP Acceptance
 

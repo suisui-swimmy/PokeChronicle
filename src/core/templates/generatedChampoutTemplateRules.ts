@@ -12,6 +12,7 @@ interface GeneratedChampoutTemplatePack {
     license: string;
     sourceCommit: string;
     noticeFile: string;
+    configFile?: string;
     files: string[];
   };
   stats: {
@@ -22,20 +23,22 @@ interface GeneratedChampoutTemplatePack {
     skippedTextCount: number;
     duplicateRuleCount: number;
     maxGeneratedRules: number;
+    eventTypeDistribution?: Record<string, number>;
     perFile: Array<{
       fileName: string;
+      reason?: string;
       extractedTextCount: number;
       battleCandidateCount: number;
       generatedRuleCount: number;
       skippedTextCount: number;
+      eventTypeDistribution?: Record<string, number>;
     }>;
   };
   rules: BattleTemplateRule[];
 }
 
-const pack = generatedPack as GeneratedChampoutTemplatePack;
+const pack = generatedPack as unknown as GeneratedChampoutTemplatePack;
 
 export const CHAMPOUT_TEMPLATE_SOURCE = pack.source;
 export const CHAMPOUT_TEMPLATE_STATS = pack.stats;
 export const CHAMPOUT_TEMPLATE_RULES = pack.rules as readonly BattleTemplateRule[];
-
