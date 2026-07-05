@@ -1,5 +1,13 @@
 # Third-Party Notices
 
+## LINE Seed JP
+
+PokeChronicle uses LINE Seed JP as the primary UI font through Google Fonts. Font files are not bundled in this repository.
+
+- Source: `https://seed.line.me/index_jp.html`
+- Delivery: `https://fonts.google.com/specimen/LINE+Seed+JP`
+- License: SIL Open Font License 1.1
+
 ## projectpokemon/champout
 
 PokeChronicle includes a compact generated battle template rule pack derived at development/build time from selected Japanese battle text files in the local `others/champout` checkout.

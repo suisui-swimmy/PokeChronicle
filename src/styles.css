@@ -1,16 +1,23 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/geist";
 
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  --app-font-sans: "LINE Seed JP", "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", "Meiryo",
+    "Noto Sans JP", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --app-font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --app-font-size-label: 0.72rem;
+  --app-font-size-support: 0.76rem;
+  --app-font-size-body: 0.86rem;
+  --app-font-size-log: 0.9rem;
+  --app-font-size-heading: 1rem;
+  --app-font-size-emphasis: 1.25rem;
+  --app-font-size-title: 1.35rem;
   color: #fffffe;
   background: #0f0e17;
-  font-family:
-    "Geist Variable", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+  font-family: var(--app-font-sans);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -158,7 +165,7 @@ button:disabled {
   padding: 0 10px;
   color: var(--faint);
   border-color: rgb(167 169 190 / 0.38);
-  font-size: 0.78rem;
+  font-size: var(--app-font-size-support);
   font-weight: 800;
   white-space: nowrap;
 }
@@ -227,7 +234,7 @@ button:disabled {
 
 .device-select span {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--app-font-size-label);
   font-weight: 800;
 }
 
@@ -239,7 +246,7 @@ button:disabled {
   border-radius: 5px;
   color: var(--text);
   background-color: var(--panel);
-  font-size: 0.78rem;
+  font-size: var(--app-font-size-support);
   font-weight: 800;
   text-overflow: ellipsis;
 }
@@ -290,7 +297,7 @@ button:disabled {
   width: 19px;
   height: 19px;
   place-items: center;
-  font-size: 1rem;
+  font-size: var(--app-font-size-heading);
   line-height: 1;
 }
 
@@ -582,15 +589,17 @@ button:disabled {
   flex: 0 0 auto;
   gap: 7px;
   min-width: 0;
-  min-height: 38px;
+  min-height: 42px;
   min-width: 116px;
+  overflow: hidden;
   padding: 0 14px;
   border: 0;
   border-bottom: 2px solid transparent;
   color: var(--muted);
   background: transparent;
-  font-size: 0.82rem;
+  font-size: var(--app-font-size-body);
   font-weight: 900;
+  line-height: 1.1;
 }
 
 .management-tab-items [data-slot="tabs-trigger"] + [data-slot="tabs-trigger"] {
@@ -717,7 +726,7 @@ button:disabled {
   border-radius: 5px;
   background: var(--green);
   color: #000000;
-  font-size: 0.84rem;
+  font-size: var(--app-font-size-body);
   font-weight: 900;
 }
 
@@ -787,13 +796,13 @@ button:disabled {
 
 .roi-settings-header h2 {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--app-font-size-heading);
   line-height: 1.2;
 }
 
 .roi-settings-header span {
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: var(--app-font-size-support);
   font-weight: 800;
 }
 
@@ -841,7 +850,7 @@ button:disabled {
   padding: 8px;
   border-radius: 5px;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--app-font-size-label);
   font-weight: 800;
 }
 
@@ -878,13 +887,13 @@ button:disabled {
 
 .analysis-header h2 {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--app-font-size-heading);
   line-height: 1.2;
 }
 
 .analysis-header span {
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: var(--app-font-size-support);
   font-weight: 800;
 }
 
@@ -914,7 +923,7 @@ button:disabled {
   padding: 8px;
   border-radius: 5px;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--app-font-size-label);
   font-weight: 800;
 }
 
@@ -991,7 +1000,7 @@ button:disabled {
 .stats-grid dt {
   overflow: hidden;
   color: var(--muted);
-  font-size: 0.68rem;
+  font-size: var(--app-font-size-label);
   font-weight: 900;
   text-overflow: ellipsis;
   text-transform: uppercase;
@@ -1000,7 +1009,7 @@ button:disabled {
 
 .stats-grid dd {
   color: var(--text);
-  font-size: 1.25rem;
+  font-size: var(--app-font-size-emphasis);
   font-weight: 900;
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -1032,7 +1041,7 @@ button:disabled {
   border-radius: 4px;
   color: var(--muted);
   background: rgb(255 137 6 / 0.1);
-  font-size: 0.72rem;
+  font-size: var(--app-font-size-label);
   font-weight: 900;
   font-variant-numeric: tabular-nums;
 }
@@ -1059,7 +1068,7 @@ button:disabled {
   border-radius: 4px;
   color: var(--muted);
   background: var(--panel-strong);
-  font-size: 0.74rem;
+  font-size: var(--app-font-size-support);
   font-weight: 900;
 }
 
@@ -1101,7 +1110,7 @@ button:disabled {
   min-width: 0;
   padding: 8px 10px;
   color: var(--muted);
-  font-size: 0.76rem;
+  font-size: var(--app-font-size-support);
   font-weight: 900;
 }
 
@@ -1132,7 +1141,7 @@ button:disabled {
 
 .crop-preview-media span {
   color: var(--faint);
-  font-size: 0.82rem;
+  font-size: var(--app-font-size-body);
   font-weight: 800;
 }
 
@@ -1160,7 +1169,7 @@ button:disabled {
   border: 1px solid var(--border-soft);
   border-radius: 4px;
   color: var(--muted);
-  font-size: 0.74rem;
+  font-size: var(--app-font-size-label);
   font-weight: 800;
 }
 
@@ -1183,13 +1192,13 @@ button:disabled {
 
 .ocr-header h2 {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--app-font-size-heading);
   line-height: 1.2;
 }
 
 .ocr-header span {
   color: var(--muted);
-  font-size: 0.76rem;
+  font-size: var(--app-font-size-support);
   font-weight: 800;
 }
 
@@ -1225,7 +1234,7 @@ button:disabled {
   min-width: 0;
   margin: 0;
   color: var(--text);
-  font-size: 1rem;
+  font-size: var(--app-font-size-heading);
   font-weight: 900;
   line-height: 1.2;
   overflow-wrap: anywhere;
@@ -1236,7 +1245,7 @@ button:disabled {
   min-width: 0;
   margin: 0;
   color: var(--muted);
-  font-size: 0.76rem;
+  font-size: var(--app-font-size-support);
   font-weight: 850;
   line-height: 1.35;
   overflow-wrap: anywhere;
@@ -1299,7 +1308,7 @@ button:disabled {
   min-height: 58px;
   border-style: dashed;
   color: var(--faint);
-  font-size: 0.82rem;
+  font-size: var(--app-font-size-body);
   font-weight: 800;
 }
 
@@ -1321,7 +1330,7 @@ button:disabled {
   flex-wrap: wrap;
   gap: 6px;
   color: var(--faint);
-  font-size: 0.72rem;
+  font-size: var(--app-font-size-label);
   font-weight: 900;
 }
 
@@ -1335,7 +1344,7 @@ button:disabled {
 
 .ocr-log-entry p {
   color: var(--text);
-  font-size: 0.9rem;
+  font-size: var(--app-font-size-log);
   font-weight: 800;
   line-height: 1.45;
 }
@@ -1343,9 +1352,8 @@ button:disabled {
 .ocr-log-entry code {
   display: block;
   color: var(--muted);
-  font-family:
-    "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 0.76rem;
+  font-family: var(--app-font-mono);
+  font-size: var(--app-font-size-support);
   white-space: pre-wrap;
 }
 
@@ -1355,7 +1363,7 @@ button:disabled {
   gap: 6px;
   align-items: center;
   color: var(--faint);
-  font-size: 0.72rem;
+  font-size: var(--app-font-size-label);
   font-weight: 900;
 }
 
@@ -1419,7 +1427,7 @@ button:disabled {
   min-width: 0;
   padding: 8px 0;
   color: var(--text);
-  font-size: 0.95rem;
+  font-size: var(--app-font-size-log);
   font-weight: 850;
   line-height: 1.5;
   overflow-wrap: anywhere;
@@ -1440,14 +1448,14 @@ button:disabled {
 
 .panel-heading h1 {
   margin: 0;
-  font-size: 1.35rem;
+  font-size: var(--app-font-size-title);
   line-height: 1.2;
 }
 
 .panel-heading p {
   margin: 4px 0 0;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--app-font-size-label);
   font-weight: 900;
 }
 
@@ -1456,7 +1464,7 @@ button:disabled {
   border: 1px solid rgb(255 137 6 / 0.55);
   border-radius: 999px;
   color: var(--green);
-  font-size: 0.76rem;
+  font-size: var(--app-font-size-support);
   font-weight: 900;
 }
 
@@ -1475,7 +1483,7 @@ button:disabled {
   color: var(--text);
   background: var(--panel-strong);
   cursor: pointer;
-  font-size: 0.72rem;
+  font-size: var(--app-font-size-label);
   font-weight: 900;
   line-height: 1.25;
   overflow-wrap: anywhere;
@@ -1525,7 +1533,7 @@ button:disabled {
   color: var(--muted);
   background: transparent;
   cursor: pointer;
-  font-size: 0.72rem;
+  font-size: var(--app-font-size-label);
   font-weight: 900;
 }
 
@@ -1538,7 +1546,7 @@ button:disabled {
 
 .review-tab strong {
   color: var(--faint);
-  font-size: 0.68rem;
+  font-size: var(--app-font-size-label);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1581,13 +1589,13 @@ button:disabled {
 .review-section-heading h2 {
   margin: 0;
   color: var(--text);
-  font-size: 0.92rem;
+  font-size: var(--app-font-size-heading);
   line-height: 1.2;
 }
 
 .review-section-heading span {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--app-font-size-label);
   font-weight: 900;
   text-align: right;
 }
@@ -1624,7 +1632,7 @@ button:disabled {
   min-height: 54px;
   border-style: dashed;
   color: var(--faint);
-  font-size: 0.8rem;
+  font-size: var(--app-font-size-body);
   font-weight: 800;
 }
 
@@ -1655,7 +1663,7 @@ button:disabled {
   gap: 6px;
   min-width: 0;
   color: var(--faint);
-  font-size: 0.69rem;
+  font-size: var(--app-font-size-label);
   font-weight: 900;
 }
 
@@ -1664,7 +1672,7 @@ button:disabled {
 .ocr-raw-entry p {
   margin: 0;
   color: var(--text);
-  font-size: 0.86rem;
+  font-size: var(--app-font-size-body);
   font-weight: 800;
   line-height: 1.42;
   overflow-wrap: anywhere;
@@ -1673,7 +1681,7 @@ button:disabled {
 .resolved-entry h3 {
   margin: 0;
   color: var(--text);
-  font-size: 0.98rem;
+  font-size: var(--app-font-size-heading);
   font-weight: 900;
   line-height: 1.35;
   overflow-wrap: anywhere;
@@ -1686,7 +1694,7 @@ button:disabled {
   align-items: center;
   min-width: 0;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--app-font-size-label);
   font-weight: 900;
 }
 
@@ -1715,9 +1723,8 @@ button:disabled {
   display: block;
   min-width: 0;
   color: var(--muted);
-  font-family:
-    "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 0.72rem;
+  font-family: var(--app-font-mono);
+  font-size: var(--app-font-size-label);
   line-height: 1.35;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
@@ -1728,7 +1735,7 @@ button:disabled {
   gap: 5px;
   min-width: 0;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--app-font-size-label);
   font-weight: 900;
 }
 
@@ -1740,12 +1747,12 @@ button:disabled {
   border-radius: 4px;
   color: var(--text);
   background: var(--panel-strong);
-  font-size: 0.8rem;
+  font-size: var(--app-font-size-body);
 }
 
 .candidate-details {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--app-font-size-label);
   font-weight: 900;
 }
 
@@ -1760,7 +1767,7 @@ button:disabled {
   color: var(--green);
   background: rgb(255 137 6 / 0.12);
   cursor: pointer;
-  font-size: 0.78rem;
+  font-size: var(--app-font-size-support);
   font-weight: 900;
 }
 
@@ -1784,7 +1791,7 @@ button:disabled {
   border-radius: 5px;
   background: rgb(255 255 255 / 0.025);
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: var(--app-font-size-body);
   line-height: 1.45;
 }
 
@@ -2007,8 +2014,8 @@ button:disabled {
 }
 
 @theme inline {
-  --font-heading: var(--font-sans);
-  --font-sans: 'Geist Variable', sans-serif;
+  --font-heading: var(--app-font-sans);
+  --font-sans: var(--app-font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
