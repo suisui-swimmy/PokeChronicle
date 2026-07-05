@@ -547,22 +547,12 @@ button:disabled {
 .management-tab-group {
   display: flex;
   align-items: center;
-  gap: 10px;
   min-width: 0;
 }
 
 .management-tab-group + .management-tab-group {
   padding-left: 22px;
   border-left: 1px solid var(--border-soft);
-}
-
-.management-tab-group-label {
-  flex: 0 0 auto;
-  color: var(--muted);
-  font-size: 0.76rem;
-  font-weight: 900;
-  line-height: 1;
-  white-space: nowrap;
 }
 
 .management-tab-items {
@@ -638,16 +628,6 @@ button:disabled {
 .roi-detail-panel {
   display: grid;
   gap: 10px;
-  border-top: 1px solid var(--border-soft);
-  padding-top: 10px;
-}
-
-.roi-detail-panel summary {
-  width: fit-content;
-  color: var(--green);
-  cursor: pointer;
-  font-size: 0.84rem;
-  font-weight: 900;
 }
 
 .capture-video,
@@ -804,17 +784,32 @@ button:disabled {
 
 .roi-setting-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  align-items: stretch;
   justify-content: flex-end;
   gap: 8px;
   min-width: 0;
 }
 
+.roi-action-button {
+  min-height: 42px;
+}
+
+.action-icon {
+  width: 15px;
+  height: 15px;
+  color: currentColor;
+}
+
 .roi-visibility-toggle {
-  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
   padding: 0 10px;
   border: 1px solid var(--border-soft);
   background: var(--panel-strong);
+  white-space: nowrap;
 }
 
 .roi-number-grid {
@@ -880,7 +875,8 @@ button:disabled {
 
 .analysis-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  align-items: stretch;
   justify-content: flex-end;
   gap: 8px;
 }
@@ -889,7 +885,7 @@ button:disabled {
   display: grid;
   grid-template-columns: 82px minmax(180px, 1fr) 96px 82px 88px;
   gap: 10px;
-  align-items: end;
+  align-items: stretch;
   min-width: 0;
 }
 
@@ -899,11 +895,19 @@ button:disabled {
   display: grid;
   gap: 5px;
   min-width: 0;
+  min-height: 74px;
   padding: 8px;
   border-radius: 5px;
   color: var(--muted);
   font-size: 0.72rem;
   font-weight: 800;
+}
+
+.roi-visibility-toggle.roi-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
 }
 
 .compact-select,
@@ -1225,10 +1229,17 @@ button:disabled {
 
 .tool-panel-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  align-items: stretch;
   justify-content: flex-end;
   gap: 8px;
   min-width: 0;
+}
+
+.tool-panel-header > .tool-panel-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
 }
 
 .ocr-meter {

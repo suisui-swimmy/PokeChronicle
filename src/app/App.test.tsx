@@ -252,8 +252,8 @@ describe("App", () => {
     const managementPanel = screen.getByLabelText("analysis and data management");
     expect(managementPanel).toBeInTheDocument();
     expect(managementPanel.tagName).toBe("SECTION");
-    expect(within(managementPanel).getByText("調整")).toBeInTheDocument();
-    expect(within(managementPanel).getByText("確認・出力")).toBeInTheDocument();
+    expect(within(managementPanel).queryByText("調整")).not.toBeInTheDocument();
+    expect(within(managementPanel).queryByText("確認・出力")).not.toBeInTheDocument();
     expect(screen.queryByText("解析・データ管理")).not.toBeInTheDocument();
 
     expect(screen.getByRole("tab", { name: "ROI" })).toHaveAttribute("aria-selected", "false");
@@ -278,9 +278,11 @@ describe("App", () => {
     expect(screen.getByRole("heading", { name: "ROI設定" })).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "ROI表示" })).toBeChecked();
     expect(screen.getByText(/x=0.3300 y=0.7200 w=0.3000 h=0.1400/)).toBeInTheDocument();
-    const roiDetailPanel = screen.getByText("詳細調整").closest("details");
-    expect(roiDetailPanel).not.toHaveAttribute("open");
-    expect(screen.getByText("詳細調整")).toBeInTheDocument();
+    expect(screen.queryByText("詳細調整")).not.toBeInTheDocument();
+    expect(screen.getByRole("spinbutton", { name: "ROI X" })).toHaveValue(0.33);
+    expect(screen.getByRole("spinbutton", { name: "ROI Y" })).toHaveValue(0.72);
+    expect(screen.getByRole("spinbutton", { name: "ROI W" })).toHaveValue(0.3);
+    expect(screen.getByRole("spinbutton", { name: "ROI H" })).toHaveValue(0.14);
     expect(screen.queryByRole("heading", { name: "統計サマリー" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "ROI" }));
@@ -289,9 +291,6 @@ describe("App", () => {
 
     await user.click(screen.getByRole("tab", { name: "ROI" }));
 
-    await user.click(screen.getByText("詳細調整"));
-    const reopenedRoiDetailPanel = screen.getByText("詳細調整").closest("details");
-    expect(reopenedRoiDetailPanel).toHaveAttribute("open");
     expect(screen.getByRole("spinbutton", { name: "ROI X" })).toHaveValue(0.33);
     expect(screen.getByRole("spinbutton", { name: "ROI Y" })).toHaveValue(0.72);
     expect(screen.getByRole("spinbutton", { name: "ROI W" })).toHaveValue(0.3);
@@ -788,7 +787,7 @@ describe("App", () => {
 
     expect(screen.getByLabelText("analysis and data management")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "ROI" }));
-    await user.click(screen.getByText("詳細調整"));
+    expect(screen.queryByText("詳細調整")).not.toBeInTheDocument();
     fireEvent.change(screen.getByRole("spinbutton", { name: "ROI X" }), {
       target: { value: "0.1" },
     });

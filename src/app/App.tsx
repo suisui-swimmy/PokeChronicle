@@ -10,7 +10,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { Activity, BarChart3, Crop, Database, List, ScanText } from "lucide-react";
+import { Activity, BarChart3, Crop, Database, List, RotateCcw, ScanText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import fullscreenExitIconUrl from "../assets/icons/fullscreen-exit.svg";
@@ -3116,9 +3116,6 @@ export function App() {
                 <TabsList className="management-tab-list" variant="line" aria-label="analysis tabs">
                   {MANAGEMENT_TAB_GROUPS.map((group) => (
                     <div key={group.label} className="management-tab-group" role="presentation">
-                      <span className="management-tab-group-label" aria-hidden="true">
-                        {group.label}
-                      </span>
                       <div className="management-tab-items" role="presentation">
                         {group.tabs.map(({ id, label, Icon }) => (
                           <TabsTrigger
@@ -3148,7 +3145,16 @@ export function App() {
                 </span>
               </div>
               <div className="roi-setting-actions tool-panel-actions">
-                <label className="toggle-control roi-visibility-toggle">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="icon-button icon-button--compact roi-action-button"
+                  onClick={handleResetRoi}
+                >
+                  <RotateCcw className="action-icon" aria-hidden="true" />
+                  <span>ROIリセット</span>
+                </Button>
+                <label className="toggle-control roi-visibility-toggle roi-action-button">
                   <input
                     type="checkbox"
                     checked={isRoiVisible}
@@ -3156,71 +3162,61 @@ export function App() {
                   />
                   <span>ROI表示</span>
                 </label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="icon-button icon-button--compact"
-                  onClick={handleResetRoi}
-                >
-                  <span aria-hidden="true">↺</span>
-                  <span>ROIリセット</span>
-                </Button>
               </div>
             </div>
 
-            <details className="roi-detail-panel">
-              <summary>詳細調整</summary>
-            <div className="roi-number-grid" aria-label="ROI numeric settings">
-              <label className="roi-number-control">
-                <span>X</span>
-                <input
-                  aria-label="ROI X"
-                  type="number"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={roi.x.toFixed(4)}
-                  onChange={(event) => handleRoiNumberChange("x", event.target.value)}
-                />
-              </label>
-              <label className="roi-number-control">
-                <span>Y</span>
-                <input
-                  aria-label="ROI Y"
-                  type="number"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={roi.y.toFixed(4)}
-                  onChange={(event) => handleRoiNumberChange("y", event.target.value)}
-                />
-              </label>
-              <label className="roi-number-control">
-                <span>W</span>
-                <input
-                  aria-label="ROI W"
-                  type="number"
-                  min={MIN_ROI_SIZE}
-                  max={1}
-                  step={0.01}
-                  value={roi.w.toFixed(4)}
-                  onChange={(event) => handleRoiNumberChange("w", event.target.value)}
-                />
-              </label>
-              <label className="roi-number-control">
-                <span>H</span>
-                <input
-                  aria-label="ROI H"
-                  type="number"
-                  min={MIN_ROI_SIZE}
-                  max={1}
-                  step={0.01}
-                  value={roi.h.toFixed(4)}
-                  onChange={(event) => handleRoiNumberChange("h", event.target.value)}
-                />
-              </label>
+            <div className="roi-detail-panel">
+              <div className="roi-number-grid" aria-label="ROI numeric settings">
+                <label className="roi-number-control">
+                  <span>X</span>
+                  <input
+                    aria-label="ROI X"
+                    type="number"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={roi.x.toFixed(4)}
+                    onChange={(event) => handleRoiNumberChange("x", event.target.value)}
+                  />
+                </label>
+                <label className="roi-number-control">
+                  <span>Y</span>
+                  <input
+                    aria-label="ROI Y"
+                    type="number"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={roi.y.toFixed(4)}
+                    onChange={(event) => handleRoiNumberChange("y", event.target.value)}
+                  />
+                </label>
+                <label className="roi-number-control">
+                  <span>W</span>
+                  <input
+                    aria-label="ROI W"
+                    type="number"
+                    min={MIN_ROI_SIZE}
+                    max={1}
+                    step={0.01}
+                    value={roi.w.toFixed(4)}
+                    onChange={(event) => handleRoiNumberChange("w", event.target.value)}
+                  />
+                </label>
+                <label className="roi-number-control">
+                  <span>H</span>
+                  <input
+                    aria-label="ROI H"
+                    type="number"
+                    min={MIN_ROI_SIZE}
+                    max={1}
+                    step={0.01}
+                    value={roi.h.toFixed(4)}
+                    onChange={(event) => handleRoiNumberChange("h", event.target.value)}
+                  />
+                </label>
+              </div>
             </div>
-            </details>
           </section>
             </TabsContent>
 
