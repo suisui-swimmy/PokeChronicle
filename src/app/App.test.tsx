@@ -418,7 +418,7 @@ describe("App", () => {
     expect(await screen.findByRole("combobox", { name: "映像デバイス" })).toHaveValue(
       "video-hidden",
     );
-    expect(getBadgeForText("権限待ち")).toHaveClass("input-badge--warn");
+    expect(getBadgeForText("権限待ち")).toHaveClass("input-badge--danger");
   });
 
   it("shows disconnected when no video inputs are available", async () => {

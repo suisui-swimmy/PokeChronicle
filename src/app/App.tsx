@@ -455,7 +455,7 @@ function getInputBadgeState({
         ? !selectedVideoDevice.hasDeviceLabel
         : videoDevices.every((device) => !device.hasDeviceLabel)
     ) {
-      return { label: "権限待ち", tone: "warn" };
+      return { label: "権限待ち", tone: "danger" };
     }
   }
 
