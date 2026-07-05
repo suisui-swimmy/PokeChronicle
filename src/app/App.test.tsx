@@ -35,10 +35,12 @@ const enumerateDevices = vi.fn();
 const getUserMedia = vi.fn();
 const requestFullscreen = vi.fn();
 const exitFullscreen = vi.fn();
+const HEADER_MEDIA_SETTINGS_STORAGE_KEY = "pokechronicle:header-media-settings:v1";
 
 describe("App", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
     Object.defineProperty(document, "fullscreenElement", {
       configurable: true,
       value: null,
@@ -377,16 +379,28 @@ describe("App", () => {
 
     expect(screen.getByRole("slider", { name: "音量 40%" })).toHaveValue("0.4");
     expect(screen.getByRole("button", { name: "音量ミュート" })).toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem(HEADER_MEDIA_SETTINGS_STORAGE_KEY) ?? "{}")).toMatchObject({
+      audioVolume: 0.4,
+      isAudioMuted: false,
+    });
 
     await user.click(volumeButton);
 
     expect(screen.getByRole("button", { name: "音量ミュート解除" })).toBeInTheDocument();
     expect(screen.getByRole("slider", { name: "音量 0%" })).toHaveValue("0.4");
+    expect(JSON.parse(window.localStorage.getItem(HEADER_MEDIA_SETTINGS_STORAGE_KEY) ?? "{}")).toMatchObject({
+      audioVolume: 0.4,
+      isAudioMuted: true,
+    });
 
     await user.click(screen.getByRole("button", { name: "音量ミュート解除" }));
 
     expect(screen.getByRole("button", { name: "音量ミュート" })).toBeInTheDocument();
     expect(screen.getByRole("slider", { name: "音量 40%" })).toHaveValue("0.4");
+    expect(JSON.parse(window.localStorage.getItem(HEADER_MEDIA_SETTINGS_STORAGE_KEY) ?? "{}")).toMatchObject({
+      audioVolume: 0.4,
+      isAudioMuted: false,
+    });
   });
 
   it("switches management review tabs without rendering every log category at once", async () => {
@@ -467,6 +481,10 @@ describe("App", () => {
         within(screen.getByRole("tabpanel", { name: /System/ })).getByText(/入力を開始しました/),
       ).toBeInTheDocument();
     });
+    expect(JSON.parse(window.localStorage.getItem(HEADER_MEDIA_SETTINGS_STORAGE_KEY) ?? "{}")).toMatchObject({
+      videoDeviceId: "video-obs",
+      audioDeviceId: "none",
+    });
   });
 
   it("starts selected audio input automatically through a separate audio stream", async () => {
@@ -506,6 +524,60 @@ describe("App", () => {
         ),
       ).toBeInTheDocument();
     });
+    expect(JSON.parse(window.localStorage.getItem(HEADER_MEDIA_SETTINGS_STORAGE_KEY) ?? "{}")).toMatchObject({
+      videoDeviceId: "video-usb",
+      audioDeviceId: "audio-usb",
+    });
+  });
+
+  it("restores saved header media settings and starts that device setup on load", async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem(
+      HEADER_MEDIA_SETTINGS_STORAGE_KEY,
+      JSON.stringify({
+        videoDeviceId: "video-obs",
+        audioDeviceId: "audio-usb",
+        audioVolume: 0.35,
+        isAudioMuted: false,
+      }),
+    );
+
+    render(<App />);
+
+    expect(await screen.findByRole("combobox", { name: "映像デバイス" })).toHaveValue(
+      "video-obs",
+    );
+    expect(screen.getByRole("combobox", { name: "音声デバイス" })).toHaveValue("audio-usb");
+    expect(screen.getByRole("slider", { name: "音量 35%" })).toHaveValue("0.35");
+
+    await waitFor(() => {
+      expect(getUserMedia).toHaveBeenNthCalledWith(1, {
+        audio: false,
+        video: {
+          deviceId: { exact: "video-obs" },
+          width: { exact: 1920 },
+          height: { exact: 1080 },
+        },
+      });
+      expect(getUserMedia).toHaveBeenNthCalledWith(2, {
+        video: false,
+        audio: {
+          deviceId: { exact: "audio-usb" },
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        },
+      });
+    });
+    expect(await screen.findByText("入力(16:9)")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "ログ" }));
+    await user.click(screen.getByRole("tab", { name: /System/ }));
+    expect(
+      within(screen.getByRole("tabpanel", { name: /System/ })).getByText(
+        "保存済みの入力構成で自動開始しました。",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("configures ROI from analysis and data management", async () => {

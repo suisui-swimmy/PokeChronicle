@@ -96,6 +96,7 @@ const MAX_RESOLVED_LOG_PANEL_WIDTH = 520;
 const MIN_PREVIEW_PANEL_WIDTH = 360;
 const WORKSPACE_RESIZER_WIDTH = 12;
 const DEFAULT_AUDIO_VOLUME = 1;
+const HEADER_MEDIA_SETTINGS_STORAGE_KEY = "pokechronicle:header-media-settings:v1";
 const RESOLVED_LOG_RESIZE_STEP = 24;
 const MAX_PENDING_OCR_JOBS = 1;
 const OCR_JOB_TIMEOUT_MS = 60_000;
@@ -141,6 +142,13 @@ type InputDevice = {
   deviceId: string;
   kind: "videoinput" | "audioinput";
   label: string;
+};
+
+type HeaderMediaSettings = {
+  videoDeviceId: string;
+  audioDeviceId: string;
+  audioVolume: number;
+  isAudioMuted: boolean;
 };
 
 type DragMode =
@@ -252,6 +260,55 @@ const REVIEW_TABS: Array<{ id: ReviewTab; label: string }> = [
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function normalizeHeaderMediaSettings(value: unknown): HeaderMediaSettings | null {
+  if (!isObjectRecord(value)) {
+    return null;
+  }
+
+  const rawAudioVolume = Number(value.audioVolume);
+  const audioVolume = Number.isFinite(rawAudioVolume)
+    ? clamp(rawAudioVolume, 0, 1)
+    : DEFAULT_AUDIO_VOLUME;
+  const isAudioMuted =
+    typeof value.isAudioMuted === "boolean" ? value.isAudioMuted : audioVolume === 0;
+
+  return {
+    videoDeviceId: typeof value.videoDeviceId === "string" ? value.videoDeviceId : "",
+    audioDeviceId:
+      typeof value.audioDeviceId === "string" && value.audioDeviceId.length > 0
+        ? value.audioDeviceId
+        : NO_AUDIO_DEVICE_ID,
+    audioVolume,
+    isAudioMuted,
+  };
+}
+
+function loadStoredHeaderMediaSettings(): HeaderMediaSettings | null {
+  try {
+    const rawSettings = window.localStorage.getItem(HEADER_MEDIA_SETTINGS_STORAGE_KEY);
+
+    if (!rawSettings) {
+      return null;
+    }
+
+    return normalizeHeaderMediaSettings(JSON.parse(rawSettings));
+  } catch {
+    return null;
+  }
+}
+
+function saveStoredHeaderMediaSettings(settings: HeaderMediaSettings) {
+  try {
+    window.localStorage.setItem(HEADER_MEDIA_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+  } catch {
+    // localStorage can be unavailable in private browsing or when storage is disabled.
+  }
 }
 
 function roundRoiValue(value: number) {
@@ -906,6 +963,9 @@ function captureRoiFrame(
 }
 
 export function App() {
+  const [initialHeaderMediaSettings] = useState<HeaderMediaSettings | null>(() =>
+    loadStoredHeaderMediaSettings(),
+  );
   const captureShellRef = useRef<HTMLElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const imagePreviewRef = useRef<HTMLImageElement | null>(null);
@@ -929,6 +989,13 @@ export function App() {
   const recentAcceptedEventRecordsRef = useRef<TimelineAcceptedEventRecord[]>([]);
   const sessionRosterDictionaryRef = useRef<DictionaryEntry[]>([]);
   const observedMoveDictionaryRef = useRef<DictionaryEntry[]>([]);
+  const latestHeaderMediaSettingsRef = useRef<HeaderMediaSettings>({
+    videoDeviceId: initialHeaderMediaSettings?.videoDeviceId ?? "",
+    audioDeviceId: initialHeaderMediaSettings?.audioDeviceId ?? NO_AUDIO_DEVICE_ID,
+    audioVolume: initialHeaderMediaSettings?.audioVolume ?? DEFAULT_AUDIO_VOLUME,
+    isAudioMuted: initialHeaderMediaSettings?.isAudioMuted ?? false,
+  });
+  const hasAttemptedSavedMediaAutoStartRef = useRef(false);
   const lastAcceptedEventIdRef = useRef<string | null>(null);
   const frameIndexRef = useRef(0);
   const ocrJobCounterRef = useRef(0);
@@ -942,8 +1009,12 @@ export function App() {
   const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
   const [videoDevices, setVideoDevices] = useState<InputDevice[]>([]);
   const [audioDevices, setAudioDevices] = useState<InputDevice[]>([]);
-  const [selectedVideoDeviceId, setSelectedVideoDeviceId] = useState("");
-  const [selectedAudioDeviceId, setSelectedAudioDeviceId] = useState(NO_AUDIO_DEVICE_ID);
+  const [selectedVideoDeviceId, setSelectedVideoDeviceId] = useState(
+    () => initialHeaderMediaSettings?.videoDeviceId ?? "",
+  );
+  const [selectedAudioDeviceId, setSelectedAudioDeviceId] = useState(
+    () => initialHeaderMediaSettings?.audioDeviceId ?? NO_AUDIO_DEVICE_ID,
+  );
   const [statusLabel, setStatusLabel] = useState("待機中");
   const [metadata, setMetadata] = useState<MediaMetadata>({
     width: null,
@@ -951,8 +1022,12 @@ export function App() {
     frameRate: null,
   });
   const [audioReady, setAudioReady] = useState(false);
-  const [audioVolume, setAudioVolume] = useState(DEFAULT_AUDIO_VOLUME);
-  const [isAudioMuted, setIsAudioMuted] = useState(false);
+  const [audioVolume, setAudioVolume] = useState(
+    () => initialHeaderMediaSettings?.audioVolume ?? DEFAULT_AUDIO_VOLUME,
+  );
+  const [isAudioMuted, setIsAudioMuted] = useState(
+    () => initialHeaderMediaSettings?.isAudioMuted ?? false,
+  );
   const [isVolumePanelOpen, setIsVolumePanelOpen] = useState(false);
   const [roi, setRoi] = useState<NormalizedRoi>(DEFAULT_ROI);
   const [isRoiVisible, setIsRoiVisible] = useState(true);
@@ -990,6 +1065,25 @@ export function App() {
 
   const addLog = useCallback((message: string, level: LogLevel = "info") => {
     setLogs((currentLogs) => [createLog(message, level), ...currentLogs].slice(0, 12));
+  }, []);
+
+  useEffect(() => {
+    latestHeaderMediaSettingsRef.current = {
+      videoDeviceId: selectedVideoDeviceId,
+      audioDeviceId: selectedAudioDeviceId,
+      audioVolume,
+      isAudioMuted,
+    };
+  }, [audioVolume, isAudioMuted, selectedAudioDeviceId, selectedVideoDeviceId]);
+
+  const persistHeaderMediaSettings = useCallback((settings: Partial<HeaderMediaSettings>) => {
+    const nextSettings = {
+      ...latestHeaderMediaSettingsRef.current,
+      ...settings,
+    };
+
+    latestHeaderMediaSettingsRef.current = nextSettings;
+    saveStoredHeaderMediaSettings(nextSettings);
   }, []);
 
   const rememberBattleEventDictionaries = useCallback((event: BattleEvent) => {
@@ -1791,6 +1885,10 @@ export function App() {
         }
 
         await refreshDevices({ silent: true });
+        persistHeaderMediaSettings({
+          videoDeviceId: nextVideoDeviceId,
+          audioDeviceId: nextAudioDeviceId,
+        });
         addLog(`入力を開始しました: ${selectedVideoLabel} / ${selectedAudioLabel}`);
         return true;
       } catch (error) {
@@ -1806,6 +1904,7 @@ export function App() {
     [
       addLog,
       audioDevices,
+      persistHeaderMediaSettings,
       refreshDevices,
       requestSelectedAudioStream,
       resetMedia,
@@ -1817,6 +1916,49 @@ export function App() {
       warmAudioOutput,
     ],
   );
+
+  useEffect(() => {
+    if (
+      hasAttemptedSavedMediaAutoStartRef.current ||
+      !initialHeaderMediaSettings?.videoDeviceId ||
+      videoDevices.length === 0
+    ) {
+      return;
+    }
+
+    hasAttemptedSavedMediaAutoStartRef.current = true;
+
+    if (mediaModeRef.current !== "idle") {
+      return;
+    }
+
+    const savedVideoDeviceId = initialHeaderMediaSettings.videoDeviceId;
+    const hasSavedVideoDevice = videoDevices.some(
+      (device) => device.deviceId === savedVideoDeviceId,
+    );
+
+    if (!hasSavedVideoDevice) {
+      addLog("保存済みの映像デバイスが見つかりません。現在の一覧から選択してください。", "warn");
+      return;
+    }
+
+    const savedAudioDeviceId = initialHeaderMediaSettings.audioDeviceId || NO_AUDIO_DEVICE_ID;
+    const nextAudioDeviceId =
+      savedAudioDeviceId === NO_AUDIO_DEVICE_ID ||
+      audioDevices.some((device) => device.deviceId === savedAudioDeviceId)
+        ? savedAudioDeviceId
+        : NO_AUDIO_DEVICE_ID;
+
+    if (savedAudioDeviceId !== nextAudioDeviceId) {
+      addLog("保存済みの音声デバイスが見つからないため、音声なしで自動開始します。", "warn");
+    }
+
+    void startCapture(savedVideoDeviceId, nextAudioDeviceId).then((started) => {
+      if (started) {
+        addLog("保存済みの入力構成で自動開始しました。");
+      }
+    });
+  }, [addLog, audioDevices, initialHeaderMediaSettings, startCapture, videoDevices]);
 
   const handleVideoDeviceChange = useCallback(
     (event: ChangeEvent<HTMLSelectElement>) => {
@@ -2058,23 +2200,38 @@ export function App() {
 
   const handleToggleAudioMuted = useCallback(() => {
     if (isAudioMuted || audioVolume === 0) {
+      const nextAudioVolume = audioVolume === 0 ? DEFAULT_AUDIO_VOLUME : audioVolume;
+
       if (audioVolume === 0) {
-        setAudioVolume(DEFAULT_AUDIO_VOLUME);
+        setAudioVolume(nextAudioVolume);
       }
 
       setIsAudioMuted(false);
+      persistHeaderMediaSettings({
+        audioVolume: nextAudioVolume,
+        isAudioMuted: false,
+      });
       return;
     }
 
     setIsAudioMuted(true);
-  }, [audioVolume, isAudioMuted]);
+    persistHeaderMediaSettings({ isAudioMuted: true });
+  }, [audioVolume, isAudioMuted, persistHeaderMediaSettings]);
 
-  const handleAudioVolumeChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    const nextVolume = clamp(Number(event.target.value), 0, 1);
+  const handleAudioVolumeChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const nextVolume = clamp(Number(event.target.value), 0, 1);
+      const nextIsAudioMuted = nextVolume === 0;
 
-    setAudioVolume(nextVolume);
-    setIsAudioMuted(nextVolume === 0);
-  }, []);
+      setAudioVolume(nextVolume);
+      setIsAudioMuted(nextIsAudioMuted);
+      persistHeaderMediaSettings({
+        audioVolume: nextVolume,
+        isAudioMuted: nextIsAudioMuted,
+      });
+    },
+    [persistHeaderMediaSettings],
+  );
 
   const handleResetRoi = useCallback(() => {
     setRoi(DEFAULT_ROI);
