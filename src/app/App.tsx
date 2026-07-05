@@ -10,6 +10,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { Activity, BarChart3, Crop, Database, List, ScanText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import fullscreenExitIconUrl from "../assets/icons/fullscreen-exit.svg";
@@ -39,6 +40,7 @@ import {
 } from "../core/events/timeline";
 import { renderBattleEventCanonicalText } from "../core/events/canonicalText";
 import type { DictionaryEntry } from "../core/dictionary/types";
+import { summarizeBattleStats } from "../core/stats/battleStats";
 import {
   createMessageLineCropVariants,
   preprocessMessageImageDataWithMetrics,
@@ -271,6 +273,32 @@ const REVIEW_TABS: Array<{ id: ReviewTab; label: string }> = [
   { id: "unknown", label: "Unknown" },
   { id: "ocr", label: "OCR Raw" },
   { id: "system", label: "System" },
+];
+
+const MANAGEMENT_TAB_GROUPS: Array<{
+  label: string;
+  tabs: Array<{
+    id: ManagementTab;
+    label: string;
+    Icon: typeof Crop;
+  }>;
+}> = [
+  {
+    label: "調整",
+    tabs: [
+      { id: "roi", label: "ROI", Icon: Crop },
+      { id: "sampler", label: "サンプラー", Icon: Activity },
+      { id: "ocr", label: "OCR", Icon: ScanText },
+    ],
+  },
+  {
+    label: "確認・出力",
+    tabs: [
+      { id: "stats", label: "統計", Icon: BarChart3 },
+      { id: "data", label: "データ", Icon: Database },
+      { id: "logs", label: "ログ", Icon: List },
+    ],
+  },
 ];
 
 function clamp(value: number, min: number, max: number) {
@@ -2446,6 +2474,10 @@ export function App() {
     () => groupOcrLogs(ocrLogs, OCR_RAW_GROUP_LIMIT),
     [ocrLogs],
   );
+  const battleStats = useMemo(
+    () => summarizeBattleStats(battleEvents, unknownEvents),
+    [battleEvents, unknownEvents],
+  );
   const captureMainStyle = useMemo(
     () =>
       resolvedLogPanelWidth === null
@@ -3080,48 +3112,34 @@ export function App() {
 
           <section className="management-panel" aria-label="analysis and data management">
             <Tabs value={activeManagementTab ?? "closed"} className="management-tabs">
-              <TabsList className="management-tab-list" variant="line" aria-label="analysis tabs">
-                <TabsTrigger
-                  value="roi"
-                  onClick={(event) => handleManagementTabClick(event, "roi")}
-                >
-                  ROI
-                </TabsTrigger>
-                <TabsTrigger
-                  value="sampler"
-                  onClick={(event) => handleManagementTabClick(event, "sampler")}
-                >
-                  サンプラー
-                </TabsTrigger>
-                <TabsTrigger
-                  value="ocr"
-                  onClick={(event) => handleManagementTabClick(event, "ocr")}
-                >
-                  OCR
-                </TabsTrigger>
-                <TabsTrigger
-                  value="stats"
-                  onClick={(event) => handleManagementTabClick(event, "stats")}
-                >
-                  統計
-                </TabsTrigger>
-                <TabsTrigger
-                  value="data"
-                  onClick={(event) => handleManagementTabClick(event, "data")}
-                >
-                  データ
-                </TabsTrigger>
-                <TabsTrigger
-                  value="logs"
-                  onClick={(event) => handleManagementTabClick(event, "logs")}
-                >
-                  ログ
-                </TabsTrigger>
-              </TabsList>
+              <div className="management-tabbar">
+                <TabsList className="management-tab-list" variant="line" aria-label="analysis tabs">
+                  {MANAGEMENT_TAB_GROUPS.map((group) => (
+                    <div key={group.label} className="management-tab-group" role="presentation">
+                      <span className="management-tab-group-label" aria-hidden="true">
+                        {group.label}
+                      </span>
+                      <div className="management-tab-items" role="presentation">
+                        {group.tabs.map(({ id, label, Icon }) => (
+                          <TabsTrigger
+                            key={id}
+                            value={id}
+                            className="management-tab-trigger"
+                            onClick={(event) => handleManagementTabClick(event, id)}
+                          >
+                            <Icon className="management-tab-icon" aria-hidden="true" />
+                            <span>{label}</span>
+                          </TabsTrigger>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </TabsList>
+              </div>
 
             <TabsContent value="roi" className="management-tab-panel">
-          <section className="roi-settings-panel" aria-label="ROI settings">
-            <div className="roi-settings-header">
+          <section className="roi-settings-panel tool-panel" aria-label="ROI settings">
+            <div className="roi-settings-header tool-panel-header">
               <div>
                 <h2>ROI設定</h2>
                 <span>
@@ -3129,7 +3147,7 @@ export function App() {
                   {roi.h.toFixed(4)}
                 </span>
               </div>
-              <div className="roi-setting-actions">
+              <div className="roi-setting-actions tool-panel-actions">
                 <label className="toggle-control roi-visibility-toggle">
                   <input
                     type="checkbox"
@@ -3207,8 +3225,8 @@ export function App() {
             </TabsContent>
 
             <TabsContent value="sampler" className="management-tab-panel">
-          <section className="analysis-panel" aria-label="frame sampling and preprocessing">
-            <div className="analysis-header">
+          <section className="analysis-panel tool-panel" aria-label="frame sampling and preprocessing">
+            <div className="analysis-header tool-panel-header">
               <div>
                 <h2>フレームサンプラー</h2>
                 <span>
@@ -3216,7 +3234,7 @@ export function App() {
                   {MAX_FRAME_BUFFER}
                 </span>
               </div>
-              <div className="analysis-actions">
+              <div className="analysis-actions tool-panel-actions">
                 <Button
                   type="button"
                   variant="default"
@@ -3366,8 +3384,8 @@ export function App() {
             </TabsContent>
 
             <TabsContent value="ocr" className="management-tab-panel">
-            <section className="ocr-panel" aria-label="realtime OCR log">
-              <div className="ocr-header">
+            <section className="ocr-panel tool-panel" aria-label="realtime OCR log">
+              <div className="ocr-header tool-panel-header">
                 <div>
                   <h2>リアルタイムOCR</h2>
                   <span>
@@ -3376,7 +3394,7 @@ export function App() {
                     )}
                   </span>
                 </div>
-                <div className="analysis-actions">
+                <div className="analysis-actions tool-panel-actions">
                   <Button
                     type="button"
                     variant="default"
@@ -3445,11 +3463,80 @@ export function App() {
             </section>
             </TabsContent>
 
-            <TabsContent value="stats" className="management-tab-panel management-tab-panel--empty" />
+            <TabsContent value="stats" className="management-tab-panel">
+          <section className="stats-panel tool-panel" aria-label="statistics summary">
+            <div className="tool-panel-header">
+              <div>
+                <h2>統計サマリー</h2>
+                <span>
+                  {battleStats.totalResolvedEventCount} events / {battleStats.unknownMessageCount} unknown /{" "}
+                  {Math.round(battleStats.unknownRate * 100)}%
+                </span>
+              </div>
+            </div>
+
+            <dl className="stats-grid">
+              <div>
+                <dt>observed moves</dt>
+                <dd>{battleStats.observedMoveCount}</dd>
+              </div>
+              <div>
+                <dt>pokemon actions</dt>
+                <dd>{battleStats.pokemonActionCount}</dd>
+              </div>
+              <div>
+                <dt>switches</dt>
+                <dd>{battleStats.switchCount}</dd>
+              </div>
+              <div>
+                <dt>faints</dt>
+                <dd>{battleStats.faintCount}</dd>
+              </div>
+              <div>
+                <dt>unknown</dt>
+                <dd>{battleStats.unknownMessageCount}</dd>
+              </div>
+              <div>
+                <dt>critical</dt>
+                <dd>{battleStats.criticalCount}</dd>
+              </div>
+            </dl>
+
+            <div className="stats-breakdown" aria-label="effectiveness counts">
+              <span>効果抜群 {battleStats.effectiveness.supereffective}</span>
+              <span>いまひとつ {battleStats.effectiveness.resisted}</span>
+              <span>効果なし {battleStats.effectiveness.immune}</span>
+            </div>
+
+            <section className="stats-action-panel" aria-label="pokemon action counts">
+              <div className="review-section-heading">
+                <h2>ポケモン別行動</h2>
+                <span>{battleStats.pokemonActionCounts.length} entries</span>
+              </div>
+              <ol className="pokemon-action-counts">
+                {battleStats.pokemonActionCounts.length === 0 ? (
+                  <li>
+                    <span>行動ログ空</span>
+                    <strong>0</strong>
+                  </li>
+                ) : (
+                  battleStats.pokemonActionCounts.map((entry) => (
+                    <li key={entry.key}>
+                      <span>
+                        {formatSide(entry.side)} / {entry.name}
+                      </span>
+                      <strong>{entry.count}</strong>
+                    </li>
+                  ))
+                )}
+              </ol>
+            </section>
+          </section>
+            </TabsContent>
 
             <TabsContent value="data" className="management-tab-panel">
-          <section className="data-management-panel" aria-label="data import export and review details">
-            <div className="panel-heading panel-heading--compact">
+          <section className="data-management-panel tool-panel" aria-label="data import export and review details">
+            <div className="panel-heading panel-heading--compact tool-panel-header">
               <div>
                 <h2>データ管理</h2>
                 <p>Battle Log JSON / CSV</p>
@@ -3501,7 +3588,15 @@ export function App() {
             </TabsContent>
 
             <TabsContent value="logs" className="management-tab-panel">
-          <section className="log-review-panel" aria-label="log review details">
+          <section className="log-review-panel tool-panel" aria-label="log review details">
+            <div className="tool-panel-header">
+              <div>
+                <h2>レビュー</h2>
+                <span>
+                  {timelineItems.length} timeline / {battleEvents.length} resolved / {unknownEvents.length} unknown
+                </span>
+              </div>
+            </div>
             <div className="review-tabs" role="tablist" aria-label="review views">
               {REVIEW_TABS.map((tab) => (
                 <Button

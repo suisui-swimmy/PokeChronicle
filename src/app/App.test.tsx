@@ -252,6 +252,8 @@ describe("App", () => {
     const managementPanel = screen.getByLabelText("analysis and data management");
     expect(managementPanel).toBeInTheDocument();
     expect(managementPanel.tagName).toBe("SECTION");
+    expect(within(managementPanel).getByText("調整")).toBeInTheDocument();
+    expect(within(managementPanel).getByText("確認・出力")).toBeInTheDocument();
     expect(screen.queryByText("解析・データ管理")).not.toBeInTheDocument();
 
     expect(screen.getByRole("tab", { name: "ROI" })).toHaveAttribute("aria-selected", "false");
@@ -343,9 +345,10 @@ describe("App", () => {
     expect(screen.queryByLabelText("template import summary")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "統計" }));
-    expect(screen.queryByRole("heading", { name: "統計サマリー" })).not.toBeInTheDocument();
-    expect(screen.queryByText("observed moves")).not.toBeInTheDocument();
-    expect(screen.queryByText("効果抜群 0")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "統計サマリー" })).toBeInTheDocument();
+    expect(screen.getByText("observed moves")).toBeInTheDocument();
+    expect(screen.getByText("効果抜群 0")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "ポケモン別行動" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "ログ" }));
     expect(screen.getByRole("tab", { name: /Timeline/ })).toHaveAttribute(
