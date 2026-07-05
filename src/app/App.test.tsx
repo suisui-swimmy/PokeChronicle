@@ -15,10 +15,17 @@ const audioTrack = {
   stop: vi.fn(),
 };
 
-function createMockVideoStream() {
+function createMockVideoStream(
+  settings: MediaTrackSettings = { width: 1920, height: 1080, frameRate: 59.94 },
+) {
+  const mockVideoTrack = {
+    ...videoTrack,
+    getSettings: () => settings,
+  };
+
   return {
-    getTracks: () => [videoTrack],
-    getVideoTracks: () => [videoTrack],
+    getTracks: () => [mockVideoTrack],
+    getVideoTracks: () => [mockVideoTrack],
     getAudioTracks: () => [],
   } as unknown as MediaStream;
 }
@@ -35,7 +42,13 @@ const enumerateDevices = vi.fn();
 const getUserMedia = vi.fn();
 const requestFullscreen = vi.fn();
 const exitFullscreen = vi.fn();
+const createObjectURL = vi.fn(() => "blob:mock-preview");
+const revokeObjectURL = vi.fn();
 const HEADER_MEDIA_SETTINGS_STORAGE_KEY = "pokechronicle:header-media-settings:v1";
+
+function getBadgeForText(label: string) {
+  return screen.getByText(label).closest(".input-badge");
+}
 
 describe("App", () => {
   beforeEach(() => {
@@ -94,6 +107,16 @@ describe("App", () => {
       value: vi.fn(),
     });
 
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: createObjectURL,
+    });
+
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: revokeObjectURL,
+    });
+
     Object.defineProperty(HTMLElement.prototype, "requestFullscreen", {
       configurable: true,
       value: requestFullscreen,
@@ -116,6 +139,15 @@ describe("App", () => {
         getTracks() {
           return this.tracks;
         }
+      },
+    });
+
+    Object.defineProperty(globalThis, "Worker", {
+      configurable: true,
+      value: class {
+        addEventListener = vi.fn();
+        postMessage = vi.fn();
+        terminate = vi.fn();
       },
     });
 
@@ -358,6 +390,170 @@ describe("App", () => {
     expect(exitFullscreen).toHaveBeenCalledTimes(1);
     expect(document.fullscreenElement).toBeNull();
     expect(screen.getByRole("button", { name: "全画面表示" })).toBeInTheDocument();
+  });
+
+  it("shows the initial badge before device metadata is available", () => {
+    enumerateDevices.mockReturnValue(new Promise(() => {}));
+    render(<App />);
+
+    expect(getBadgeForText("未取得")).toHaveClass("input-badge--idle");
+  });
+
+  it("shows permission-waiting when browser hides device labels before camera permission", async () => {
+    enumerateDevices.mockResolvedValueOnce([
+      {
+        deviceId: "video-hidden",
+        kind: "videoinput",
+        label: "",
+      },
+      {
+        deviceId: "audio-hidden",
+        kind: "audioinput",
+        label: "",
+      },
+    ]);
+
+    render(<App />);
+
+    expect(await screen.findByRole("combobox", { name: "映像デバイス" })).toHaveValue(
+      "video-hidden",
+    );
+    expect(getBadgeForText("権限待ち")).toHaveClass("input-badge--warn");
+  });
+
+  it("shows disconnected when no video inputs are available", async () => {
+    enumerateDevices.mockResolvedValueOnce([
+      {
+        deviceId: "audio-usb",
+        kind: "audioinput",
+        label: "USB audio",
+      },
+    ]);
+
+    render(<App />);
+
+    expect(await screen.findByText("映像デバイスが見つかりません")).toBeInTheDocument();
+    expect(getBadgeForText("未接続")).toHaveClass("input-badge--danger");
+  });
+
+  it("shows disconnected when the previously selected video input is missing", async () => {
+    window.localStorage.setItem(
+      HEADER_MEDIA_SETTINGS_STORAGE_KEY,
+      JSON.stringify({
+        videoDeviceId: "video-missing",
+        audioDeviceId: "none",
+        audioVolume: 1,
+        isAudioMuted: false,
+      }),
+    );
+
+    render(<App />);
+
+    expect(await screen.findByRole("combobox", { name: "映像デバイス" })).toHaveValue(
+      "video-missing",
+    );
+    expect(screen.getByText("保存済み映像デバイス未接続")).toBeInTheDocument();
+    expect(getBadgeForText("未接続")).toHaveClass("input-badge--danger");
+  });
+
+  it("shows starting while waiting for getUserMedia and then the active aspect badge", async () => {
+    const user = userEvent.setup();
+    let resolveVideoStream: (stream: MediaStream) => void = () => {};
+
+    getUserMedia.mockImplementation((constraints: MediaStreamConstraints) => {
+      if (constraints.video) {
+        return new Promise<MediaStream>((resolve) => {
+          resolveVideoStream = resolve;
+        });
+      }
+
+      return Promise.resolve(createMockAudioStream());
+    });
+
+    render(<App />);
+
+    await screen.findByRole("combobox", { name: "映像デバイス" });
+    await user.click(screen.getByRole("button", { name: "開始" }));
+
+    expect(await screen.findByText("開始中")).toBeInTheDocument();
+    expect(getBadgeForText("開始中")).toHaveClass("input-badge--warn");
+
+    resolveVideoStream(createMockVideoStream());
+
+    expect(await screen.findByText("入力(16:9)")).toBeInTheDocument();
+    expect(getBadgeForText("入力(16:9)")).toHaveClass("input-badge--active");
+  });
+
+  it("shows video when a local media file is loaded into preview", async () => {
+    render(<App />);
+
+    await screen.findByRole("combobox", { name: "映像デバイス" });
+    const fileInput = document.querySelector<HTMLInputElement>('input[type="file"]');
+
+    expect(fileInput).not.toBeNull();
+    fireEvent.change(fileInput as HTMLInputElement, {
+      target: {
+        files: [new File(["mock"], "battle.mp4", { type: "video/mp4" })],
+      },
+    });
+
+    expect(getBadgeForText("動画")).toHaveClass("input-badge--warn");
+  });
+
+  it.each([
+    {
+      label: "入力(4:3)",
+      settings: { width: 1024, height: 768, frameRate: 30 },
+    },
+    {
+      label: "入力(非16:9)",
+      settings: { width: 1000, height: 1000, frameRate: 30 },
+    },
+  ])("shows $label for non-standard capture aspect ratios", async ({ label, settings }) => {
+    const user = userEvent.setup();
+    getUserMedia.mockImplementation((constraints: MediaStreamConstraints) =>
+      Promise.resolve(
+        constraints.video
+          ? createMockVideoStream(settings)
+          : createMockAudioStream(),
+      ),
+    );
+
+    render(<App />);
+
+    await screen.findByRole("combobox", { name: "映像デバイス" });
+    await user.click(screen.getByRole("button", { name: "開始" }));
+
+    expect(await screen.findByText(label)).toBeInTheDocument();
+    expect(getBadgeForText(label)).toHaveClass("input-badge--warn");
+  });
+
+  it.each([
+    {
+      error: new DOMException("denied", "NotAllowedError"),
+      label: "拒否",
+    },
+    {
+      error: new DOMException("busy", "NotReadableError"),
+      label: "使用中",
+    },
+    {
+      error: new Error("device failed"),
+      label: "開始失敗",
+    },
+  ])("shows $label when starting the selected input fails", async ({ error, label }) => {
+    const user = userEvent.setup();
+    getUserMedia.mockImplementation((constraints: MediaStreamConstraints) =>
+      constraints.video ? Promise.reject(error) : Promise.resolve(createMockAudioStream()),
+    );
+
+    render(<App />);
+
+    await screen.findByRole("combobox", { name: "映像デバイス" });
+    await user.click(screen.getByRole("button", { name: "開始" }));
+
+    expect(await screen.findByText(label)).toBeInTheDocument();
+    expect(getBadgeForText(label)).toHaveClass("input-badge--danger");
   });
 
   it("toggles audio mute and adjusts volume from the header control", async () => {

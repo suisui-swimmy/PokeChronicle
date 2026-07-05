@@ -130,6 +130,16 @@ type MediaMetadata = {
 };
 
 type LogLevel = "info" | "warn" | "error";
+type InputStatus =
+  | "unknown"
+  | "starting"
+  | "active"
+  | "stopped"
+  | "denied"
+  | "busy"
+  | "start-failed"
+  | "unsupported";
+type InputBadgeTone = "idle" | "warn" | "active" | "danger";
 
 type SystemLog = {
   id: string;
@@ -142,6 +152,7 @@ type InputDevice = {
   deviceId: string;
   kind: "videoinput" | "audioinput";
   label: string;
+  hasDeviceLabel: boolean;
 };
 
 type HeaderMediaSettings = {
@@ -249,6 +260,10 @@ type ResolvedLogResizeSession = {
   startWidth: number;
   containerWidth: number | null;
 };
+type InputBadgeState = {
+  label: string;
+  tone: InputBadgeTone;
+};
 
 const REVIEW_TABS: Array<{ id: ReviewTab; label: string }> = [
   { id: "timeline", label: "Timeline" },
@@ -352,22 +367,124 @@ function formatResolution(metadata: MediaMetadata) {
   return `${metadata.width}x${metadata.height}`;
 }
 
-function formatAspect(metadata: MediaMetadata) {
+function getActiveInputBadge(metadata: MediaMetadata): InputBadgeState {
   if (!metadata.width || !metadata.height) {
-    return "未取得";
+    return { label: "未取得", tone: "idle" };
   }
 
   const aspect = metadata.width / metadata.height;
 
   if (Math.abs(aspect - ASPECT_16_BY_9) <= ASPECT_TOLERANCE) {
-    return "16:9";
+    return { label: "入力(16:9)", tone: "active" };
   }
 
   if (Math.abs(aspect - ASPECT_4_BY_3) <= ASPECT_TOLERANCE) {
-    return "4:3";
+    return { label: "入力(4:3)", tone: "warn" };
   }
 
-  return aspect.toFixed(2);
+  return { label: "入力(非16:9)", tone: "warn" };
+}
+
+function getFailureInputBadge(inputStatus: InputStatus): InputBadgeState | null {
+  switch (inputStatus) {
+    case "denied":
+      return { label: "拒否", tone: "danger" };
+    case "busy":
+      return { label: "使用中", tone: "danger" };
+    case "start-failed":
+      return { label: "開始失敗", tone: "danger" };
+    case "unsupported":
+      return { label: "非対応", tone: "danger" };
+    default:
+      return null;
+  }
+}
+
+function getInputBadgeState({
+  hasEnumeratedDevices,
+  inputStatus,
+  mediaMode,
+  metadata,
+  selectedVideoDeviceId,
+  videoDevices,
+}: {
+  hasEnumeratedDevices: boolean;
+  inputStatus: InputStatus;
+  mediaMode: MediaMode;
+  metadata: MediaMetadata;
+  selectedVideoDeviceId: string;
+  videoDevices: InputDevice[];
+}): InputBadgeState {
+  const failureBadge = getFailureInputBadge(inputStatus);
+
+  if (failureBadge) {
+    return failureBadge;
+  }
+
+  if (inputStatus === "starting") {
+    return { label: "開始中", tone: "warn" };
+  }
+
+  if (mediaMode === "video-file" || mediaMode === "image-file") {
+    return { label: "動画", tone: "warn" };
+  }
+
+  if (mediaMode === "device" || inputStatus === "active") {
+    return getActiveInputBadge(metadata);
+  }
+
+  if (inputStatus === "stopped") {
+    return { label: "停止", tone: "idle" };
+  }
+
+  if (hasEnumeratedDevices) {
+    if (videoDevices.length === 0) {
+      return { label: "未接続", tone: "danger" };
+    }
+
+    const selectedVideoDevice = videoDevices.find(
+      (device) => device.deviceId === selectedVideoDeviceId,
+    );
+
+    if (selectedVideoDeviceId && !selectedVideoDevice) {
+      return { label: "未接続", tone: "danger" };
+    }
+
+    if (
+      selectedVideoDevice
+        ? !selectedVideoDevice.hasDeviceLabel
+        : videoDevices.every((device) => !device.hasDeviceLabel)
+    ) {
+      return { label: "権限待ち", tone: "warn" };
+    }
+  }
+
+  return { label: "未取得", tone: "idle" };
+}
+
+function getStartFailureStatus(error: unknown): InputStatus {
+  if (error instanceof DOMException) {
+    if (["NotAllowedError", "SecurityError"].includes(error.name)) {
+      return "denied";
+    }
+
+    if (["NotReadableError", "AbortError", "TrackStartError"].includes(error.name)) {
+      return "busy";
+    }
+  }
+
+  return "start-failed";
+}
+
+function getStartFailureMessage(inputStatus: InputStatus) {
+  switch (inputStatus) {
+    case "denied":
+      return "カメラまたはマイクの権限が拒否されました。";
+    case "busy":
+      return "入力デバイスが他アプリまたは他タブで使用中の可能性があります。";
+    default:
+      return "入力デバイスの開始に失敗しました。";
+  }
 }
 
 function formatFps(frameRate: number | null) {
@@ -709,11 +826,14 @@ function createDeviceOptions(devices: MediaDeviceInfo[], kind: InputDevice["kind
     .filter((device) => device.kind === kind)
     .map((device) => {
       deviceIndex += 1;
+      const rawLabel = device.label.trim();
+
       return {
         deviceId: device.deviceId,
         kind,
+        hasDeviceLabel: rawLabel.length > 0,
         label:
-          device.label ||
+          rawLabel ||
           (kind === "videoinput" ? `映像デバイス ${deviceIndex}` : `音声デバイス ${deviceIndex}`),
       };
     });
@@ -1015,7 +1135,8 @@ export function App() {
   const [selectedAudioDeviceId, setSelectedAudioDeviceId] = useState(
     () => initialHeaderMediaSettings?.audioDeviceId ?? NO_AUDIO_DEVICE_ID,
   );
-  const [statusLabel, setStatusLabel] = useState("待機中");
+  const [inputStatus, setInputStatus] = useState<InputStatus>("unknown");
+  const [hasEnumeratedDevices, setHasEnumeratedDevices] = useState(false);
   const [metadata, setMetadata] = useState<MediaMetadata>({
     width: null,
     height: null,
@@ -1573,6 +1694,8 @@ export function App() {
       if (!navigator.mediaDevices?.enumerateDevices) {
         setVideoDevices([]);
         setAudioDevices([]);
+        setHasEnumeratedDevices(true);
+        setInputStatus("unsupported");
         addLog("このブラウザはデバイス一覧の取得に対応していません。", "error");
         return;
       }
@@ -1584,8 +1707,13 @@ export function App() {
 
         setVideoDevices(nextVideoDevices);
         setAudioDevices(nextAudioDevices);
+        setHasEnumeratedDevices(true);
         setSelectedVideoDeviceId((currentDeviceId) => {
           if (nextVideoDevices.some((device) => device.deviceId === currentDeviceId)) {
+            return currentDeviceId;
+          }
+
+          if (currentDeviceId) {
             return currentDeviceId;
           }
 
@@ -1607,6 +1735,8 @@ export function App() {
           addLog("入力デバイス一覧を更新しました。");
         }
       } catch {
+        setHasEnumeratedDevices(true);
+        setInputStatus("start-failed");
         addLog("入力デバイス一覧の取得に失敗しました。", "error");
       }
     },
@@ -1664,7 +1794,7 @@ export function App() {
     setMediaMode("idle");
     setFilePreviewUrl(null);
     setFrameSamples([]);
-    setStatusLabel("待機中");
+    setInputStatus("stopped");
     setMetadata({ width: null, height: null, frameRate: null });
 
     if (videoRef.current) {
@@ -1809,18 +1939,26 @@ export function App() {
     ) => {
       if (!navigator.mediaDevices?.getUserMedia) {
         addLog("このブラウザはカメラ入力に対応していません。", "error");
-        setStatusLabel("非対応");
+        setInputStatus("unsupported");
         return false;
       }
 
       if (videoDevices.length === 0) {
         addLog("映像デバイスが見つかりません。", "warn");
-        setStatusLabel("未選択");
         return false;
       }
 
       const nextVideoDeviceId = videoDeviceId || videoDevices[0]?.deviceId || "";
       const nextAudioDeviceId = audioDeviceId || NO_AUDIO_DEVICE_ID;
+      const hasSelectedVideoDevice = videoDevices.some(
+        (device) => device.deviceId === nextVideoDeviceId,
+      );
+
+      if (!hasSelectedVideoDevice) {
+        addLog("選択中の映像デバイスが見つかりません。", "warn");
+        return false;
+      }
+
       const selectedVideoLabel = getDeviceLabel(
         videoDevices,
         nextVideoDeviceId,
@@ -1835,6 +1973,7 @@ export function App() {
         setSelectedVideoDeviceId(nextVideoDeviceId);
         setSelectedAudioDeviceId(nextAudioDeviceId);
         resetMedia();
+        setInputStatus("starting");
         warmAudioOutput();
         const deviceStream = await requestPreferredVideoStream(nextVideoDeviceId);
 
@@ -1845,7 +1984,7 @@ export function App() {
             setStream(null);
             mediaModeRef.current = "idle";
             setMediaMode("idle");
-            setStatusLabel("停止済み");
+            setInputStatus("stopped");
             addLog("入力デバイスの映像トラックが停止しました。");
           },
           { once: true },
@@ -1860,7 +1999,7 @@ export function App() {
         setStream(deviceStream);
         mediaModeRef.current = "device";
         setMediaMode("device");
-        setStatusLabel("キャプチャ中");
+        setInputStatus("active");
         setMetadata(
           videoRef.current
             ? getVideoMetadata(videoRef.current, deviceStream)
@@ -1892,12 +2031,10 @@ export function App() {
         addLog(`入力を開始しました: ${selectedVideoLabel} / ${selectedAudioLabel}`);
         return true;
       } catch (error) {
-        const message =
-          error instanceof DOMException && error.name === "NotAllowedError"
-            ? "カメラまたはマイクの権限が拒否されました。"
-            : "入力デバイスの開始に失敗しました。";
+        const nextInputStatus = getStartFailureStatus(error);
+        const message = getStartFailureMessage(nextInputStatus);
         addLog(message, "error");
-        setStatusLabel("開始失敗");
+        setInputStatus(nextInputStatus);
         return false;
       }
     },
@@ -2012,7 +2149,7 @@ export function App() {
       const nextMediaMode = file.type.startsWith("image/") ? "image-file" : "video-file";
       mediaModeRef.current = nextMediaMode;
       setMediaMode(nextMediaMode);
-      setStatusLabel("ファイル表示中");
+      setInputStatus("active");
       addLog(`ファイルを読み込みました: ${file.name}`);
       event.target.value = "";
     },
@@ -2242,17 +2379,23 @@ export function App() {
     setRoi((currentRoi) => updateRoiField(currentRoi, field, Number(value)));
   }, []);
 
-  const statusTone = useMemo(() => {
-    if (statusLabel.includes("失敗") || statusLabel === "非対応") {
-      return "danger";
-    }
-
-    if (statusLabel === "キャプチャ中" || statusLabel === "ファイル表示中") {
-      return "active";
-    }
-
-    return "idle";
-  }, [statusLabel]);
+  const inputBadge = useMemo(
+    () =>
+      getInputBadgeState({
+        hasEnumeratedDevices,
+        inputStatus,
+        mediaMode,
+        metadata,
+        selectedVideoDeviceId,
+        videoDevices,
+      }),
+    [hasEnumeratedDevices, inputStatus, mediaMode, metadata, selectedVideoDeviceId, videoDevices],
+  );
+  const isSelectedVideoDeviceMissing =
+    hasEnumeratedDevices &&
+    selectedVideoDeviceId.length > 0 &&
+    videoDevices.length > 0 &&
+    !videoDevices.some((device) => device.deviceId === selectedVideoDeviceId);
 
   const isVolumeEffectivelyMuted = isAudioMuted || audioVolume === 0;
   const volumePercent = Math.round(effectiveAudioVolume * 100);
@@ -2722,9 +2865,9 @@ export function App() {
   return (
     <main ref={captureShellRef} className="capture-shell" aria-label="capture workspace shell">
       <header className="capture-toolbar" aria-label="capture controls">
-        <div className="input-badge">
-          <span className={`status-dot status-dot--${statusTone}`} aria-hidden="true" />
-          <span className="input-badge-text">入力({formatAspect(metadata)})</span>
+        <div className={`input-badge input-badge--${inputBadge.tone}`}>
+          <span className={`status-dot status-dot--${inputBadge.tone}`} aria-hidden="true" />
+          <span className="input-badge-text">{inputBadge.label}</span>
         </div>
         <div className="device-selects" aria-label="input device selectors">
           <label className="device-select">
@@ -2736,6 +2879,9 @@ export function App() {
             >
               {videoDevices.length === 0 ? (
                 <option value="">映像デバイスが見つかりません</option>
+              ) : null}
+              {isSelectedVideoDeviceMissing ? (
+                <option value={selectedVideoDeviceId}>保存済み映像デバイス未接続</option>
               ) : null}
               {videoDevices.map((device) => (
                 <option key={device.deviceId} value={device.deviceId}>

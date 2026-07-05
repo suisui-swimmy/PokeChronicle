@@ -156,11 +156,22 @@ button:disabled {
   gap: 8px;
   min-height: 38px;
   padding: 0 10px;
-  color: var(--green);
-  border-color: rgb(255 137 6 / 0.74);
+  color: var(--faint);
+  border-color: rgb(167 169 190 / 0.38);
   font-size: 0.78rem;
   font-weight: 800;
   white-space: nowrap;
+}
+
+.input-badge--warn,
+.input-badge--active {
+  color: var(--warning);
+  border-color: rgb(255 137 6 / 0.74);
+}
+
+.input-badge--danger {
+  color: var(--danger);
+  border-color: rgb(242 95 76 / 0.72);
 }
 
 .input-badge-text {
@@ -172,8 +183,19 @@ button:disabled {
 .status-dot {
   width: 10px;
   height: 10px;
+  border-radius: 999px !important;
   background: var(--faint);
   box-shadow: 0 0 0 4px rgb(167 169 190 / 0.16);
+}
+
+.status-dot--idle {
+  background: var(--faint);
+  box-shadow: 0 0 0 4px rgb(167 169 190 / 0.16);
+}
+
+.status-dot--warn {
+  background: var(--warning);
+  box-shadow: 0 0 0 4px rgb(255 137 6 / 0.18);
 }
 
 .status-dot--active {
