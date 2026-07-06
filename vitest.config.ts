@@ -12,9 +12,10 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
-    include: ["src/**/*.test.{ts,tsx}"],
+    include: ["src/**/*.test.{ts,tsx}", "scripts/**/*.test.mjs"],
     setupFiles: ["src/test/setup.ts"],
     exclude: ["node_modules", "dist", "others", "vendor"],
+    fileParallelism: false,
     testTimeout: 10000,
   },
 });

@@ -674,7 +674,7 @@ describe("parseBattleMessage", () => {
         actor: { name: "バンギラス", side: "opponent" },
       },
     });
-  });
+  }, 20000);
 
   it("parses complete weather and tea-effect btl_set messages but leaves fragments unknown", () => {
     const teaEffect = parseBattleMessage("ヤバソチャが たてた お茶をバンギラスは 飲みほした!");

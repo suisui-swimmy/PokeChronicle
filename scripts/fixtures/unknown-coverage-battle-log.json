@@ -1,0 +1,108 @@
+{
+  "schemaVersion": "0.1.0",
+  "appVersion": "0.1.0",
+  "exportedAt": "1970-01-01T00:00:00.000Z",
+  "battle": {
+    "id": "fixture_unknown_coverage",
+    "title": "Unknown coverage fixture",
+    "startedAt": null
+  },
+  "media": {
+    "sourceKind": "none",
+    "videoLabel": null,
+    "audioLabel": null,
+    "width": null,
+    "height": null,
+    "frameRate": null
+  },
+  "roiProfile": {
+    "id": "roi_fixture",
+    "name": "Fixture ROI",
+    "roi": { "x": 0, "y": 0, "w": 1, "h": 1 },
+    "updatedAt": "1970-01-01T00:00:00.000Z"
+  },
+  "ocrMessages": [
+    {
+      "id": "ocr-fixture-1",
+      "battleId": "fixture_unknown_coverage",
+      "rawText": "ゆけっ! エルフーン!\nマフォクシー!",
+      "normalizedText": "ゆけっ! エルフーン!マフォクシー!",
+      "matchText": "ゆけっエルフーンマフォクシー",
+      "ocrConfidence": 0.92,
+      "timestampMs": 1000,
+      "frameIndex": 1,
+      "roi": { "x": 0, "y": 0, "w": 1, "h": 1 },
+      "lines": [
+        { "text": "ゆけっ! エルフーン!", "confidence": 0.93, "bbox": null },
+        { "text": "マフォクシー!", "confidence": 0.91, "bbox": null }
+      ]
+    },
+    {
+      "id": "ocr-fixture-2",
+      "battleId": "fixture_unknown_coverage",
+      "rawText": "ヤバソチャに 効果は バツグンだ!",
+      "normalizedText": "ヤバソチャに 効果は バツグンだ!",
+      "matchText": "ヤバソチャに効果はバツグンだ",
+      "ocrConfidence": 0.93,
+      "timestampMs": 2000,
+      "frameIndex": 2,
+      "roi": { "x": 0, "y": 0, "w": 1, "h": 1 },
+      "lines": [
+        { "text": "ヤバソチャに 効果は バツグンだ!", "confidence": 0.93, "bbox": null }
+      ]
+    },
+    {
+      "id": "ocr-fixture-3",
+      "battleId": "fixture_unknown_coverage",
+      "rawText": "ヤバソチャに 効果は バツグンだ!",
+      "normalizedText": "ヤバソチャに 効果は バツグンだ!",
+      "matchText": "ヤバソチャに効果はバツグンだ",
+      "ocrConfidence": 0.93,
+      "timestampMs": 2150,
+      "frameIndex": 3,
+      "roi": { "x": 0, "y": 0, "w": 1, "h": 1 },
+      "lines": [
+        { "text": "ヤバソチャに 効果は バツグンだ!", "confidence": 0.93, "bbox": null }
+      ]
+    },
+    {
+      "id": "ocr-fixture-4",
+      "battleId": "fixture_unknown_coverage",
+      "rawText": "相手の キュウコンの",
+      "normalizedText": "相手の キュウコンの",
+      "matchText": "相手のキュウコンの",
+      "ocrConfidence": 0.84,
+      "timestampMs": 3000,
+      "frameIndex": 4,
+      "roi": { "x": 0, "y": 0, "w": 1, "h": 1 },
+      "lines": [
+        { "text": "相手の キュウコンの", "confidence": 0.84, "bbox": null }
+      ]
+    },
+    {
+      "id": "ocr-fixture-5",
+      "battleId": "fixture_unknown_coverage",
+      "rawText": "砂あらしが ー",
+      "normalizedText": "砂あらしが ー",
+      "matchText": "砂あらしがー",
+      "ocrConfidence": 0.78,
+      "timestampMs": 4200,
+      "frameIndex": 5,
+      "roi": { "x": 0, "y": 0, "w": 1, "h": 1 },
+      "lines": [
+        { "text": "砂あらしが ー", "confidence": 0.78, "bbox": null }
+      ]
+    }
+  ],
+  "events": [
+    { "id": "evt_old_1" },
+    { "id": "evt_old_2" }
+  ],
+  "unknowns": [
+    { "id": "unk_old_1" },
+    { "id": "unk_old_2" },
+    { "id": "unk_old_3" }
+  ],
+  "frameEvidence": [],
+  "manualCorrections": []
+}

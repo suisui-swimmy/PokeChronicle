@@ -50,6 +50,7 @@ Run these from PowerShell in the repository root:
 ```powershell
 npm install
 npm run report:champout
+npm run report:unknown-coverage -- scripts/fixtures/unknown-coverage-battle-log.json --json
 npm run generate:champout-templates
 npm run generate:dictionaries
 npm run dev
@@ -78,6 +79,20 @@ npm run generate:champout-templates
 The current enabled source files are `btl_attack_syn.json`, `btl_std.json`, and the narrowly selected `btl_set.json`. Add more `btl_*.json` files one at a time only after checking the scan report, label allow/deny patterns, event type distribution, parser behavior, and tests.
 
 The runtime app imports only `data/generated/champout-event-rules.ja.json`. It does not read `others/champout`, and it does not bundle the full raw dump. Source files, source commit, license, and notice details are recorded in the generated JSON and `THIRD_PARTY_NOTICES.md`.
+
+## Unknown Coverage Report
+
+Exported Battle Log JSON can be replayed against the current parser to find safe coverage improvement candidates:
+
+```powershell
+npm run report:unknown-coverage -- path\to\battle-log.json
+npm run report:unknown-coverage -- path\to\battle-log.json --json --top 20
+npm run report:unknown-coverage -- path\to\battle-log.json --write-proposals tmp\unknown-proposals
+```
+
+The report re-parses `ocrMessages` with the current normalizer, dictionaries, generated champout rules, parser, timeline dedupe, and unknown gating. Previous exported `events` / `unknowns` are used only as a before snapshot. Optional `--unknowns <csv>` and `--events <csv>` can add ID-count hints when the CSV exports are available.
+
+If local `others/champout` exists, the report also checks source-label candidates such as not-yet-enabled `btl_set.json` categories without dumping raw `OriginalText` values. If `others/champout` is missing, source matching is skipped with a warning and replay coverage still works. The script does not auto-edit `data/champout`, `data/generated`, or `src`; proposals are review inputs for the next focused parser/config change.
 
 ## GitHub Pages Base Path
 

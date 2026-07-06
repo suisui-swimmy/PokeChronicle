@@ -104,3 +104,19 @@ The app validates `schemaVersion` on import and restores the review state on the
 Events and unknown messages can also be exported as CSV. Unknown CSV includes manual review notes when present.
 
 Runtime code must not import from `others/`.
+
+## Unknown coverage development report
+
+Use the coverage report when exported logs show many unknown messages:
+
+```powershell
+npm run report:unknown-coverage -- path\to\battle-log.json
+npm run report:unknown-coverage -- path\to\battle-log.json --json --top 20
+npm run report:unknown-coverage -- path\to\battle-log.json --write-proposals tmp\unknown-proposals
+```
+
+The Battle Log JSON is the primary input. The script replays `ocrMessages` through the current parser and timeline logic, then compares replay coverage with the previously exported `events` / `unknowns`. `--unknowns <csv>` and `--events <csv>` are optional helper inputs when ID-level CSV exports are available.
+
+The output separates root causes and recommended actions instead of treating every unknown as a new template request. Prefix-only fragments, timer/UI text, near-duplicate partials, and short broken weather lines are routed toward unknown suppression or `hold_review`; generated-rule near misses, dictionary OCR gaps, and safe champout candidates become proposals. `--write-proposals` writes a temporary proposal JSON only and never edits source config, generated data, or browser runtime code.
+
+When `others/champout` is present, the report can compare unknown clusters with local source labels while omitting raw `OriginalText` dumps. Missing `others/champout` only disables that source comparison; replay metrics and parser proposals still run.
