@@ -679,6 +679,10 @@ describe("parseBattleMessage", () => {
   it("parses complete weather and tea-effect btl_set messages but leaves fragments unknown", () => {
     const teaEffect = parseBattleMessage("ヤバソチャが たてた お茶をバンギラスは 飲みほした!");
     const sandDamage = parseBattleMessage("砂あらしが相手の バンギラスを 襲う!");
+    const noisySandStart = parseBattleMessage({
+      rawText: "砂 あらじしが 吹き始めた /",
+      ocrConfidence: 0.85,
+    });
     const partialTea = parseBattleMessage({
       rawText: "ヤ六ソチヤがか たてた お茶を",
       ocrConfidence: 0.88,
@@ -705,8 +709,99 @@ describe("parseBattleMessage", () => {
         classification: { method: "template_dictionary" },
       },
     });
+    expect(noisySandStart).toMatchObject({
+      status: "event",
+      event: {
+        type: "weather_start",
+        classification: { templateId: "weather_start" },
+      },
+    });
     expect(partialTea).toMatchObject({ status: "unknown" });
     expect(partialSand).toMatchObject({ status: "unknown" });
+  });
+
+  it("parses requested champout/live resolution messages from real-log review", () => {
+    expect(parseBattleMessage("相手の ガメノデスは ひるんで 技が だせない!")).toMatchObject({
+      status: "event",
+      event: {
+        type: "flinch",
+        actor: { name: "ガメノデス", side: "opponent" },
+        classification: { method: "template_dictionary" },
+      },
+    });
+    expect(
+      parseBattleMessage("相手の ガメノデスは せんせいのツメで 行動が はやくなった!"),
+    ).toMatchObject({
+      status: "event",
+      event: {
+        type: "item",
+        actor: { name: "ガメノデス", side: "opponent" },
+        classification: { method: "template_dictionary" },
+      },
+    });
+    expect(parseBattleMessage("相手の バンギラスは メガバンギラスに メガシンカした!")).toMatchObject({
+      status: "event",
+      event: {
+        type: "activate",
+        actor: { name: "バンギラス", side: "opponent" },
+        classification: { method: "template_dictionary" },
+      },
+    });
+    expect(parseBattleMessage("ヤバソチャが たてた お茶を メタグロスは 飲みほした!")).toMatchObject({
+      status: "event",
+      event: {
+        type: "activate",
+        actor: { name: "ヤバソチャ" },
+        target: { name: "メタグロス" },
+        classification: { templateId: "champout_activate_1gp6nis" },
+      },
+    });
+    expect(parseBattleMessage("雨が 降り始めた!")).toMatchObject({
+      status: "event",
+      event: { type: "weather_start" },
+    });
+    expect(parseBattleMessage("砂あらしが 吹き始めた!")).toMatchObject({
+      status: "event",
+      event: { type: "weather_start" },
+    });
+    expect(parseBattleMessage("急所に 当たった!")).toMatchObject({
+      status: "event",
+      event: { type: "critical" },
+    });
+    expect(parseBattleMessage("降参が 選ばれました")).toMatchObject({
+      status: "event",
+      event: { type: "battle_end" },
+    });
+  });
+
+  it("projects noisy flinch and priority-item templates only inside narrow shapes", () => {
+    expect(
+      parseBattleMessage({
+        rawText: "相手の ガメノデスは ひるんで 技が だせない/",
+        ocrConfidence: 0.88,
+      }),
+    ).toMatchObject({
+      status: "event",
+      event: {
+        type: "flinch",
+        actor: { name: "ガメノデス", side: "opponent" },
+      },
+    });
+    expect(
+      parseBattleMessage({
+        rawText: "相手の ガメノデスは せんせいのツメで 行動が はやくなつた/",
+        ocrConfidence: 0.88,
+      }),
+    ).toMatchObject({
+      status: "event",
+      event: {
+        type: "item",
+        actor: { name: "ガメノデス", side: "opponent" },
+      },
+    });
+    expect(parseBattleMessage("せんせいのツメで 行動が はやくなった")).toMatchObject({
+      status: "unknown",
+    });
   });
 
   it("keeps weak constrained candidates unknown and reviewable", () => {

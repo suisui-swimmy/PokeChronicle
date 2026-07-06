@@ -8,6 +8,7 @@ const POKEMON_ACTION_EVENT_TYPES = new Set<BattleEvent["type"]>([
   "heal",
   "status",
   "status_cure",
+  "flinch",
   "boost",
   "unboost",
   "protect",

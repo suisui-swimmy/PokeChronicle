@@ -353,12 +353,20 @@ function inferLikelyEventType(item: CoverageReplayItem): BattleEventType | "nois
     return "faint";
   }
 
+  if (text.includes("ひるん") && text.includes("だせない")) {
+    return "flinch";
+  }
+
   if (text.includes("うまく決まらなかった") || text.includes("決まらなかった")) {
     return "fail";
   }
 
   if (text.includes("守り") || text.includes("身を守")) {
     return "protect";
+  }
+
+  if (text.includes("行動がはやく") || text.includes("せんせいのツメ")) {
+    return "item";
   }
 
   if (text.includes("上がっ") || text.includes("下がっ")) {
@@ -382,6 +390,7 @@ function getEventValue(eventType: BattleEventType | "noise" | "unknown") {
     switch_in: 2,
     switch_out: 1.8,
     faint: 2.4,
+    flinch: 1.7,
     status: 1.8,
     status_cure: 1.6,
     supereffective: 1.7,
@@ -389,6 +398,8 @@ function getEventValue(eventType: BattleEventType | "noise" | "unknown") {
     fail: 1.5,
     protect: 1.4,
     damage: 1.4,
+    item: 1.4,
+    activate: 1.4,
     weather_start: 1.3,
     weather_end: 1.3,
     terrain_start: 1.2,

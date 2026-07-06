@@ -88,6 +88,53 @@ describe("renderBattleEventCanonicalText", () => {
     ).toBe("ヤバソチャは 注目の的に なった!");
     expect(
       renderBattleEventCanonicalText(
+        event({ type: "flinch", actor: { name: "ガメノデス", side: "opponent" } }),
+      ),
+    ).toBe("相手の ガメノデスは ひるんで 技が だせない!");
+    expect(
+      renderBattleEventCanonicalText(
+        event({
+          type: "item",
+          actor: { name: "ガメノデス", side: "opponent" },
+          classification: {
+            method: "template_dictionary",
+            templateId: "champout_item_1s665oh",
+            alternatives: ["template:champout_item_1s665oh:text=せんせいのツメ"],
+          },
+        }),
+      ),
+    ).toBe("相手の ガメノデスは せんせいのツメで 行動が はやくなった!");
+    expect(
+      renderBattleEventCanonicalText(
+        event({
+          type: "activate",
+          actor: { name: "バンギラス", side: "opponent" },
+          normalizedText: "相手の バンギラスは メガバンギラスに メガシンカした!",
+          classification: {
+            method: "template_dictionary",
+            templateId: "champout_activate_5yixin",
+            alternatives: ["template:champout_activate_5yixin:text=バンギラス"],
+          },
+        }),
+      ),
+    ).toBe("相手の バンギラスは メガバンギラスに メガシンカした!");
+    expect(
+      renderBattleEventCanonicalText(
+        event({
+          type: "activate",
+          actor: { name: "ヤバソチャ", side: null },
+          target: { name: "メタグロス", side: null },
+          normalizedText: "ヤバソチャが たてた お茶を メタグロスは 飲みほした!",
+          classification: {
+            method: "template_dictionary",
+            templateId: "champout_activate_1gp6nis",
+            alternatives: [],
+          },
+        }),
+      ),
+    ).toBe("ヤバソチャが たてた お茶を メタグロスは 飲みほした!");
+    expect(
+      renderBattleEventCanonicalText(
         event({ type: "fail", target: { name: "ヤバソチャ", side: null } }),
       ),
     ).toBe("しかし ヤバソチャには うまく 決まらなかった!");

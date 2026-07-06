@@ -16,6 +16,7 @@ export type BattleEventType =
   | "resisted"
   | "immune"
   | "critical"
+  | "flinch"
   | "boost"
   | "unboost"
   | "protect"

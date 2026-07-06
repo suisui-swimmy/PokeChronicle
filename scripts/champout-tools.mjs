@@ -34,6 +34,7 @@ export const actorEventTypes = new Set([
   "heal",
   "status",
   "status_cure",
+  "flinch",
   "boost",
   "unboost",
   "protect",
@@ -376,6 +377,10 @@ export function inferEventType(extracted, sourceConfig = {}) {
     return "faint";
   }
 
+  if (matchText.includes("ひるんで") && matchText.includes("技がだせない")) {
+    return "flinch";
+  }
+
   if (matchText.includes("外れた") || matchText.includes("あたらなかった")) {
     return "miss";
   }
@@ -388,6 +393,10 @@ export function inferEventType(extracted, sourceConfig = {}) {
     matchText.includes("足りなかった")
   ) {
     return "fail";
+  }
+
+  if (matchText.includes("行動がはやくなった")) {
+    return "item";
   }
 
   if (matchText.includes("身を守") || matchText.includes("守っている") || matchText.includes("守られた")) {

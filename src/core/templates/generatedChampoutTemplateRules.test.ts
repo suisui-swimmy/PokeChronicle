@@ -19,20 +19,22 @@ describe("generated champout template rules", () => {
     expect(CHAMPOUT_TEMPLATE_STATS).toMatchObject({
       sourceFileCount: 3,
       extractedTextCount: 851,
-      generatedRuleCount: 147,
+      generatedRuleCount: 151,
       eventTypeDistribution: {
         activate: 4,
         damage: 3,
         fail: 12,
+        flinch: 2,
         status: 14,
         status_cure: 28,
         faint: 2,
         immune: 2,
+        item: 5,
         redirection: 2,
         supereffective: 4,
       },
     });
-    expect(CHAMPOUT_TEMPLATE_RULES.length).toBe(147);
+    expect(CHAMPOUT_TEMPLATE_RULES.length).toBe(151);
     expect(CHAMPOUT_TEMPLATE_RULES[0].source).toMatchObject({
       fileName: "btl_attack_syn.json",
       keyPath: "mSDataSet[0].OriginalText",
@@ -43,8 +45,8 @@ describe("generated champout template rules", () => {
       expect.objectContaining({
         fileName: "btl_set.json",
         reason:
-          "narrow live battle resolution messages for status, faint, effectiveness, fail, redirection, mega evolution, weather damage, and tea effect",
-        generatedRuleCount: 60,
+          "narrow live battle resolution messages for status, faint, flinch, item priority, effectiveness, fail, redirection, mega evolution, weather damage, and tea effect",
+        generatedRuleCount: 64,
       }),
     );
   });
@@ -120,6 +122,26 @@ describe("generated champout template rules", () => {
       id: "champout_fail_le5yfc",
       eventType: "fail",
       patterns: ["しかし {target}にはうまく 決まらなかった!"],
+    });
+    expect(
+      CHAMPOUT_TEMPLATE_RULES.find(
+        (rule) => rule.source?.labelName === "BTL_STRID_SET_ShrinkExe_E",
+      ),
+    ).toMatchObject({
+      id: "champout_flinch_1fbzyy3",
+      eventType: "flinch",
+      patterns: ["相手の {pokemon}はひるんで 技が だせない!"],
+      constants: { "actor.side": "opponent" },
+    });
+    expect(
+      CHAMPOUT_TEMPLATE_RULES.find(
+        (rule) => rule.source?.labelName === "BTL_STRID_SET_UseItem_PriorityUpOnce_E",
+      ),
+    ).toMatchObject({
+      id: "champout_item_1s665oh",
+      eventType: "item",
+      patterns: ["相手の {pokemon}は {text}で行動が はやくなった!"],
+      constants: { "actor.side": "opponent" },
     });
     expect(
       CHAMPOUT_TEMPLATE_RULES.find(
@@ -233,6 +255,28 @@ describe("generated champout template rules", () => {
       event: {
         type: "activate",
         actor: { name: "バンギラス", side: "opponent" },
+      },
+    });
+    expect(parseBattleMessage("相手の ガメノデスは ひるんで 技が だせない!")).toMatchObject({
+      status: "event",
+      event: {
+        type: "flinch",
+        actor: { name: "ガメノデス", side: "opponent" },
+        classification: {
+          method: "template_dictionary",
+        },
+      },
+    });
+    expect(
+      parseBattleMessage("相手の ガメノデスは せんせいのツメで 行動が はやくなった!"),
+    ).toMatchObject({
+      status: "event",
+      event: {
+        type: "item",
+        actor: { name: "ガメノデス", side: "opponent" },
+        classification: {
+          method: "template_dictionary",
+        },
       },
     });
   });

@@ -156,6 +156,40 @@ describe("decodeConstrainedTemplate", () => {
     });
   });
 
+  it("projects noisy generated flinch and priority-item templates only from narrow surfaces", () => {
+    const rules = STANDARD_TEMPLATE_RULES.filter((rule) =>
+      [
+        "BTL_STRID_SET_ShrinkExe_E",
+        "BTL_STRID_SET_UseItem_PriorityUpOnce_E",
+      ].includes(rule.source?.labelName ?? ""),
+    );
+    const flinch = decodeConstrainedTemplate({
+      surfaces: [surface("相手の ガメノデスは ひるんで 技が だせない/")],
+      dictionary: BATTLE_DICTIONARY,
+      rules,
+      ocrConfidence: 0.88,
+    });
+    const priorityItem = decodeConstrainedTemplate({
+      surfaces: [surface("相手の ガメノデスは せんせいのツメで 行動が はやくなつた/")],
+      dictionary: BATTLE_DICTIONARY,
+      rules,
+      ocrConfidence: 0.88,
+    });
+
+    expect(flinch).toMatchObject({
+      accepted: true,
+      eventType: "flinch",
+      actor: { name: "ガメノデス", side: "opponent" },
+      rule: { id: "champout_flinch_1fbzyy3" },
+    });
+    expect(priorityItem).toMatchObject({
+      accepted: true,
+      eventType: "item",
+      actor: { name: "ガメノデス", side: "opponent" },
+      rule: { id: "champout_item_1s665oh" },
+    });
+  });
+
   it("keeps short suffix noise as evidence without contaminating placeholders", () => {
     const result = decodeConstrainedTemplate({
       surfaces: [surface("相手の キュウコンの オームーヒードヒ/ bh、亜")],

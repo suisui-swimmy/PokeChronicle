@@ -19,9 +19,9 @@
   "stats": {
     "sourceFileCount": 3,
     "extractedTextCount": 851,
-    "battleCandidateCount": 151,
-    "generatedRuleCount": 147,
-    "skippedTextCount": 704,
+    "battleCandidateCount": 155,
+    "generatedRuleCount": 151,
+    "skippedTextCount": 700,
     "duplicateRuleCount": 4,
     "maxGeneratedRules": 600,
     "eventTypeDistribution": {
@@ -34,9 +34,10 @@
       "faint": 2,
       "field_end": 5,
       "field_start": 1,
+      "flinch": 2,
       "heal": 1,
       "immune": 2,
-      "item": 3,
+      "item": 5,
       "move": 2,
       "protect": 4,
       "redirection": 2,
@@ -95,17 +96,19 @@
       },
       {
         "fileName": "btl_set.json",
-        "reason": "narrow live battle resolution messages for status, faint, effectiveness, fail, redirection, mega evolution, weather damage, and tea effect",
+        "reason": "narrow live battle resolution messages for status, faint, flinch, item priority, effectiveness, fail, redirection, mega evolution, weather damage, and tea effect",
         "extractedTextCount": 734,
-        "battleCandidateCount": 60,
-        "generatedRuleCount": 60,
-        "skippedTextCount": 674,
+        "battleCandidateCount": 64,
+        "generatedRuleCount": 64,
+        "skippedTextCount": 670,
         "eventTypeDistribution": {
           "activate": 4,
           "damage": 2,
           "fail": 4,
           "faint": 2,
+          "flinch": 2,
           "immune": 2,
+          "item": 2,
           "redirection": 2,
           "status": 14,
           "status_cure": 28,
@@ -2444,6 +2447,45 @@
       }
     },
     {
+      "id": "champout_flinch_1ipnxgr",
+      "eventType": "flinch",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}はひるんで 技が だせない!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[118].OriginalText",
+        "labelName": "BTL_STRID_SET_ShrinkExe",
+        "originalText": "{0}はひるんで 技が だせない!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_flinch_1fbzyy3",
+      "eventType": "flinch",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}はひるんで 技が だせない!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[119].OriginalText",
+        "labelName": "BTL_STRID_SET_ShrinkExe_E",
+        "originalText": "相手の {0}はひるんで 技が だせない!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
       "id": "champout_damage_1jfudf5",
       "eventType": "damage",
       "priority": 50,
@@ -2791,6 +2833,45 @@
         "keyPath": "mSDataSet[406].OriginalText",
         "labelName": "BTL_STRID_SET_UseItem_CureMero_E",
         "originalText": "相手の {0}は {1}でメロメロ状態が 治った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_item_1xzsjz9",
+      "eventType": "item",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}は {text}で行動が はやくなった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[417].OriginalText",
+        "labelName": "BTL_STRID_SET_UseItem_PriorityUpOnce",
+        "originalText": "{0}は {1}で行動が はやくなった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_item_1s665oh",
+      "eventType": "item",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}は {text}で行動が はやくなった!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[418].OriginalText",
+        "labelName": "BTL_STRID_SET_UseItem_PriorityUpOnce_E",
+        "originalText": "相手の {0}は {1}で行動が はやくなった!",
         "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
       }
     },

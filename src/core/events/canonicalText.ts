@@ -24,11 +24,28 @@ function formatTargetObject(event: Pick<BattleEvent, "actor" | "target">) {
   return formatParticipant(event.target) ?? formatParticipant(event.actor);
 }
 
+function extractTextCapture(classification: BattleEvent["classification"]) {
+  for (const alternative of classification.alternatives) {
+    const match = alternative.match(/(?:^|:)text[=:]([^:]+)/);
+
+    if (!match?.[1]) {
+      continue;
+    }
+
+    return match[1].split(",")[0].trim();
+  }
+
+  return null;
+}
+
 export function renderBattleEventCanonicalText(
-  event: Pick<BattleEvent, "type" | "actor" | "move" | "target" | "classification">,
+  event: Pick<BattleEvent, "type" | "actor" | "move" | "target" | "classification"> &
+    Partial<Pick<BattleEvent, "normalizedText">>,
 ) {
   const actorSubject = formatActorSubject(event.actor);
   const targetObject = formatTargetObject(event);
+  const textCapture = extractTextCapture(event.classification);
+  const classificationEvidence = event.classification.alternatives.join(":");
 
   switch (event.type) {
     case "move":
@@ -59,6 +76,10 @@ export function renderBattleEventCanonicalText(
       return targetObject ? `${targetObject}に 効果が ない!` : "効果が ない!";
     case "critical":
       return "急所に 当たった!";
+    case "flinch":
+      return actorSubject
+        ? `${actorSubject}は ひるんで 技が だせない!`
+        : "ひるんで 技が だせない!";
     case "faint":
       return actorSubject ? `${actorSubject}は たおれた!` : "たおれた!";
     case "damage":
@@ -71,7 +92,35 @@ export function renderBattleEventCanonicalText(
       return targetObject
         ? `しかし ${targetObject}には うまく 決まらなかった!`
         : "しかし うまく 決まらなかった!";
+    case "item":
+      if (textCapture && event.classification.templateId?.startsWith("champout_item_")) {
+        return actorSubject
+          ? `${actorSubject}は ${textCapture}で 行動が はやくなった!`
+          : `${textCapture}で 行動が はやくなった!`;
+      }
+
+      return actorSubject
+        ? `${actorSubject}は 道具で 行動が はやくなった!`
+        : "道具で 行動が はやくなった!";
     case "activate":
+      if (
+        (event.normalizedText?.includes("飲みほした") ||
+          classificationEvidence.includes("飲みほした")) &&
+        actorSubject &&
+        targetObject
+      ) {
+        return `${actorSubject}が たてた お茶を ${targetObject}は 飲みほした!`;
+      }
+
+      if (
+        (event.normalizedText?.includes("メガシンカ") ||
+          classificationEvidence.includes("メガシンカ")) &&
+        actorSubject &&
+        textCapture
+      ) {
+        return `${actorSubject}は メガ${textCapture}に メガシンカした!`;
+      }
+
       return actorSubject ? `${actorSubject}の 効果が 発動した!` : "効果が 発動した!";
     case "redirection":
       return actorSubject ? `${actorSubject}は 注目の的に なった!` : "注目の的に なった!";

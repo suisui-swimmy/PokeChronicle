@@ -1767,6 +1767,20 @@ function isConstrainedFailSurface(surfaceText: string) {
   );
 }
 
+function isConstrainedFlinchSurface(surfaceText: string) {
+  return (
+    includesAny(surfaceText, ["ひるん", "技がだせない", "技かだせない"]) &&
+    includesAny(surfaceText, ["だせない", "出せない"])
+  );
+}
+
+function isConstrainedItemPrioritySurface(surfaceText: string) {
+  return (
+    includesAny(surfaceText, ["行動がはやく", "行動かはやく", "行動が早く"]) &&
+    includesAny(surfaceText, ["なった", "なつた"])
+  );
+}
+
 function isConstrainedRedirectionSurface(surfaceText: string) {
   return (
     surfaceText.includes("注目の的") ||
@@ -1883,6 +1897,14 @@ function selectConstrainedTemplateSurfaces(
       return true;
     }
 
+    if (eventTypes.has("flinch") && isConstrainedFlinchSurface(surface.matchText)) {
+      return true;
+    }
+
+    if (eventTypes.has("item") && isConstrainedItemPrioritySurface(surface.matchText)) {
+      return true;
+    }
+
     if (
       eventTypes.has("redirection") &&
       isConstrainedRedirectionSurface(surface.matchText)
@@ -1966,6 +1988,8 @@ function selectConstrainedTemplateRules(
   const hasSupereffectiveShape = surfaceTexts.some(isConstrainedSupereffectiveSurface);
   const hasSupereffectiveTargetShape = surfaceTexts.some(hasEffectTargetSurfaceShape);
   const hasFailShape = surfaceTexts.some(isConstrainedFailSurface);
+  const hasFlinchShape = surfaceTexts.some(isConstrainedFlinchSurface);
+  const hasItemPriorityShape = surfaceTexts.some(isConstrainedItemPrioritySurface);
   const hasRedirectionShape = surfaceTexts.some(isConstrainedRedirectionSurface);
   const hasActivateShape = surfaceTexts.some(isConstrainedActivateSurface);
   const hasDamageShape = surfaceTexts.some(isConstrainedDamageSurface);
@@ -2013,6 +2037,14 @@ function selectConstrainedTemplateRules(
 
     if (rule.eventType === "fail") {
       return hasFailShape;
+    }
+
+    if (rule.eventType === "flinch") {
+      return hasFlinchShape;
+    }
+
+    if (rule.eventType === "item") {
+      return hasItemPriorityShape;
     }
 
     if (rule.eventType === "redirection") {

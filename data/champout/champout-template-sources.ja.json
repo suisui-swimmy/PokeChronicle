@@ -33,9 +33,9 @@
     {
       "fileName": "btl_set.json",
       "status": "enabled",
-      "reason": "narrow live battle resolution messages for status, faint, effectiveness, fail, redirection, mega evolution, weather damage, and tea effect",
+      "reason": "narrow live battle resolution messages for status, faint, flinch, item priority, effectiveness, fail, redirection, mega evolution, weather damage, and tea effect",
       "labelAllowPatterns": [
-        "^BTL_STRID_SET_(Dead|NoEffect|AffGood_1|DokuGet|YakedoGet|MahiGet|KoriGet|NemuriGet|MeromeroGet|KonranGet|DokuCure|YakedoCure|MahiCure|KoriMelt|NemuriWake|KonranCure|MeromeroCure|UseItem_Cure(Doku|Mahi|Nemuri|Koori|Yakedo|Konran|Mero)|WazaFailPoke|FushokugasuMiss|WeatherDmg_Sand|Konoyubi|MegaEvo|MotenashiNoKokoro)(_E)?$"
+        "^BTL_STRID_SET_(Dead|ShrinkExe|NoEffect|AffGood_1|DokuGet|YakedoGet|MahiGet|KoriGet|NemuriGet|MeromeroGet|KonranGet|DokuCure|YakedoCure|MahiCure|KoriMelt|NemuriWake|KonranCure|MeromeroCure|UseItem_Cure(Doku|Mahi|Nemuri|Koori|Yakedo|Konran|Mero)|UseItem_PriorityUpOnce|WazaFailPoke|FushokugasuMiss|WeatherDmg_Sand|Konoyubi|MegaEvo|MotenashiNoKokoro)(_E)?$"
       ],
       "labelDenyPatterns": ["Already", "Act$", "Damage", "TUTORIAL", "HELP", "BUTTON", "SELECT"],
       "textDenyHints": [],
@@ -56,6 +56,18 @@
           "eventType": "supereffective",
           "when": {
             "labelPatterns": ["^BTL_STRID_SET_AffGood_1(_E)?$"]
+          }
+        },
+        {
+          "eventType": "flinch",
+          "when": {
+            "labelPatterns": ["^BTL_STRID_SET_ShrinkExe(_E)?$"]
+          }
+        },
+        {
+          "eventType": "item",
+          "when": {
+            "labelPatterns": ["^BTL_STRID_SET_UseItem_PriorityUpOnce(_E)?$"]
           }
         },
         {
@@ -116,6 +128,10 @@
           {
             "pattern": "^BTL_STRID_SET_MotenashiNoKokoro(_E)?$",
             "slots": ["pokemon", "target", "text"]
+          },
+          {
+            "pattern": "^BTL_STRID_SET_UseItem_PriorityUpOnce(_E)?$",
+            "slots": ["pokemon", "text"]
           }
         ]
       }

@@ -121,6 +121,7 @@ const ACTOR_EVENT_TYPES = new Set<BattleEventType>([
   "heal",
   "status",
   "status_cure",
+  "flinch",
   "boost",
   "unboost",
   "protect",
@@ -249,12 +250,20 @@ function inferEventType(extracted: ExtractedTemplateText): BattleEventType | nul
     return "faint";
   }
 
+  if (matchText.includes("ひるんで") && matchText.includes("技がだせない")) {
+    return "flinch";
+  }
+
   if (matchText.includes("外れた") || matchText.includes("あたらなかった")) {
     return "miss";
   }
 
   if (matchText.includes("失敗") || matchText.includes("うまく決まらない")) {
     return "fail";
+  }
+
+  if (matchText.includes("行動がはやくなった")) {
+    return "item";
   }
 
   if (matchText.includes("身を守った") || matchText.includes("守られた")) {

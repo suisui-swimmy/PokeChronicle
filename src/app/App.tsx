@@ -646,6 +646,7 @@ function formatEventType(type: string) {
     faint: "ひんし",
     field_end: "場終了",
     field_start: "場開始",
+    flinch: "ひるみ",
     heal: "回復",
     immune: "無効",
     item: "道具",
