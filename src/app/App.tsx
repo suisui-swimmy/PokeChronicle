@@ -42,9 +42,10 @@ import { renderBattleEventCanonicalText } from "../core/events/canonicalText";
 import type { DictionaryEntry } from "../core/dictionary/types";
 import { summarizeBattleStats } from "../core/stats/battleStats";
 import {
-  createMessageLineCropVariants,
-  preprocessMessageImageDataWithMetrics,
+  choosePreferredMessagePreprocessVariant,
+  createMessagePreprocessVariants,
   type MessagePreprocessOptions,
+  type MessageTextMask,
 } from "../core/preprocess/messagePreprocess";
 import { mapDisplayRoiToSourceRect } from "../core/media/roiMapping";
 import { createTesseractWorkerConfig } from "../core/ocr/tesseractConfig";
@@ -192,6 +193,7 @@ type FrameSourceElement = HTMLVideoElement | HTMLImageElement;
 
 type ProcessedLineCropPreview = {
   id: string;
+  textMask: MessageTextMask;
   processedDataUrl: string;
   cropWidth: number;
   cropHeight: number;
@@ -203,6 +205,8 @@ type ProcessedLineCropPreview = {
 type CapturedFrameImages = {
   rawDataUrl: string;
   processedDataUrl: string;
+  preprocessVariantId: MessageTextMask;
+  preprocessVariantRejectReason: string | null;
   ocrDataUrl: string;
   ocrVariantId: string;
   ocrForegroundPixelRatio: number;
@@ -1133,9 +1137,25 @@ function captureRoiFrame(
   );
 
   const rawImageData = rawContext.getImageData(0, 0, crop.width, crop.height);
-  const { imageData: processedImageData, metrics } = preprocessMessageImageDataWithMetrics(
-    rawImageData,
-    preprocess,
+  const preprocessVariants = createMessagePreprocessVariants(rawImageData, preprocess, {
+    minForegroundPixelRatio: MIN_TEXT_PIXEL_RATIO,
+    maxForegroundPixelRatio: MAX_TEXT_PIXEL_RATIO,
+  });
+  const selectedPreprocessVariant =
+    choosePreferredMessagePreprocessVariant(preprocessVariants) ??
+    preprocessVariants.find((variant) => variant.id === "white");
+
+  if (!selectedPreprocessVariant) {
+    return null;
+  }
+
+  const processedImageData = selectedPreprocessVariant.imageData;
+  const metrics = selectedPreprocessVariant.metrics;
+  const selectedTextMask = selectedPreprocessVariant.id;
+  const selectedRejectReason = selectedPreprocessVariant.rejectReason;
+  const selectedLineCropVariants = selectedPreprocessVariant.lineCropVariants;
+  const fallbackVariants = preprocessVariants.filter(
+    (variant) => variant.id !== selectedTextMask && variant.isOcrCandidate,
   );
   const scale = Math.max(1, Math.round(upscaleFactor));
   const processedDataUrl = imageDataToScaledDataUrl(processedImageData, scale);
@@ -1144,10 +1164,9 @@ function captureRoiFrame(
     return null;
   }
 
-  const lineCropVariants = createMessageLineCropVariants(processedImageData, preprocess);
   const lineCropPreviews: ProcessedLineCropPreview[] = [];
 
-  for (const variant of lineCropVariants) {
+  for (const variant of selectedLineCropVariants) {
     const dataUrl = variant.id === "full"
       ? processedDataUrl
       : imageDataToScaledDataUrl(variant.imageData, scale);
@@ -1157,7 +1176,8 @@ function captureRoiFrame(
     }
 
     lineCropPreviews.push({
-      id: variant.id,
+      id: `${selectedTextMask}/${variant.id}`,
+      textMask: selectedTextMask,
       processedDataUrl: dataUrl,
       cropWidth: variant.imageData.width,
       cropHeight: variant.imageData.height,
@@ -1167,12 +1187,15 @@ function captureRoiFrame(
     });
   }
 
-  const detectedLineCount = lineCropVariants[0]?.lineCount ?? 0;
+  const detectedLineCount = selectedLineCropVariants[0]?.lineCount ?? 0;
   const preferredLineCount = Math.min(3, detectedLineCount);
   const preferredVariant =
-    lineCropPreviews.find((variant) => variant.id === `top-${preferredLineCount}-lines`) ??
+    lineCropPreviews.find(
+      (variant) => variant.id === `${selectedTextMask}/top-${preferredLineCount}-lines`,
+    ) ??
     lineCropPreviews[0] ?? {
-      id: "full",
+      id: `${selectedTextMask}/full`,
+      textMask: selectedTextMask,
       processedDataUrl,
       cropWidth: crop.width,
       cropHeight: crop.height,
@@ -1180,15 +1203,37 @@ function captureRoiFrame(
       lineCount: detectedLineCount,
       foregroundPixelRatio: metrics.foregroundPixelRatio,
     };
+  const fallbackPreviewVariants: ProcessedLineCropPreview[] = [];
+
+  for (const fallbackVariant of fallbackVariants) {
+    const fallbackDataUrl = imageDataToScaledDataUrl(fallbackVariant.imageData, scale);
+
+    if (!fallbackDataUrl) {
+      continue;
+    }
+
+    fallbackPreviewVariants.push({
+      id: `${fallbackVariant.id}/full`,
+      textMask: fallbackVariant.id,
+      processedDataUrl: fallbackDataUrl,
+      cropWidth: fallbackVariant.imageData.width,
+      cropHeight: fallbackVariant.imageData.height,
+      sourceY: 0,
+      lineCount: fallbackVariant.lineCropVariants[0]?.lineCount ?? 0,
+      foregroundPixelRatio: fallbackVariant.metrics.foregroundPixelRatio,
+    });
+  }
 
   return {
     rawDataUrl: rawCanvas.toDataURL("image/png"),
     processedDataUrl,
+    preprocessVariantId: selectedTextMask,
+    preprocessVariantRejectReason: selectedRejectReason,
     ocrDataUrl: preferredVariant.processedDataUrl,
     ocrVariantId: preferredVariant.id,
     ocrForegroundPixelRatio: preferredVariant.foregroundPixelRatio,
     lineBandCount: detectedLineCount,
-    lineCropVariants: lineCropPreviews,
+    lineCropVariants: [...lineCropPreviews, ...fallbackPreviewVariants],
     sourceWidth,
     sourceHeight,
     cropWidth: crop.width,
@@ -1650,6 +1695,13 @@ export function App() {
   const queueOcrRecognition = useCallback(
     (sample: FrameSample) => {
       if (!isOcrEnabledRef.current) {
+        return;
+      }
+
+      if (sample.preprocessVariantRejectReason) {
+        setOcrStatusLabel(
+          `OCR skipped: preprocess ${sample.preprocessVariantRejectReason} gate (${sample.preprocessVariantId})`,
+        );
         return;
       }
 
@@ -3457,7 +3509,7 @@ export function App() {
                   <span>preprocessed</span>
                   <span>
                     {latestFrameSample
-                      ? `${latestFrameSample.upscaleFactor}x / ${latestFrameSample.preprocess.whiteThreshold} / text ${formatTextDensity(latestFrameSample.foregroundPixelRatio)} / OCR ${latestFrameSample.ocrVariantId} ${formatTextDensity(latestFrameSample.ocrForegroundPixelRatio)}`
+                      ? `${latestFrameSample.upscaleFactor}x / ${latestFrameSample.preprocess.whiteThreshold} / mask ${latestFrameSample.preprocessVariantId} / text ${formatTextDensity(latestFrameSample.foregroundPixelRatio)} / OCR ${latestFrameSample.ocrVariantId} ${formatTextDensity(latestFrameSample.ocrForegroundPixelRatio)}`
                       : "未生成"}
                   </span>
                 </figcaption>

@@ -1,15 +1,24 @@
 export type PreprocessBackground = "black" | "white";
+export type MessageTextMask = "white" | "yellow" | "white-yellow";
 
 export interface MessagePreprocessOptions {
   whiteThreshold: number;
   background: PreprocessBackground;
   invert: boolean;
+  textMask?: MessageTextMask;
 }
 
 export interface MessagePreprocessMetrics {
   foregroundPixelCount: number;
   totalPixelCount: number;
   foregroundPixelRatio: number;
+}
+
+export interface MessageForegroundComponentMetrics {
+  componentCount: number;
+  largestComponentPixelCount: number;
+  largestComponentForegroundRatio: number;
+  textLikeComponentCount: number;
 }
 
 export interface MessageLineBandDetectionOptions {
@@ -41,6 +50,24 @@ export interface MessageLineCropVariant {
   metrics: MessagePreprocessMetrics;
 }
 
+export interface MessagePreprocessVariant {
+  id: MessageTextMask;
+  imageData: ImageData;
+  metrics: MessagePreprocessMetrics;
+  componentMetrics: MessageForegroundComponentMetrics;
+  lineCropVariants: MessageLineCropVariant[];
+  isOcrCandidate: boolean;
+  rejectReason: "density" | "component" | "line-band" | null;
+  score: number;
+}
+
+export interface MessagePreprocessVariantOptions {
+  minForegroundPixelRatio?: number;
+  maxForegroundPixelRatio?: number;
+  maxLargestComponentForegroundRatio?: number;
+  detectionOptions?: MessageLineBandDetectionOptions;
+}
+
 function clampByte(value: number) {
   return Math.min(Math.max(Math.round(value), 0), 255);
 }
@@ -59,6 +86,64 @@ function getOutputValues(background: PreprocessBackground, invert: boolean) {
   };
 }
 
+function getTextMask(options: MessagePreprocessOptions): MessageTextMask {
+  return options.textMask ?? "white";
+}
+
+export function isBrightWhiteTextPixel(
+  red: number,
+  green: number,
+  blue: number,
+  alpha: number,
+  threshold: number,
+) {
+  const minChannel = Math.min(red, green, blue);
+  const maxChannel = Math.max(red, green, blue);
+
+  return alpha > 0 && minChannel >= threshold && maxChannel - minChannel <= 72;
+}
+
+export function isBrightYellowTextPixel(
+  red: number,
+  green: number,
+  blue: number,
+  alpha: number,
+) {
+  if (alpha <= 0) {
+    return false;
+  }
+
+  const redGreenFloor = Math.min(red, green);
+  const redGreenDelta = Math.abs(red - green);
+  const luminance = red * 0.2126 + green * 0.7152 + blue * 0.0722;
+  const chroma = Math.max(red, green, blue) - Math.min(red, green, blue);
+
+  return (
+    redGreenFloor >= 145 &&
+    blue <= 150 &&
+    red - blue >= 55 &&
+    green - blue >= 45 &&
+    redGreenDelta <= 82 &&
+    luminance >= 140 &&
+    chroma >= 48
+  );
+}
+
+function isTextMaskPixel(
+  red: number,
+  green: number,
+  blue: number,
+  alpha: number,
+  options: MessagePreprocessOptions,
+) {
+  const textMask = getTextMask(options);
+  const isWhite = textMask !== "yellow" &&
+    isBrightWhiteTextPixel(red, green, blue, alpha, clampByte(options.whiteThreshold));
+  const isYellow = textMask !== "white" && isBrightYellowTextPixel(red, green, blue, alpha);
+
+  return isWhite || isYellow;
+}
+
 export function preprocessMessageImageData(
   source: ImageData,
   options: MessagePreprocessOptions,
@@ -75,10 +160,10 @@ export function preprocessMessageImageData(
     const green = source.data[index + 1];
     const blue = source.data[index + 2];
     const alpha = source.data[index + 3];
-    const minChannel = Math.min(red, green, blue);
-    const maxChannel = Math.max(red, green, blue);
-    const isBrightTextCandidate =
-      alpha > 0 && minChannel >= threshold && maxChannel - minChannel <= 72;
+    const isBrightTextCandidate = isTextMaskPixel(red, green, blue, alpha, {
+      ...options,
+      whiteThreshold: threshold,
+    });
     const value = isBrightTextCandidate ? foregroundValue : backgroundValue;
 
     output.data[index] = value;
@@ -132,6 +217,112 @@ export function analyzeProcessedMessageImageData(
   };
 }
 
+export function analyzeProcessedForegroundComponents(
+  processed: ImageData,
+  options: MessagePreprocessOptions,
+): MessageForegroundComponentMetrics {
+  const { foregroundValue } = getOutputValues(options.background, options.invert);
+  const width = processed.width;
+  const height = processed.height;
+  const visited = new Uint8Array(width * height);
+  const queue: number[] = [];
+  let componentCount = 0;
+  let largestComponentPixelCount = 0;
+  let textLikeComponentCount = 0;
+  let foregroundPixelCount = 0;
+
+  for (let pixelIndex = 0; pixelIndex < width * height; pixelIndex += 1) {
+    const dataIndex = pixelIndex * 4;
+
+    if (isProcessedForegroundPixel(processed.data, dataIndex, foregroundValue)) {
+      foregroundPixelCount += 1;
+    }
+  }
+
+  for (let pixelIndex = 0; pixelIndex < width * height; pixelIndex += 1) {
+    if (visited[pixelIndex]) {
+      continue;
+    }
+
+    const startDataIndex = pixelIndex * 4;
+
+    if (!isProcessedForegroundPixel(processed.data, startDataIndex, foregroundValue)) {
+      visited[pixelIndex] = 1;
+      continue;
+    }
+
+    componentCount += 1;
+    queue.length = 0;
+    queue.push(pixelIndex);
+    visited[pixelIndex] = 1;
+
+    let componentPixelCount = 0;
+    let minX = width;
+    let minY = height;
+    let maxX = -1;
+    let maxY = -1;
+
+    for (let queueIndex = 0; queueIndex < queue.length; queueIndex += 1) {
+      const current = queue[queueIndex];
+      const x = current % width;
+      const y = Math.floor(current / width);
+
+      componentPixelCount += 1;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+
+      const neighbors = [
+        x > 0 ? current - 1 : -1,
+        x + 1 < width ? current + 1 : -1,
+        y > 0 ? current - width : -1,
+        y + 1 < height ? current + width : -1,
+      ];
+
+      for (const neighbor of neighbors) {
+        if (neighbor < 0 || visited[neighbor]) {
+          continue;
+        }
+
+        const neighborDataIndex = neighbor * 4;
+
+        if (!isProcessedForegroundPixel(processed.data, neighborDataIndex, foregroundValue)) {
+          visited[neighbor] = 1;
+          continue;
+        }
+
+        visited[neighbor] = 1;
+        queue.push(neighbor);
+      }
+    }
+
+    largestComponentPixelCount = Math.max(largestComponentPixelCount, componentPixelCount);
+
+    const componentWidth = maxX - minX + 1;
+    const componentHeight = maxY - minY + 1;
+    const componentArea = componentWidth * componentHeight;
+    const fillRatio = componentArea === 0 ? 1 : componentPixelCount / componentArea;
+
+    if (
+      componentPixelCount >= 2 &&
+      componentWidth >= 2 &&
+      componentHeight >= 1 &&
+      (componentArea <= 6 || fillRatio <= 0.92)
+    ) {
+      textLikeComponentCount += 1;
+    }
+  }
+
+  return {
+    componentCount,
+    largestComponentPixelCount,
+    largestComponentForegroundRatio:
+      foregroundPixelCount === 0 ? 0 : largestComponentPixelCount / foregroundPixelCount,
+    textLikeComponentCount,
+  };
+}
+
 export function preprocessMessageImageDataWithMetrics(
   source: ImageData,
   options: MessagePreprocessOptions,
@@ -142,6 +333,99 @@ export function preprocessMessageImageDataWithMetrics(
     imageData,
     metrics: analyzeProcessedMessageImageData(imageData, options),
   };
+}
+
+function scorePreprocessVariant(
+  id: MessageTextMask,
+  metrics: MessagePreprocessMetrics,
+  componentMetrics: MessageForegroundComponentMetrics,
+  lineCropVariants: MessageLineCropVariant[],
+  isOcrCandidate: boolean,
+) {
+  const preferredMaskBias =
+    id === "white" ? 0.03 : id === "white-yellow" ? 0.02 : 0.01;
+
+  if (!isOcrCandidate) {
+    return preferredMaskBias + metrics.foregroundPixelRatio;
+  }
+
+  const lineBandCount = lineCropVariants[0]?.lineCount ?? 0;
+  const densityScore = Math.min(metrics.foregroundPixelRatio, 0.04) * 10;
+  const componentPenalty = componentMetrics.largestComponentForegroundRatio * 0.04;
+
+  return preferredMaskBias + lineBandCount * 0.08 + densityScore - componentPenalty;
+}
+
+export function createMessagePreprocessVariants(
+  source: ImageData,
+  options: MessagePreprocessOptions,
+  variantOptions: MessagePreprocessVariantOptions = {},
+): MessagePreprocessVariant[] {
+  const minForegroundPixelRatio = variantOptions.minForegroundPixelRatio ?? 0.002;
+  const maxForegroundPixelRatio = variantOptions.maxForegroundPixelRatio ?? 0.22;
+  const maxLargestComponentForegroundRatio =
+    variantOptions.maxLargestComponentForegroundRatio ?? 0.72;
+  const variantIds: MessageTextMask[] = ["white", "yellow", "white-yellow"];
+
+  return variantIds.map((id) => {
+    const variantPreprocessOptions = { ...options, textMask: id };
+    const { imageData, metrics } = preprocessMessageImageDataWithMetrics(
+      source,
+      variantPreprocessOptions,
+    );
+    const componentMetrics = analyzeProcessedForegroundComponents(
+      imageData,
+      variantPreprocessOptions,
+    );
+    const lineCropVariants = createMessageLineCropVariants(
+      imageData,
+      variantPreprocessOptions,
+      variantOptions.detectionOptions,
+    );
+    const hasUsableDensity =
+      metrics.foregroundPixelRatio >= minForegroundPixelRatio &&
+      metrics.foregroundPixelRatio <= maxForegroundPixelRatio;
+    const hasTextLikeComponents =
+      componentMetrics.componentCount > 0 &&
+      componentMetrics.textLikeComponentCount > 0 &&
+      componentMetrics.largestComponentForegroundRatio <=
+        maxLargestComponentForegroundRatio;
+    const hasLineBand = (lineCropVariants[0]?.lineCount ?? 0) > 0;
+    const rejectReason = !hasUsableDensity
+      ? "density"
+      : !hasTextLikeComponents
+        ? "component"
+        : !hasLineBand
+          ? "line-band"
+          : null;
+    const isOcrCandidate = rejectReason === null;
+
+    return {
+      id,
+      imageData,
+      metrics,
+      componentMetrics,
+      lineCropVariants,
+      isOcrCandidate,
+      rejectReason,
+      score: scorePreprocessVariant(
+        id,
+        metrics,
+        componentMetrics,
+        lineCropVariants,
+        isOcrCandidate,
+      ),
+    };
+  });
+}
+
+export function choosePreferredMessagePreprocessVariant(
+  variants: readonly MessagePreprocessVariant[],
+) {
+  const candidates = variants.filter((variant) => variant.isOcrCandidate);
+  const source = candidates.length > 0 ? candidates : variants;
+
+  return [...source].sort((left, right) => right.score - left.score)[0] ?? null;
 }
 
 function getLineBandDetectionOptions(

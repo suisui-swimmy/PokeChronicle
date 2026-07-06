@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   analyzeProcessedMessageImageData,
+  choosePreferredMessagePreprocessVariant,
   createMessageLineCropVariants,
+  createMessagePreprocessVariants,
   detectMessageLineBands,
+  isBrightYellowTextPixel,
   preprocessMessageImageData,
   preprocessMessageImageDataWithMetrics,
   type MessagePreprocessOptions,
@@ -31,6 +34,41 @@ function createSolidProcessedImage(
   return new ImageData(data, width, height);
 }
 
+function createSolidSourceImage(
+  width: number,
+  height: number,
+  red: number,
+  green: number,
+  blue: number,
+) {
+  const data = new Uint8ClampedArray(width * height * 4);
+
+  for (let index = 0; index < data.length; index += 4) {
+    data[index] = red;
+    data[index + 1] = green;
+    data[index + 2] = blue;
+    data[index + 3] = 255;
+  }
+
+  return new ImageData(data, width, height);
+}
+
+function setSourcePixel(
+  image: ImageData,
+  x: number,
+  y: number,
+  red: number,
+  green: number,
+  blue: number,
+) {
+  const index = (y * image.width + x) * 4;
+
+  image.data[index] = red;
+  image.data[index + 1] = green;
+  image.data[index + 2] = blue;
+  image.data[index + 3] = 255;
+}
+
 function setProcessedPixel(image: ImageData, x: number, y: number, value: number) {
   const index = (y * image.width + x) * 4;
 
@@ -50,6 +88,13 @@ function drawProcessedTextRow(
   for (let x = xStart; x < xEnd; x += 2) {
     setProcessedPixel(image, x, y, foregroundValue);
     setProcessedPixel(image, x + 1, y, foregroundValue);
+  }
+}
+
+function drawYellowTextRow(image: ImageData, y: number, xStart = 4, xEnd = 46) {
+  for (let x = xStart; x < xEnd; x += 3) {
+    setSourcePixel(image, x, y, 244, 236, 42);
+    setSourcePixel(image, x + 1, y, 244, 236, 42);
   }
 }
 
@@ -151,6 +196,98 @@ describe("preprocessMessageImageData", () => {
       expect(metrics.foregroundPixelRatio).toBe(0.5);
       expect(analyzed).toEqual(metrics);
     }
+  });
+
+  it("extracts high-luminance yellow text pixels when the yellow mask is enabled", () => {
+    const source = new ImageData(
+      new Uint8ClampedArray([
+        244, 236, 42, 255,
+        245, 245, 245, 255,
+        24, 28, 36, 255,
+      ]),
+      3,
+      1,
+    );
+
+    const whiteOnly = preprocessMessageImageData(source, defaultOptions);
+    const yellowOnly = preprocessMessageImageData(source, {
+      ...defaultOptions,
+      textMask: "yellow",
+    });
+    const whiteAndYellow = preprocessMessageImageData(source, {
+      ...defaultOptions,
+      textMask: "white-yellow",
+    });
+
+    expect(pixelAt(whiteOnly, 0)).toEqual([0, 0, 0, 255]);
+    expect(pixelAt(yellowOnly, 0)).toEqual([255, 255, 255, 255]);
+    expect(pixelAt(yellowOnly, 1)).toEqual([0, 0, 0, 255]);
+    expect(pixelAt(whiteAndYellow, 0)).toEqual([255, 255, 255, 255]);
+    expect(pixelAt(whiteAndYellow, 1)).toEqual([255, 255, 255, 255]);
+  });
+
+  it("keeps dark yellow and blue effect colors out of the yellow text mask", () => {
+    expect(isBrightYellowTextPixel(122, 112, 18, 255)).toBe(false);
+    expect(isBrightYellowTextPixel(42, 88, 238, 255)).toBe(false);
+    expect(isBrightYellowTextPixel(244, 236, 42, 255)).toBe(true);
+
+    const source = new ImageData(
+      new Uint8ClampedArray([
+        122, 112, 18, 255,
+        42, 88, 238, 255,
+      ]),
+      2,
+      1,
+    );
+    const { metrics } = preprocessMessageImageDataWithMetrics(source, {
+      ...defaultOptions,
+      textMask: "yellow",
+    });
+
+    expect(metrics.foregroundPixelCount).toBe(0);
+  });
+
+  it("prefers a yellow-capable OCR variant when white extraction would produce an empty crop", () => {
+    const source = createSolidSourceImage(64, 20, 14, 18, 30);
+
+    drawYellowTextRow(source, 5);
+    drawYellowTextRow(source, 6);
+    drawYellowTextRow(source, 13);
+    drawYellowTextRow(source, 14);
+
+    const variants = createMessagePreprocessVariants(source, defaultOptions, {
+      minForegroundPixelRatio: 0.004,
+      maxForegroundPixelRatio: 0.18,
+    });
+    const white = variants.find((variant) => variant.id === "white");
+    const yellow = variants.find((variant) => variant.id === "yellow");
+    const selected = choosePreferredMessagePreprocessVariant(variants);
+
+    expect(white?.metrics.foregroundPixelRatio).toBe(0);
+    expect(yellow).toMatchObject({ isOcrCandidate: true, rejectReason: null });
+    expect(yellow?.metrics.foregroundPixelRatio).toBeGreaterThan(0);
+    expect(yellow?.lineCropVariants[0]?.lineCount).toBe(2);
+    expect(selected?.id).not.toBe("white");
+    expect(selected?.id).toMatch(/yellow/);
+  });
+
+  it("rejects solid yellow blocks as OCR candidates even when the yellow mask is non-empty", () => {
+    const source = createSolidSourceImage(64, 20, 14, 18, 30);
+
+    for (let y = 6; y < 9; y += 1) {
+      for (let x = 8; x < 28; x += 1) {
+        setSourcePixel(source, x, y, 244, 236, 42);
+      }
+    }
+
+    const yellow = createMessagePreprocessVariants(source, defaultOptions, {
+      minForegroundPixelRatio: 0.004,
+      maxForegroundPixelRatio: 0.18,
+    }).find((variant) => variant.id === "yellow");
+
+    expect(yellow?.metrics.foregroundPixelCount).toBeGreaterThan(0);
+    expect(yellow?.isOcrCandidate).toBe(false);
+    expect(yellow?.rejectReason).toBe("component");
   });
 });
 
