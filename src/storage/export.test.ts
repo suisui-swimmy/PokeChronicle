@@ -166,4 +166,40 @@ describe("battle log export", () => {
     expect(unknownsCsv).toContain("unk_1,battle_test,1800,reviewed");
     expect(unknownsCsv).toContain("\"候補,確認\"");
   });
+
+  it("exports simultaneous switch-in events with stable ids and shared source text", () => {
+    const firstSwitch: BattleEvent = {
+      ...battleEvent,
+      id: "evt_ocr-double_1",
+      timestampMs: 1400,
+      type: "switch_in",
+      actor: { name: "エルフーン", side: null },
+      move: null,
+      rawText: "ゆけっ! エルフーン!\nマフォクシー!",
+      normalizedText: "ゆけっ! エルフーン!マフォクシー!",
+      classification: {
+        method: "template_dictionary",
+        templateId: "switch_in_double_call",
+        alternatives: [],
+      },
+      source: { frameIndex: 8, timestampMs: 1400, cropObjectUrl: null },
+    };
+    const secondSwitch: BattleEvent = {
+      ...firstSwitch,
+      id: "evt_ocr-double_2",
+      actor: { name: "マフォクシー", side: null },
+    };
+    const eventsCsv = createEventsCsv([secondSwitch, firstSwitch]);
+    const firstIndex = eventsCsv.indexOf("evt_ocr-double_1");
+    const secondIndex = eventsCsv.indexOf("evt_ocr-double_2");
+
+    expect(firstIndex).toBeGreaterThan(0);
+    expect(secondIndex).toBeGreaterThan(firstIndex);
+    expect(eventsCsv).toContain("\"ゆけっ! エルフーン!\nマフォクシー!\"");
+    expect(
+      eventsCsv
+        .split("\n")
+        .filter((row) => row.includes(",switch_in,")),
+    ).toHaveLength(2);
+  });
 });

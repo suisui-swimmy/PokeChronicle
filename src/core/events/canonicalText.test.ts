@@ -44,9 +44,30 @@ describe("renderBattleEventCanonicalText", () => {
     ).toBe("マフォクシー 戻れ!");
     expect(
       renderBattleEventCanonicalText(
-        event({ type: "protect", actor: { name: "マフォクシー", side: null } }),
+        event({
+          type: "protect",
+          actor: { name: "マフォクシー", side: null },
+          classification: {
+            method: "seed_rule",
+            templateId: "protect_block",
+            alternatives: [],
+          },
+        }),
       ),
     ).toBe("マフォクシーは 攻撃から 身を守った!");
+    expect(
+      renderBattleEventCanonicalText(
+        event({
+          type: "protect",
+          actor: { name: "マフォクシー", side: null },
+          classification: {
+            method: "seed_rule",
+            templateId: "protect_stance",
+            alternatives: [],
+          },
+        }),
+      ),
+    ).toBe("マフォクシーは 守りの 体勢に 入った!");
     expect(
       renderBattleEventCanonicalText(
         event({

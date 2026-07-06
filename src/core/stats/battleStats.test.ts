@@ -139,4 +139,36 @@ describe("summarizeBattleStats", () => {
       pokemonActionCounts: [],
     });
   });
+
+  it("counts simultaneous switch-in events independently", () => {
+    const summary = summarizeBattleStats(
+      [
+        createEvent({
+          id: "evt_ocr-double_1",
+          type: "switch_in",
+          actor: { name: "エルフーン", side: "player" },
+          timestampMs: 1400,
+        }),
+        createEvent({
+          id: "evt_ocr-double_2",
+          type: "switch_in",
+          actor: { name: "マフォクシー", side: "player" },
+          timestampMs: 1400,
+        }),
+      ],
+      [],
+    );
+
+    expect(summary).toMatchObject({
+      totalResolvedEventCount: 2,
+      pokemonActionCount: 2,
+      switchCount: 2,
+    });
+    expect(summary.pokemonActionCounts).toEqual(
+      expect.arrayContaining([
+        { key: "player:エルフーン", name: "エルフーン", side: "player", count: 1 },
+        { key: "player:マフォクシー", name: "マフォクシー", side: "player", count: 1 },
+      ]),
+    );
+  });
 });

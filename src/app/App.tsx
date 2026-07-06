@@ -54,6 +54,7 @@ import type {
   OCRWorkerResponse,
 } from "../core/ocr/workerMessages";
 import {
+  getParsedBattleEvents,
   parseBattleMessage,
   type BattleMessageParseResult,
 } from "../core/parser/seedParser";
@@ -105,6 +106,7 @@ const RESOLVED_LOG_RESIZE_STEP = 24;
 const MAX_PENDING_OCR_JOBS = 1;
 const OCR_JOB_TIMEOUT_MS = 60_000;
 const TIMELINE_DUPLICATE_WINDOW_MS = 2500;
+const MAX_TIMELINE_DEDUPE_RECORDS = 32;
 const MAX_SESSION_ROSTER_DICTIONARY_ENTRIES = 18;
 const MAX_OBSERVED_MOVE_DICTIONARY_ENTRIES = 96;
 const MIN_TEXT_PIXEL_RATIO = 0.004;
@@ -675,10 +677,13 @@ function formatParseSummary(result: BattleMessageParseResult) {
       : "unknown";
   }
 
-  const actor = result.event.actor.name ? ` / ${result.event.actor.name}` : "";
-  const move = result.event.move ? ` / ${result.event.move}` : "";
+  const events = getParsedBattleEvents(result);
+  const firstEvent = events[0] ?? result.event;
+  const eventCount = events.length > 1 ? ` x${events.length}` : "";
+  const actor = firstEvent.actor.name ? ` / ${firstEvent.actor.name}` : "";
+  const move = firstEvent.move ? ` / ${firstEvent.move}` : "";
 
-  return `${formatEventType(result.event.type)} / ${result.event.classification.method}${actor}${move}`;
+  return `${formatEventType(firstEvent.type)}${eventCount} / ${firstEvent.classification.method}${actor}${move}`;
 }
 
 function formatSide(side: BattleEvent["actor"]["side"]) {
@@ -880,6 +885,25 @@ function pruneOldestMapEntries<TKey, TValue>(map: Map<TKey, TValue>, maxSize: nu
 
     map.delete(firstKey);
   }
+}
+
+function updateTimelineDeduplicationRecords(
+  currentRecords: readonly TimelineDeduplicationRecord[],
+  nextRecords: readonly TimelineDeduplicationRecord[],
+  timestampMs: number,
+) {
+  if (nextRecords.length === 0) {
+    return currentRecords.filter(
+      (record) => timestampMs - record.timestampMs <= TIMELINE_DUPLICATE_WINDOW_MS,
+    );
+  }
+
+  const minTimestampMs = timestampMs - TIMELINE_DUPLICATE_WINDOW_MS;
+
+  return [
+    ...nextRecords,
+    ...currentRecords.filter((record) => record.timestampMs >= minTimestampMs),
+  ].slice(0, MAX_TIMELINE_DEDUPE_RECORDS);
 }
 
 function createLog(message: string, level: LogLevel = "info"): SystemLog {
@@ -1196,7 +1220,7 @@ export function App() {
   const samplingTimerRef = useRef<number | null>(null);
   const ocrWorkerRef = useRef<Worker | null>(null);
   const cropEvidenceBySourceRef = useRef<Map<string, CropEvidence>>(new Map());
-  const lastTimelineDeduplicationRef = useRef<TimelineDeduplicationRecord | null>(null);
+  const recentTimelineDeduplicationRecordsRef = useRef<TimelineDeduplicationRecord[]>([]);
   const recentConstrainedCandidateRecordsRef = useRef<TimelineConstrainedCandidateRecord[]>([]);
   const recentAcceptedEventRecordsRef = useRef<TimelineAcceptedEventRecord[]>([]);
   const sessionRosterDictionaryRef = useRef<DictionaryEntry[]>([]);
@@ -1452,11 +1476,26 @@ export function App() {
           response.meta.timestampMs,
           response.meta.frameIndex,
         );
-        const suppressTimelineItem = shouldSuppressTimelineObservation(
-          lastTimelineDeduplicationRef.current,
-          observation.dedupe,
-          TIMELINE_DUPLICATE_WINDOW_MS,
+        const suppressedDedupeIds = new Set(
+          observation.dedupes
+            .filter((dedupe) =>
+              shouldSuppressTimelineObservation(
+                recentTimelineDeduplicationRecordsRef.current,
+                dedupe,
+                TIMELINE_DUPLICATE_WINDOW_MS,
+              ),
+            )
+            .map((dedupe) => dedupe.id),
         );
+        const acceptedEvents = observation.events.filter(
+          (event) => !suppressedDedupeIds.has(event.id),
+        );
+        const suppressUnknown =
+          observation.unknown !== null && suppressedDedupeIds.has(observation.unknown.id);
+        const suppressedItemCount =
+          observation.events.length -
+          acceptedEvents.length +
+          (suppressUnknown ? 1 : 0);
 
         if (constrainedCandidateRecord) {
           const minTimestampMs = response.meta.timestampMs - TIMELINE_DUPLICATE_WINDOW_MS;
@@ -1468,9 +1507,9 @@ export function App() {
           ].slice(0, 12);
         }
 
-        if (observation.event) {
-          rememberBattleEventDictionaries(observation.event);
-          rememberAcceptedEventRecord(observation.event);
+        for (const event of observation.events) {
+          rememberBattleEventDictionaries(event);
+          rememberAcceptedEventRecord(event);
         }
 
         setOcrLogs((currentLogs) => [nextEntry, ...currentLogs].slice(0, MAX_OCR_LOGS));
@@ -1478,32 +1517,32 @@ export function App() {
           [observation.ocrMessage, ...currentMessages].slice(0, MAX_OCR_MESSAGES),
         );
 
-        if (suppressTimelineItem) {
-          setSuppressedTimelineCount((currentCount) => currentCount + 1);
+        if (suppressedItemCount > 0) {
+          setSuppressedTimelineCount((currentCount) => currentCount + suppressedItemCount);
+        }
 
-          if (observation.dedupe) {
-            lastTimelineDeduplicationRef.current = observation.dedupe;
-          }
-        } else {
-          if (observation.event) {
-            lastAcceptedEventIdRef.current = observation.event.id;
-            setBattleEvents((currentEvents) =>
-              [observation.event as BattleEvent, ...currentEvents].slice(0, MAX_TIMELINE_ITEMS),
-            );
-          }
+        if (acceptedEvents.length > 0) {
+          lastAcceptedEventIdRef.current = acceptedEvents[acceptedEvents.length - 1].id;
+          setBattleEvents((currentEvents) =>
+            [...acceptedEvents, ...currentEvents].slice(0, MAX_TIMELINE_ITEMS),
+          );
+        }
 
-          if (observation.unknown) {
-            setUnknownEvents((currentUnknowns) =>
-              [observation.unknown as UnknownEvent, ...currentUnknowns].slice(
-                0,
-                MAX_UNKNOWN_EVENTS,
-              ),
-            );
-          }
+        if (observation.unknown && !suppressUnknown) {
+          setUnknownEvents((currentUnknowns) =>
+            [observation.unknown as UnknownEvent, ...currentUnknowns].slice(
+              0,
+              MAX_UNKNOWN_EVENTS,
+            ),
+          );
+        }
 
-          if (observation.dedupe) {
-            lastTimelineDeduplicationRef.current = observation.dedupe;
-          }
+        if (observation.dedupes.length > 0) {
+          recentTimelineDeduplicationRecordsRef.current = updateTimelineDeduplicationRecords(
+            recentTimelineDeduplicationRecordsRef.current,
+            observation.dedupes,
+            response.meta.timestampMs,
+          );
         }
 
         setOcrProgress(0);
@@ -2384,7 +2423,7 @@ export function App() {
     setReviewNotes({});
     setSuppressedTimelineCount(0);
     cropEvidenceBySourceRef.current.clear();
-    lastTimelineDeduplicationRef.current = null;
+    recentTimelineDeduplicationRecordsRef.current = [];
     recentConstrainedCandidateRecordsRef.current = [];
     recentAcceptedEventRecordsRef.current = [];
     sessionRosterDictionaryRef.current = [];
@@ -2777,7 +2816,7 @@ export function App() {
       );
       setRoi(document.roiProfile.roi);
       setSuppressedTimelineCount(0);
-      lastTimelineDeduplicationRef.current = null;
+      recentTimelineDeduplicationRecordsRef.current = [];
       recentConstrainedCandidateRecordsRef.current = [];
       recentAcceptedEventRecordsRef.current = restoredEvents
         .map((event) => createAcceptedEventRecord(event))

@@ -50,6 +50,7 @@ export interface EventParseResult {
   normalizedText: string;
   matchText: string;
   event: ParsedBattleEvent;
+  events?: readonly ParsedBattleEvent[];
   candidateMatches: string[];
 }
 
@@ -64,6 +65,10 @@ export interface UnknownParseResult {
 }
 
 export type BattleMessageParseResult = EventParseResult | UnknownParseResult;
+
+export function getParsedBattleEvents(result: BattleMessageParseResult) {
+  return result.status === "event" ? [...(result.events ?? [result.event])] : [];
+}
 
 const DEFAULT_ACTOR = { name: null, side: null } satisfies BattleEvent["actor"];
 const OPPONENT_PREFIX = "相手の";
@@ -109,6 +114,13 @@ const OCR_WEIGHTED_GLOBAL_POKEMON_OPTIONS = {
   reviewScore: 0.7,
   acceptMargin: 0.06,
   minOcrConfidenceForFuzzy: 0.55,
+  similarity: "ocr_weighted",
+} as const;
+const RELAXED_SWITCH_IN_POKEMON_OPTIONS = {
+  acceptScore: 0.68,
+  reviewScore: 0.62,
+  acceptMargin: 0.03,
+  minOcrConfidenceForFuzzy: 0.5,
   similarity: "ocr_weighted",
 } as const;
 const OCR_WEIGHTED_GLOBAL_MOVE_OPTIONS = {
@@ -634,7 +646,12 @@ function parseContextEvent(
     ],
     ["miss", "move_miss", ["外れた", "あたらなかった"]],
     ["fail", "move_fail", ["失敗", "うまく決まらない"]],
-    ["protect", "protect", ["身を守った", "守られた", "守りの体勢に入った"]],
+    ["protect", "protect_block", ["身を守った", "守られた"]],
+    [
+      "protect",
+      "protect_stance",
+      ["守りの体勢に入った", "宝りの体勢に入った"],
+    ],
     ["faint", "faint", ["倒れた", "たおれた", "たおれだ", "だたおれだ", "ひんし"]],
     ["switch_out", "switch_out", ["引っこめた", "ひっこめた"]],
     ["side_end", "tailwind_end", ["追い風が止んだ", "追い風か止んだ"]],
@@ -719,6 +736,323 @@ function parseSwitchInCallFallback(
     rawText,
     ocrConfidence,
     "switch_in_call",
+  );
+}
+
+interface SwitchInPokemonResolution {
+  segmentText: string;
+  match: DictionaryMatch;
+  candidateMatches: string[];
+}
+
+interface DoubleSwitchInCandidate {
+  templateId: string;
+  side: BattleEvent["actor"]["side"];
+  segments: string[];
+  evidence: string;
+}
+
+function createExactPokemonSpanMatch(segmentText: string, span: DictionarySpan): DictionaryMatch {
+  return {
+    input: segmentText,
+    normalizedInput: createOcrMatchText(segmentText),
+    best: span.entry.label,
+    bestEntry: span.entry,
+    score: 1,
+    secondBest: null,
+    secondScore: null,
+    status: "accepted",
+    method: "exact",
+    reason: "exact-span",
+  };
+}
+
+function createPokemonSpanDictionary(dictionary: BattleMessageDictionary) {
+  const entries: DictionaryEntry[] = [];
+  const seen = new Set<string>();
+
+  for (const entry of [
+    ...(dictionary.sessionRosterDictionary ?? []),
+    ...dictionary.pokemon,
+  ]) {
+    if (seen.has(entry.id)) {
+      continue;
+    }
+
+    seen.add(entry.id);
+    entries.push(entry);
+  }
+
+  return entries;
+}
+
+function cleanupSwitchInSegment(value: string) {
+  const stripped = createOcrMatchText(value)
+    .replace(/^(?:ゆけ|いけ)[っつ]?/u, "")
+    .replace(/^(?:がんばれ|出てこい)/u, "");
+
+  if (countCharacters(stripped) < 2 || countCharacters(stripped) > 22) {
+    return null;
+  }
+
+  return stripped;
+}
+
+function createSwitchInSegmentVariants(segmentText: string) {
+  const variants = [
+    segmentText,
+    segmentText
+      .replace(/フ[オォ]+/gu, "フォ")
+      .replace(/[オォ]{2,}/gu, "オ")
+      .replace(/グ(?=クシ)/gu, ""),
+  ];
+
+  return variants.filter((variant, index, values) => variant && values.indexOf(variant) === index);
+}
+
+function resolveSwitchInPokemon(
+  segmentText: string,
+  dictionary: BattleMessageDictionary,
+  ocrConfidence: number | null | undefined,
+): SwitchInPokemonResolution | null {
+  const cleanedSegment = cleanupSwitchInSegment(segmentText);
+
+  if (!cleanedSegment) {
+    return null;
+  }
+
+  const segmentVariants = createSwitchInSegmentVariants(cleanedSegment);
+  const spanDictionary = createPokemonSpanDictionary(dictionary);
+
+  for (const variant of segmentVariants) {
+    const spans = findDictionarySpans(variant, spanDictionary);
+    const exactSpan = spans[spans.length - 1];
+
+    if (!exactSpan) {
+      continue;
+    }
+
+    const match = createExactPokemonSpanMatch(variant, exactSpan);
+
+    return {
+      segmentText: variant,
+      match,
+      candidateMatches: [
+        ...(variant !== cleanedSegment ? [`switch-in-normalized:${cleanedSegment}->${variant}`] : []),
+        `switch-in-span:pokemon=${exactSpan.entry.label}:range=${exactSpan.start}-${exactSpan.end}`,
+        formatDictionaryCandidate("pokemon", match),
+      ],
+    };
+  }
+
+  const fuzzyCandidateMatches: string[] = [];
+
+  for (const variant of segmentVariants) {
+    const { match, candidateMatches } = matchPokemonEntry(
+      variant,
+      dictionary,
+      ocrConfidence,
+      RELAXED_SWITCH_IN_POKEMON_OPTIONS,
+    );
+
+    candidateMatches.forEach((candidate) =>
+      pushUniqueCandidate(
+        fuzzyCandidateMatches,
+        variant === cleanedSegment ? candidate : `switch-in-normalized:${cleanedSegment}->${variant}:${candidate}`,
+      ),
+    );
+
+    if (match.status !== "accepted") {
+      continue;
+    }
+
+    return {
+      segmentText: variant,
+      match,
+      candidateMatches: fuzzyCandidateMatches,
+    };
+  }
+
+  return null;
+}
+
+function collectOwnDoubleSwitchInCandidates(
+  rawText: string,
+  lines: readonly string[] | undefined,
+): DoubleSwitchInCandidate | null {
+  const sourceLines = getSourceLines(rawText, lines);
+  const normalizedParts = sourceLines.flatMap((line) => line.split("!"));
+  const hasCallShape = sourceLines.some((line) => {
+    const lineMatchText = createOcrMatchText(line);
+
+    return /^(?:ゆけ|いけ)[っつ]?/u.test(lineMatchText);
+  });
+
+  if (!hasCallShape) {
+    return null;
+  }
+
+  const segments = normalizedParts
+    .map((part) => cleanupSwitchInSegment(part))
+    .filter((part): part is string => Boolean(part));
+
+  const uniqueSegments = segments.filter(
+    (segment, index, values) => values.indexOf(segment) === index,
+  );
+
+  if (uniqueSegments.length !== 2) {
+    return null;
+  }
+
+  return {
+    templateId: "switch_in_double_call",
+    side: null,
+    segments: uniqueSegments,
+    evidence: "double-switch-in:call",
+  };
+}
+
+function collectTrainerDoubleSwitchInCandidates(
+  matchText: string,
+  surfaces: readonly MatchSurface[],
+): DoubleSwitchInCandidate | null {
+  const surfaceMatchTexts = [
+    matchText,
+    ...surfaces.map((surface) => surface.matchText),
+  ].filter((value, index, values) => value && values.indexOf(value) === index);
+
+  for (const surfaceText of surfaceMatchTexts) {
+    if (!surfaceText.includes("繰り出") || !surfaceText.includes("と")) {
+      continue;
+    }
+
+    const sendIndex = surfaceText.indexOf("を繰り出");
+
+    if (sendIndex <= 0) {
+      continue;
+    }
+
+    const prefix = surfaceText.slice(0, sendIndex);
+    const subjectIndex = prefix.lastIndexOf("は");
+
+    if (subjectIndex < 0) {
+      continue;
+    }
+
+    const body = prefix.slice(subjectIndex + 1);
+    const segments = body
+      .split("と")
+      .map((segment) => segment.trim())
+      .filter(Boolean);
+
+    if (segments.length !== 2) {
+      continue;
+    }
+
+    return {
+      templateId: "switch_in_double_trainer",
+      side: surfaceText.startsWith(OPPONENT_PREFIX) ? "opponent" : null,
+      segments,
+      evidence: "double-switch-in:trainer-send",
+    };
+  }
+
+  return null;
+}
+
+function createDoubleSwitchInResult(
+  rawText: string,
+  normalizedText: string,
+  matchText: string,
+  ocrConfidence: number | null | undefined,
+  candidate: DoubleSwitchInCandidate,
+  resolutions: readonly SwitchInPokemonResolution[],
+): EventParseResult {
+  const method: ClassificationMethod = resolutions.some(
+    (resolution) => resolution.match.method === "fuzzy",
+  )
+    ? "fuzzy_dictionary"
+    : "template_dictionary";
+  const sharedCandidateMatches = [
+    candidate.evidence,
+    ...resolutions.flatMap((resolution) => resolution.candidateMatches),
+  ];
+  const events = resolutions.map((resolution, index): ParsedBattleEvent => ({
+    type: "switch_in",
+    actor: {
+      name: resolution.match.best,
+      side: candidate.side,
+    },
+    move: null,
+    target: null,
+    confidence: combineConfidence(ocrConfidence, [resolution.match.score ?? 1]),
+    classification: createClassification(
+      method,
+      candidate.templateId,
+      [
+        candidate.evidence,
+        `slot=${index + 1}:pokemon=${resolution.match.best}:segment=${resolution.segmentText}`,
+        ...resolution.candidateMatches,
+      ],
+    ),
+  }));
+
+  return {
+    status: "event",
+    rawText,
+    normalizedText,
+    matchText,
+    event: events[0],
+    events,
+    candidateMatches: sharedCandidateMatches,
+  };
+}
+
+function parseDoubleSwitchInEvent(
+  rawText: string,
+  normalizedText: string,
+  matchText: string,
+  ocrConfidence: number | null | undefined,
+  lines: readonly string[] | undefined,
+  surfaces: readonly MatchSurface[],
+  dictionary: BattleMessageDictionary,
+) {
+  const candidate =
+    collectOwnDoubleSwitchInCandidates(rawText, lines) ??
+    collectTrainerDoubleSwitchInCandidates(matchText, surfaces);
+
+  if (!candidate) {
+    return null;
+  }
+
+  const resolutions = candidate.segments.map((segment) =>
+    resolveSwitchInPokemon(segment, dictionary, ocrConfidence),
+  );
+
+  if (resolutions.some((resolution) => !resolution)) {
+    return null;
+  }
+
+  const acceptedResolutions = resolutions.filter(
+    (resolution): resolution is SwitchInPokemonResolution => resolution !== null,
+  );
+  const pokemonNames = acceptedResolutions.map((resolution) => resolution.match.best);
+
+  if (
+    acceptedResolutions.length !== 2 ||
+    pokemonNames.some((name) => !name) ||
+    new Set(pokemonNames).size !== 2
+  ) {
+    return null;
+  }
+
+  return createDoubleSwitchInResult(
+    rawText,
+    normalizedText,
+    matchText,
+    ocrConfidence,
+    candidate,
+    acceptedResolutions,
   );
 }
 
@@ -1611,6 +1945,20 @@ export function parseBattleMessage(
 
   if (contextEvent) {
     return contextEvent;
+  }
+
+  const doubleSwitchInEvent = parseDoubleSwitchInEvent(
+    rawText,
+    normalizedText,
+    matchText,
+    ocrConfidence,
+    lines,
+    surfaces,
+    runtimeDictionary,
+  );
+
+  if (doubleSwitchInEvent) {
+    return doubleSwitchInEvent;
   }
 
   const activeTemplateRules = options.templateRules ?? STANDARD_TEMPLATE_RULES;

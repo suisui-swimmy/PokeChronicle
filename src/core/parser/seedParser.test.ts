@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderBattleEventCanonicalText } from "../events/canonicalText";
-import { parseBattleMessage } from "./seedParser";
+import { getParsedBattleEvents, parseBattleMessage } from "./seedParser";
 
 describe("parseBattleMessage", () => {
   it("parses a basic move message", () => {
@@ -286,7 +286,17 @@ describe("parseBattleMessage", () => {
   it("parses protect and side-end context OCR variants", () => {
     expect(parseBattleMessage("マフォクシーは 守りの体勢に入った/")).toMatchObject({
       status: "event",
-      event: { type: "protect" },
+      event: {
+        type: "protect",
+        classification: { templateId: "protect_stance" },
+      },
+    });
+    expect(parseBattleMessage("マフォクシーは 攻撃から 身を守った/")).toMatchObject({
+      status: "event",
+      event: {
+        type: "protect",
+        classification: { templateId: "protect_block" },
+      },
     });
     expect(parseBattleMessage("追い風が 止んだ/")).toMatchObject({
       status: "event",
@@ -437,6 +447,60 @@ describe("parseBattleMessage", () => {
       status: "event",
       event: { type: "switch_out", actor: { name: "ドドゲザン" } },
     });
+  });
+
+  it("parses double switch-in call messages as two switch-in events", () => {
+    const result = parseBattleMessage({
+      rawText: "ゆけっ! エルフーン!\nマフォクシー!",
+      lines: ["ゆけっ! エルフーン!", "マフォクシー!"],
+      ocrConfidence: 0.92,
+    });
+    const events = getParsedBattleEvents(result);
+
+    expect(result).toMatchObject({
+      status: "event",
+      event: {
+        type: "switch_in",
+        actor: { name: "エルフーン" },
+        classification: { templateId: "switch_in_double_call" },
+      },
+    });
+    expect(events).toHaveLength(2);
+    expect(events.map((event) => event.actor.name)).toEqual(["エルフーン", "マフォクシー"]);
+    expect(events.every((event) => event.type === "switch_in")).toBe(true);
+  });
+
+  it("parses noisy double switch-in call OCR from live logs", () => {
+    const result = parseBattleMessage({
+      rawText: "ゆけつ/ エルフーン/\nマフオォオグクシー/",
+      lines: ["ゆけつ/ エルフーン/", "マフオォオグクシー/"],
+      ocrConfidence: 0.847,
+    });
+    const events = getParsedBattleEvents(result);
+
+    expect(result.status).toBe("event");
+    expect(events).toHaveLength(2);
+    expect(events.map((event) => event.actor.name)).toEqual(["エルフーン", "マフォクシー"]);
+  });
+
+  it("parses titled trainer double switch-in messages as two switch-in events", () => {
+    const result = parseBattleMessage({
+      rawText: "Mercysanは ランクマスター エルフーンと\nイダイトウを 繰り出した!",
+      lines: ["Mercysanは ランクマスター エルフーンと", "イダイトウを 繰り出した!"],
+      ocrConfidence: 0.92,
+    });
+    const events = getParsedBattleEvents(result);
+
+    expect(result).toMatchObject({
+      status: "event",
+      event: {
+        type: "switch_in",
+        actor: { name: "エルフーン" },
+        classification: { templateId: "switch_in_double_trainer" },
+      },
+    });
+    expect(events).toHaveLength(2);
+    expect(events.map((event) => event.actor.name)).toEqual(["エルフーン", "イダイトウ"]);
   });
 
   it("parses switch messages from terminator-trimmed noisy surfaces", () => {

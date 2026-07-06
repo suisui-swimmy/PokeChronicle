@@ -25,7 +25,7 @@ function formatTargetObject(event: Pick<BattleEvent, "actor" | "target">) {
 }
 
 export function renderBattleEventCanonicalText(
-  event: Pick<BattleEvent, "type" | "actor" | "move" | "target">,
+  event: Pick<BattleEvent, "type" | "actor" | "move" | "target" | "classification">,
 ) {
   const actorSubject = formatActorSubject(event.actor);
   const targetObject = formatTargetObject(event);
@@ -42,6 +42,12 @@ export function renderBattleEventCanonicalText(
     case "switch_out":
       return actorSubject ? `${actorSubject} 戻れ!` : "戻れ!";
     case "protect":
+      if (event.classification.templateId === "protect_stance") {
+        return actorSubject
+          ? `${actorSubject}は 守りの 体勢に 入った!`
+          : "守りの 体勢に 入った!";
+      }
+
       return actorSubject
         ? `${actorSubject}は 攻撃から 身を守った!`
         : "攻撃から 身を守った!";

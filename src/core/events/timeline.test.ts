@@ -72,6 +72,29 @@ describe("timeline observation", () => {
       move: "じしん",
       source: { frameIndex: 12, timestampMs: 1000, cropObjectUrl: null },
     });
+    expect(observation.events).toHaveLength(1);
+    expect(observation.unknown).toBeNull();
+  });
+
+  it("creates multiple battle events from one OCR observation", () => {
+    const observation = createObservation(
+      "ゆけっ! エルフーン!\nマフォクシー!",
+      "ocr-double",
+      1400,
+      0.92,
+    );
+
+    expect(observation.ocrMessage.rawText).toBe("ゆけっ! エルフーン!\nマフォクシー!");
+    expect(observation.events).toHaveLength(2);
+    expect(observation.events.map((event) => event.id)).toEqual([
+      "evt_ocr-double_1",
+      "evt_ocr-double_2",
+    ]);
+    expect(observation.events.map((event) => event.actor.name)).toEqual([
+      "エルフーン",
+      "マフォクシー",
+    ]);
+    expect(observation.dedupes).toHaveLength(2);
     expect(observation.unknown).toBeNull();
   });
 
@@ -96,6 +119,7 @@ describe("timeline observation", () => {
     expect(observation.event).toBeNull();
     expect(observation.unknown).toBeNull();
     expect(observation.dedupe).toBeNull();
+    expect(observation.dedupes).toEqual([]);
   });
 
   it("does not promote short OCR noise into unknown events", () => {
@@ -141,6 +165,41 @@ describe("timeline observation", () => {
         candidateMatches: ["span:pokemon", "span:move"],
       }),
     ).toBe(true);
+    expect(
+      shouldCreateUnknownEvent({
+        matchText: "相手のキュウコンの",
+        normalizedText: "相手の キュウコンの",
+        ocrConfidence: 0.86,
+        candidateMatches: ["partial-template;eventType=move"],
+      }),
+    ).toBe(false);
+    expect(
+      shouldCreateUnknownEvent({
+        matchText: "特性持ち物",
+        normalizedText: "特性 持ち物",
+        ocrConfidence: 0.9,
+        candidateMatches: [],
+      }),
+    ).toBe(false);
+    expect(
+      shouldCreateUnknownEvent({
+        matchText: "05:39",
+        normalizedText: "05:39",
+        ocrConfidence: 0.9,
+        candidateMatches: [],
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps OCR raw messages while suppressing UI fragments from UnknownEvent", () => {
+    for (const rawText of ["相手の キュウコンの", "味方の", "特性 持ち物", "ーー 05:39 h"]) {
+      const observation = createObservation(rawText, `ocr-${rawText}`, 1800, 0.86);
+
+      expect(observation.ocrMessage.rawText).toBe(rawText);
+      expect(observation.event).toBeNull();
+      expect(observation.unknown).toBeNull();
+      expect(observation.dedupes).toEqual([]);
+    }
   });
 
   it("suppresses same-message timeline repeats in a short time window", () => {
@@ -152,6 +211,17 @@ describe("timeline observation", () => {
     expect(shouldSuppressTimelineObservation(first.dedupe, repeated.dedupe)).toBe(true);
     expect(shouldSuppressTimelineObservation(first.dedupe, later.dedupe)).toBe(false);
     expect(shouldSuppressTimelineObservation(first.dedupe, different.dedupe)).toBe(false);
+  });
+
+  it("suppresses repeats against a recent dedupe record ring", () => {
+    const first = createObservation("ガブリアスの じしん！", "ocr-1", 1000);
+    const interveningUnknown = createObservation("まだ分類できないメッセージ", "ocr-2", 1400);
+    const repeated = createObservation("ガブリアスの\nじしん/", "ocr-3", 1800);
+    const recentRecords = [first.dedupe, interveningUnknown.dedupe].filter(
+      (record): record is NonNullable<typeof record> => record !== null,
+    );
+
+    expect(shouldSuppressTimelineObservation(recentRecords, repeated.dedupe)).toBe(true);
   });
 
   it("deduplicates resolved events by structure instead of OCR match text", () => {

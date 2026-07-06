@@ -5,7 +5,7 @@ import type {
   OCRMessage,
   UnknownEvent,
 } from "./schema";
-import type { BattleMessageParseResult } from "../parser/seedParser";
+import { getParsedBattleEvents, type BattleMessageParseResult } from "../parser/seedParser";
 
 export const DEFAULT_TIMELINE_DUPLICATE_WINDOW_MS = 2500;
 
@@ -35,8 +35,10 @@ export interface TimelineDeduplicationRecord {
 
 export interface TimelineObservation {
   ocrMessage: OCRMessage;
+  events: BattleEvent[];
   event: BattleEvent | null;
   unknown: UnknownEvent | null;
+  dedupes: TimelineDeduplicationRecord[];
   dedupe: TimelineDeduplicationRecord | null;
 }
 
@@ -86,6 +88,98 @@ function containsJapaneseText(value: string) {
   return /[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u.test(value);
 }
 
+function hasCandidateMatchWithPrefix(candidateMatches: readonly string[], prefixes: readonly string[]) {
+  return candidateMatches.some((candidate) =>
+    prefixes.some((prefix) => candidate.startsWith(prefix)),
+  );
+}
+
+function hasBattleActionSignal(
+  matchText: string,
+  candidateMatches: readonly string[],
+) {
+  if (
+    hasCandidateMatchWithPrefix(candidateMatches, [
+      "constrained-review:",
+      "constrained-candidate;",
+      "span:move",
+      "span-relation:",
+    ])
+  ) {
+    return true;
+  }
+
+  return [
+    "効果",
+    "繰り出",
+    "ゆけ",
+    "いけ",
+    "戻れ",
+    "引っこめ",
+    "ひっこめ",
+    "倒れ",
+    "たおれ",
+    "ひんし",
+    "守り",
+    "身を守",
+    "体勢",
+    "上がっ",
+    "下がっ",
+    "治った",
+    "なおった",
+    "回復",
+    "負った",
+    "外れ",
+    "失敗",
+    "命が少し削られ",
+    "命か少し削られ",
+  ].some((keyword) => matchText.includes(keyword));
+}
+
+function isPrefixOnlyBattleFragment(matchText: string) {
+  if (matchText === "味方の" || matchText === "相手の") {
+    return true;
+  }
+
+  return /^(?:相手の)?[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}A-Za-z0-9ー]{2,14}(?:の|は)$/u.test(
+    matchText,
+  );
+}
+
+function isLikelyUiNoiseText(
+  matchText: string,
+  normalizedText: string,
+  candidateMatches: readonly string[],
+) {
+  if (isPrefixOnlyBattleFragment(matchText)) {
+    return true;
+  }
+
+  if (hasCandidateMatchWithPrefix(candidateMatches, ["partial-template;"]) && matchText.endsWith("の")) {
+    return true;
+  }
+
+  if (/(?:^|\D)\d{1,2}\s*[:：]\s*\d{2}(?:\D|$)/u.test(normalizedText)) {
+    return true;
+  }
+
+  if (["特性", "持ち物", "もちもの", "味方の"].some((hint) => matchText.includes(hint))) {
+    return true;
+  }
+
+  const characters = Array.from(matchText);
+
+  if (characters.length === 0) {
+    return true;
+  }
+
+  const symbolCount = characters.filter(
+    (character) => !/[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}A-Za-z0-9]/u.test(character),
+  ).length;
+
+  return symbolCount / characters.length >= 0.45 && !hasBattleActionSignal(matchText, candidateMatches);
+}
+
 export function shouldCreateUnknownEvent(input: {
   matchText: string;
   normalizedText: string;
@@ -99,12 +193,21 @@ export function shouldCreateUnknownEvent(input: {
   }
 
   const matchTextLength = countCharacters(matchText);
+  const hasActionSignal = hasBattleActionSignal(matchText, input.candidateMatches);
+
+  if (isLikelyUiNoiseText(matchText, input.normalizedText, input.candidateMatches)) {
+    return false;
+  }
+
+  if ((input.ocrConfidence ?? 0) < 0.5 && !hasActionSignal) {
+    return false;
+  }
 
   if (matchTextLength >= 6 && (input.ocrConfidence ?? 0) >= 0.7) {
     return true;
   }
 
-  if (input.candidateMatches.length > 0 && matchTextLength >= 3) {
+  if (input.candidateMatches.length > 0 && matchTextLength >= 3 && hasActionSignal) {
     return true;
   }
 
@@ -320,16 +423,16 @@ export function createAcceptedEventRecord(
   };
 }
 
-function createBattleEvent(
+function createBattleEvents(
   input: TimelineObservationInput,
   promotedCandidate: ParsedConstrainedCandidateMatch | null,
-): BattleEvent | null {
+): BattleEvent[] {
   if (input.parseResult.status !== "event" && !promotedCandidate) {
-    return null;
+    return [];
   }
 
   if (promotedCandidate) {
-    return {
+    return [{
       id: `evt_${input.id}`,
       battleId: input.battleId,
       turn: null,
@@ -364,17 +467,18 @@ function createBattleEvent(
         timestampMs: input.timestampMs,
         cropObjectUrl: null,
       },
-    };
+    }];
   }
 
   if (input.parseResult.status !== "event") {
-    return null;
+    return [];
   }
 
-  const event = input.parseResult.event;
+  const parsedEvents = getParsedBattleEvents(input.parseResult);
+  const useSlotIds = parsedEvents.length > 1;
 
-  return {
-    id: `evt_${input.id}`,
+  return parsedEvents.map((event, index) => ({
+    id: useSlotIds ? `evt_${input.id}_${index + 1}` : `evt_${input.id}`,
     battleId: input.battleId,
     turn: null,
     timestampMs: input.timestampMs,
@@ -391,7 +495,7 @@ function createBattleEvent(
       timestampMs: input.timestampMs,
       cropObjectUrl: null,
     },
-  };
+  }));
 }
 
 function createUnknownEvent(input: TimelineObservationInput): UnknownEvent | null {
@@ -438,40 +542,60 @@ export function createTimelineObservation(input: TimelineObservationInput): Time
     lines: [...input.lines],
   };
   const promotedCandidate = getPromotedConstrainedCandidate(input);
-  const event = createBattleEvent(input, promotedCandidate);
-  const unknown = event || shouldSuppressPartialTemplateUnknown(input) ? null : createUnknownEvent(input);
-  const dedupeKey = event
-    ? createResolvedEventDedupeKey(event)
-    : unknown && input.parseResult.matchText
-      ? `unknown:${input.parseResult.matchText}`
-      : null;
+  const events = createBattleEvents(input, promotedCandidate);
+  const event = events[0] ?? null;
+  const unknown = events.length > 0 || shouldSuppressPartialTemplateUnknown(input)
+    ? null
+    : createUnknownEvent(input);
+  const dedupes = [
+    ...events.map((timelineEvent) => ({
+      id: timelineEvent.id,
+      key: createResolvedEventDedupeKey(timelineEvent),
+      kind: "event" as const,
+      timestampMs: input.timestampMs,
+      frameIndex: input.frameIndex,
+    })),
+    ...(unknown && input.parseResult.matchText
+      ? [
+          {
+            id: unknown.id,
+            key: `unknown:${input.parseResult.matchText}`,
+            kind: "unknown" as const,
+            timestampMs: input.timestampMs,
+            frameIndex: input.frameIndex,
+          },
+        ]
+      : []),
+  ];
 
   return {
     ocrMessage,
+    events,
     event,
     unknown,
-    dedupe: dedupeKey
-      ? {
-          id: event?.id ?? unknown?.id ?? input.id,
-          key: dedupeKey,
-          kind: event ? "event" : "unknown",
-          timestampMs: input.timestampMs,
-          frameIndex: input.frameIndex,
-        }
-      : null,
+    dedupes,
+    dedupe: dedupes[0] ?? null,
   };
 }
 
 export function shouldSuppressTimelineObservation(
-  previous: TimelineDeduplicationRecord | null,
+  previous: TimelineDeduplicationRecord | readonly TimelineDeduplicationRecord[] | null,
   next: TimelineDeduplicationRecord | null,
   windowMs = DEFAULT_TIMELINE_DUPLICATE_WINDOW_MS,
 ) {
-  if (!previous || !next || previous.key !== next.key) {
+  if (!previous || !next) {
     return false;
   }
 
-  const deltaMs = next.timestampMs - previous.timestampMs;
+  const previousRecords = Array.isArray(previous) ? previous : [previous];
 
-  return deltaMs >= 0 && deltaMs <= windowMs;
+  return previousRecords.some((record) => {
+    if (record.key !== next.key) {
+      return false;
+    }
+
+    const deltaMs = next.timestampMs - record.timestampMs;
+
+    return deltaMs >= 0 && deltaMs <= windowMs;
+  });
 }
