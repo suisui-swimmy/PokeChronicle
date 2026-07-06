@@ -61,10 +61,20 @@ export function renderBattleEventCanonicalText(
       return "急所に 当たった!";
     case "faint":
       return actorSubject ? `${actorSubject}は たおれた!` : "たおれた!";
+    case "damage":
+      return targetObject ? `${targetObject}は ダメージを 受けた!` : "ダメージを 受けた!";
     case "boost":
       return actorSubject ? `${actorSubject}の 能力が 上がった!` : "能力が 上がった!";
     case "unboost":
       return actorSubject ? `${actorSubject}の 能力が 下がった!` : "能力が 下がった!";
+    case "fail":
+      return targetObject
+        ? `しかし ${targetObject}には うまく 決まらなかった!`
+        : "しかし うまく 決まらなかった!";
+    case "activate":
+      return actorSubject ? `${actorSubject}の 効果が 発動した!` : "効果が 発動した!";
+    case "redirection":
+      return actorSubject ? `${actorSubject}は 注目の的に なった!` : "注目の的に なった!";
     case "side_end":
       return "追い風が 止んだ!";
     case "battle_end":

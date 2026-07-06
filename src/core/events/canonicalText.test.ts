@@ -81,5 +81,15 @@ describe("renderBattleEventCanonicalText", () => {
         event({ type: "faint", actor: { name: "エルフーン", side: null } }),
       ),
     ).toBe("エルフーンは たおれた!");
+    expect(
+      renderBattleEventCanonicalText(
+        event({ type: "redirection", actor: { name: "ヤバソチャ", side: null } }),
+      ),
+    ).toBe("ヤバソチャは 注目の的に なった!");
+    expect(
+      renderBattleEventCanonicalText(
+        event({ type: "fail", target: { name: "ヤバソチャ", side: null } }),
+      ),
+    ).toBe("しかし ヤバソチャには うまく 決まらなかった!");
   });
 });

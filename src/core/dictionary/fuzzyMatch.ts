@@ -94,12 +94,14 @@ const SMALL_KANA_MAP = new Map<string, string>([
 ]);
 
 const OCR_CONFUSION_GROUPS = [
-  new Set(["ガ", "カ"]),
-  new Set(["バ", "パ", "ハ"]),
+  new Set(["ガ", "カ", "力"]),
+  new Set(["ギ", "キ"]),
+  new Set(["バ", "パ", "ハ", "八", "六"]),
   new Set(["ブ", "プ", "フ"]),
   new Set(["ッ", "ツ", "つ"]),
   new Set(["シ", "ツ", "ソ", "ン"]),
   new Set(["ト", "ド"]),
+  new Set(["ミ", "三"]),
 ];
 
 function getNormalizedOcrChar(value: string) {
@@ -223,10 +225,10 @@ function getOcrWeightedLengthDeltaLimit(inputLength: number) {
   }
 
   if (inputLength <= 8) {
-    return 2;
+    return 3;
   }
 
-  return 3;
+  return 4;
 }
 
 function scoreEntryKey(normalizedInput: string, key: string, mode: DictionaryMatchOptions["similarity"]) {

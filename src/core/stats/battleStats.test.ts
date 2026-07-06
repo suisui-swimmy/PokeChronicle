@@ -84,15 +84,20 @@ describe("summarizeBattleStats", () => {
           type: "protect",
           actor: { name: null, side: null },
         }),
+        createEvent({
+          id: "evt_redirection",
+          type: "redirection",
+          actor: { name: "ヤバソチャ", side: "player" },
+        }),
       ],
       [createUnknown({ id: "unk_1" }), createUnknown({ id: "unk_2" })],
     );
 
     expect(summary).toMatchObject({
-      totalResolvedEventCount: 10,
-      totalClassifiedItemCount: 12,
+      totalResolvedEventCount: 11,
+      totalClassifiedItemCount: 13,
       observedMoveCount: 2,
-      pokemonActionCount: 4,
+      pokemonActionCount: 5,
       switchCount: 2,
       faintCount: 1,
       unknownMessageCount: 2,
@@ -104,7 +109,7 @@ describe("summarizeBattleStats", () => {
         total: 3,
       },
     });
-    expect(summary.unknownRate).toBeCloseTo(2 / 12);
+    expect(summary.unknownRate).toBeCloseTo(2 / 13);
     expect(summary.pokemonActionCounts[0]).toEqual({
       key: "player:ガブリアス",
       name: "ガブリアス",
@@ -115,6 +120,7 @@ describe("summarizeBattleStats", () => {
       expect.arrayContaining([
         { key: "opponent:相手イダイトウ", name: "相手イダイトウ", side: "opponent", count: 1 },
         { key: "player:エルフーン", name: "エルフーン", side: "player", count: 1 },
+        { key: "player:ヤバソチャ", name: "ヤバソチャ", side: "player", count: 1 },
       ]),
     );
   });

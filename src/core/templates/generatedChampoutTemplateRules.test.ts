@@ -19,15 +19,20 @@ describe("generated champout template rules", () => {
     expect(CHAMPOUT_TEMPLATE_STATS).toMatchObject({
       sourceFileCount: 3,
       extractedTextCount: 851,
-      generatedRuleCount: 133,
+      generatedRuleCount: 147,
       eventTypeDistribution: {
+        activate: 4,
+        damage: 3,
+        fail: 12,
         status: 14,
         status_cure: 28,
         faint: 2,
         immune: 2,
+        redirection: 2,
+        supereffective: 4,
       },
     });
-    expect(CHAMPOUT_TEMPLATE_RULES.length).toBe(133);
+    expect(CHAMPOUT_TEMPLATE_RULES.length).toBe(147);
     expect(CHAMPOUT_TEMPLATE_RULES[0].source).toMatchObject({
       fileName: "btl_attack_syn.json",
       keyPath: "mSDataSet[0].OriginalText",
@@ -37,8 +42,9 @@ describe("generated champout template rules", () => {
     expect(CHAMPOUT_TEMPLATE_STATS.perFile).toContainEqual(
       expect.objectContaining({
         fileName: "btl_set.json",
-        reason: "narrow live battle status, faint, and no-effect messages only",
-        generatedRuleCount: 46,
+        reason:
+          "narrow live battle resolution messages for status, faint, effectiveness, fail, redirection, mega evolution, weather damage, and tea effect",
+        generatedRuleCount: 60,
       }),
     );
   });
@@ -96,6 +102,62 @@ describe("generated champout template rules", () => {
       id: "champout_immune_j84h1z",
       eventType: "immune",
       patterns: ["{target}には効果が ないようだ..."],
+    });
+    expect(
+      CHAMPOUT_TEMPLATE_RULES.find(
+        (rule) => rule.source?.labelName === "BTL_STRID_SET_AffGood_1",
+      ),
+    ).toMatchObject({
+      id: "champout_supereffective_hqpe25",
+      eventType: "supereffective",
+      patterns: ["{target}に効果は バツグンだ!"],
+    });
+    expect(
+      CHAMPOUT_TEMPLATE_RULES.find(
+        (rule) => rule.source?.labelName === "BTL_STRID_SET_WazaFailPoke",
+      ),
+    ).toMatchObject({
+      id: "champout_fail_le5yfc",
+      eventType: "fail",
+      patterns: ["しかし {target}にはうまく 決まらなかった!"],
+    });
+    expect(
+      CHAMPOUT_TEMPLATE_RULES.find(
+        (rule) => rule.source?.labelName === "BTL_STRID_SET_Konoyubi",
+      ),
+    ).toMatchObject({
+      id: "champout_redirection_zp3lh",
+      eventType: "redirection",
+      patterns: ["{pokemon}は注目の的に なった!"],
+    });
+    expect(
+      CHAMPOUT_TEMPLATE_RULES.find(
+        (rule) => rule.source?.labelName === "BTL_STRID_SET_MegaEvo_E",
+      ),
+    ).toMatchObject({
+      id: "champout_activate_5yixin",
+      eventType: "activate",
+      patterns: ["相手の {pokemon}はメガ{text}に メガシンカした!"],
+      constants: { "actor.side": "opponent" },
+    });
+    expect(
+      CHAMPOUT_TEMPLATE_RULES.find(
+        (rule) => rule.source?.labelName === "BTL_STRID_SET_WeatherDmg_Sand_E",
+      ),
+    ).toMatchObject({
+      id: "champout_damage_1fu6qsj",
+      eventType: "damage",
+      patterns: ["砂あらしが相手の {target}を 襲う!"],
+      constants: { "target.side": "opponent" },
+    });
+    expect(
+      CHAMPOUT_TEMPLATE_RULES.find(
+        (rule) => rule.source?.labelName === "BTL_STRID_SET_MotenashiNoKokoro",
+      ),
+    ).toMatchObject({
+      id: "champout_activate_1gp6nis",
+      eventType: "activate",
+      patterns: ["{pokemon}が たてた お茶を{target}は 飲みほした!"],
     });
   });
 
@@ -157,6 +219,20 @@ describe("generated champout template rules", () => {
       event: {
         type: "immune",
         target: { name: "マフォクシー" },
+      },
+    });
+    expect(parseBattleMessage("ヤバソチャは注目の的に なった!")).toMatchObject({
+      status: "event",
+      event: {
+        type: "redirection",
+        actor: { name: "ヤバソチャ" },
+      },
+    });
+    expect(parseBattleMessage("相手の バンギラスはメガバンギラスに メガシンカした!")).toMatchObject({
+      status: "event",
+      event: {
+        type: "activate",
+        actor: { name: "バンギラス", side: "opponent" },
       },
     });
   });

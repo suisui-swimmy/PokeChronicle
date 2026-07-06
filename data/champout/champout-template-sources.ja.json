@@ -33,9 +33,9 @@
     {
       "fileName": "btl_set.json",
       "status": "enabled",
-      "reason": "narrow live battle status, faint, and no-effect messages only",
+      "reason": "narrow live battle resolution messages for status, faint, effectiveness, fail, redirection, mega evolution, weather damage, and tea effect",
       "labelAllowPatterns": [
-        "^BTL_STRID_SET_(Dead|NoEffect|DokuGet|YakedoGet|MahiGet|KoriGet|NemuriGet|MeromeroGet|KonranGet|DokuCure|YakedoCure|MahiCure|KoriMelt|NemuriWake|KonranCure|MeromeroCure|UseItem_Cure(Doku|Mahi|Nemuri|Koori|Yakedo|Konran|Mero))(_E)?$"
+        "^BTL_STRID_SET_(Dead|NoEffect|AffGood_1|DokuGet|YakedoGet|MahiGet|KoriGet|NemuriGet|MeromeroGet|KonranGet|DokuCure|YakedoCure|MahiCure|KoriMelt|NemuriWake|KonranCure|MeromeroCure|UseItem_Cure(Doku|Mahi|Nemuri|Koori|Yakedo|Konran|Mero)|WazaFailPoke|FushokugasuMiss|WeatherDmg_Sand|Konoyubi|MegaEvo|MotenashiNoKokoro)(_E)?$"
       ],
       "labelDenyPatterns": ["Already", "Act$", "Damage", "TUTORIAL", "HELP", "BUTTON", "SELECT"],
       "textDenyHints": [],
@@ -53,6 +53,36 @@
           }
         },
         {
+          "eventType": "supereffective",
+          "when": {
+            "labelPatterns": ["^BTL_STRID_SET_AffGood_1(_E)?$"]
+          }
+        },
+        {
+          "eventType": "fail",
+          "when": {
+            "labelPatterns": ["^BTL_STRID_SET_(WazaFailPoke|FushokugasuMiss)(_E)?$"]
+          }
+        },
+        {
+          "eventType": "damage",
+          "when": {
+            "labelPatterns": ["^BTL_STRID_SET_WeatherDmg_Sand(_E)?$"]
+          }
+        },
+        {
+          "eventType": "redirection",
+          "when": {
+            "labelPatterns": ["^BTL_STRID_SET_Konoyubi(_E)?$"]
+          }
+        },
+        {
+          "eventType": "activate",
+          "when": {
+            "labelPatterns": ["^BTL_STRID_SET_(MegaEvo|MotenashiNoKokoro)(_E)?$"]
+          }
+        },
+        {
           "eventType": "status_cure",
           "when": {
             "labelPatterns": ["^BTL_STRID_SET_(DokuCure|YakedoCure|MahiCure|KoriMelt|NemuriWake|KonranCure|MeromeroCure|UseItem_Cure(Doku|Mahi|Nemuri|Koori|Yakedo|Konran|Mero))(_E)?$"]
@@ -67,8 +97,27 @@
       ],
       "placeholderPolicy": {
         "byEventType": {
-          "immune": ["target", "text"]
-        }
+          "immune": ["target", "text"],
+          "supereffective": ["target", "text"]
+        },
+        "byLabelPattern": [
+          {
+            "pattern": "^BTL_STRID_SET_(WazaFailPoke|FushokugasuMiss)(_E)?$",
+            "slots": ["target", "text"]
+          },
+          {
+            "pattern": "^BTL_STRID_SET_WeatherDmg_Sand(_E)?$",
+            "slots": ["target", "text"]
+          },
+          {
+            "pattern": "^BTL_STRID_SET_MegaEvo(_E)?$",
+            "slots": ["pokemon", "text"]
+          },
+          {
+            "pattern": "^BTL_STRID_SET_MotenashiNoKokoro(_E)?$",
+            "slots": ["pokemon", "target", "text"]
+          }
+        ]
       }
     }
   ]

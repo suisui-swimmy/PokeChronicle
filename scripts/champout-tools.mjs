@@ -42,6 +42,7 @@ export const actorEventTypes = new Set([
   "item",
   "ability",
   "activate",
+  "redirection",
 ]);
 
 const defaultLabelDenyPattern = /INFO|TUTORIAL|HELP|SELECT|POKESELECT|RECEPTION|BUTTON|UI/i;
@@ -351,6 +352,18 @@ export function inferEventType(extracted, sourceConfig = {}) {
     return "critical";
   }
 
+  if (matchText.includes("注目の的")) {
+    return "redirection";
+  }
+
+  if (matchText.includes("メガシンカ")) {
+    return "activate";
+  }
+
+  if (matchText.includes("お茶") && matchText.includes("飲みほした")) {
+    return "activate";
+  }
+
   if (matchText.includes("ゆけっ") || matchText.includes("いけっ") || matchText.includes("繰り出した")) {
     return "switch_in";
   }
@@ -466,7 +479,13 @@ export function inferEventType(extracted, sourceConfig = {}) {
     return "heal";
   }
 
-  if (matchText.includes("ダメージ") || matchText.includes("反動") || matchText.includes("削られ") || matchText.includes("自分を攻撃した")) {
+  if (
+    matchText.includes("ダメージ") ||
+    matchText.includes("反動") ||
+    matchText.includes("削られ") ||
+    matchText.includes("自分を攻撃した") ||
+    (matchText.includes("砂あらし") && matchText.includes("襲う"))
+  ) {
     return "damage";
   }
 
@@ -601,12 +620,17 @@ export function createRuleId(extracted, eventType, pattern) {
 export function inferSideConstants(extracted, pattern) {
   const labelName = extracted.labelName ?? "";
   const matchText = createOcrMatchText(pattern);
+  const isOpponentSource = matchText.startsWith("相手の") || /_E(?:_|$)|ATKMSG_E_/i.test(labelName);
 
-  if (matchText.startsWith("相手の") || /_E(?:_|$)|ATKMSG_E_/i.test(labelName)) {
-    return { "actor.side": "opponent" };
+  if (!isOpponentSource) {
+    return undefined;
   }
 
-  return undefined;
+  if (/^\s*相手の\s*\{target\}/.test(pattern) || (pattern.includes("{target}") && !pattern.includes("{pokemon}"))) {
+    return { "target.side": "opponent" };
+  }
+
+  return { "actor.side": "opponent" };
 }
 
 export function createRule(extracted, eventType, sourceCommit, sourceConfig = {}) {

@@ -16,6 +16,7 @@ const POKEMON_ACTION_EVENT_TYPES = new Set<BattleEvent["type"]>([
   "item",
   "ability",
   "activate",
+  "redirection",
 ]);
 
 export interface PokemonActionCount {

@@ -603,6 +603,112 @@ describe("parseBattleMessage", () => {
     });
   });
 
+  it("parses newly allowed btl_set resolution templates from real OCR variants", () => {
+    const megaEvolution = parseBattleMessage({
+      rawText: "相手の バンギラスは\nメ力八ンギラスに メガシン力した/",
+      ocrConfidence: 0.82,
+    });
+    const failed = parseBattleMessage({
+      rawText: "しじしかし うまぐ   決ま らなかつた//",
+      ocrConfidence: 0.88,
+    });
+    const redirection = parseBattleMessage({
+      rawText: "ヤハバソチヤは\n注目の的に なった/",
+      ocrConfidence: 0.9,
+    });
+    const supereffective = parseBattleMessage({
+      rawText: "ヤハソチヤに\n効果は バウツグンただ/",
+      ocrConfidence: 0.83,
+    });
+    const fainted = parseBattleMessage({
+      rawText: "ヤミラ三は たおあれた/",
+      ocrConfidence: 0.88,
+    });
+    const opponentFainted = parseBattleMessage({
+      rawText: "相手の バンギキギキラスは だおれだた/",
+      ocrConfidence: 0.88,
+    });
+
+    expect(megaEvolution).toMatchObject({
+      status: "event",
+      event: {
+        type: "activate",
+        actor: { name: "バンギラス", side: "opponent" },
+        classification: { method: "template_dictionary" },
+      },
+    });
+    expect(failed).toMatchObject({
+      status: "event",
+      event: {
+        type: "fail",
+        classification: { templateId: "champout_fail_1mhcr35" },
+      },
+    });
+    expect(redirection).toMatchObject({
+      status: "event",
+      event: {
+        type: "redirection",
+        actor: { name: "ヤバソチャ" },
+        classification: { templateId: "champout_redirection_zp3lh" },
+      },
+    });
+    expect(supereffective).toMatchObject({
+      status: "event",
+      event: {
+        type: "supereffective",
+        target: { name: "ヤバソチャ" },
+        classification: { templateId: "champout_supereffective_hqpe25" },
+      },
+    });
+    expect(fainted).toMatchObject({
+      status: "event",
+      event: {
+        type: "faint",
+        actor: { name: "ヤミラミ" },
+      },
+    });
+    expect(opponentFainted).toMatchObject({
+      status: "event",
+      event: {
+        type: "faint",
+        actor: { name: "バンギラス", side: "opponent" },
+      },
+    });
+  });
+
+  it("parses complete weather and tea-effect btl_set messages but leaves fragments unknown", () => {
+    const teaEffect = parseBattleMessage("ヤバソチャが たてた お茶をバンギラスは 飲みほした!");
+    const sandDamage = parseBattleMessage("砂あらしが相手の バンギラスを 襲う!");
+    const partialTea = parseBattleMessage({
+      rawText: "ヤ六ソチヤがか たてた お茶を",
+      ocrConfidence: 0.88,
+    });
+    const partialSand = parseBattleMessage({
+      rawText: "砂あらしが ー",
+      ocrConfidence: 0.85,
+    });
+
+    expect(teaEffect).toMatchObject({
+      status: "event",
+      event: {
+        type: "activate",
+        actor: { name: "ヤバソチャ" },
+        target: { name: "バンギラス" },
+        classification: { templateId: "champout_activate_1gp6nis" },
+      },
+    });
+    expect(sandDamage).toMatchObject({
+      status: "event",
+      event: {
+        type: "damage",
+        target: { name: "バンギラス", side: "opponent" },
+        classification: { method: "template_dictionary" },
+      },
+    });
+    expect(partialTea).toMatchObject({ status: "unknown" });
+    expect(partialSand).toMatchObject({ status: "unknown" });
+  });
+
   it("keeps weak constrained candidates unknown and reviewable", () => {
     const result = parseBattleMessage({
       rawText: "相手の キュウの\nオーパーヒードト/",

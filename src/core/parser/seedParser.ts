@@ -1493,6 +1493,15 @@ function parseTemplateEvent(
           side: inferResolvedActorSide(templateMatch.actor.name, surfaces) ?? templateMatch.actor.side,
         }
       : templateMatch.actor;
+  const target =
+    templateMatch.target?.name && !templateMatch.target.side
+      ? {
+          ...templateMatch.target,
+          side:
+            inferResolvedActorSide(templateMatch.target.name, surfaces) ??
+            templateMatch.target.side,
+        }
+      : templateMatch.target;
 
   return {
     status: "event",
@@ -1503,7 +1512,7 @@ function parseTemplateEvent(
       type: templateMatch.rule.eventType,
       actor,
       move: templateMatch.move,
-      target: templateMatch.target,
+      target,
       confidence: combineConfidence(ocrConfidence, [templateMatch.confidenceScore]),
       classification: createClassification(
         "template_dictionary",
@@ -1656,6 +1665,15 @@ function parseConstrainedTemplateEvent(
             constrainedMatch.actor.side,
         }
       : constrainedMatch.actor;
+  const target =
+    constrainedMatch.target?.name && !constrainedMatch.target.side
+      ? {
+          ...constrainedMatch.target,
+          side:
+            inferResolvedActorSide(constrainedMatch.target.name, surfaces) ??
+            constrainedMatch.target.side,
+        }
+      : constrainedMatch.target;
 
   return {
     result: {
@@ -1667,7 +1685,7 @@ function parseConstrainedTemplateEvent(
         type: constrainedMatch.eventType,
         actor,
         move: constrainedMatch.move,
-        target: constrainedMatch.target,
+        target,
         confidence: combineConfidence(ocrConfidence, [constrainedMatch.confidenceScore]),
         classification: createClassification(
           "template_dictionary",
@@ -1708,7 +1726,64 @@ function includesAny(value: string, needles: readonly string[]) {
 }
 
 function isConstrainedFaintSurface(surfaceText: string) {
-  return includesAny(surfaceText, ["倒れ", "たおれ", "ひんし"]);
+  return includesAny(surfaceText, [
+    "倒れ",
+    "たおれ",
+    "たおあれ",
+    "だおれ",
+    "おれだ",
+    "ひんし",
+  ]);
+}
+
+function isConstrainedSupereffectiveSurface(surfaceText: string) {
+  return (
+    surfaceText.includes("効果") &&
+    includesAny(surfaceText, ["バツ", "パツ", "バウツ", "バッグ", "パッグ", "バック", "グン"])
+  );
+}
+
+function hasEffectTargetSurfaceShape(surfaceText: string) {
+  const effectIndex = surfaceText.indexOf("効果");
+
+  if (effectIndex <= 0) {
+    return false;
+  }
+
+  const beforeEffect = surfaceText.slice(0, effectIndex);
+
+  return beforeEffect.endsWith("に") && beforeEffect.length >= 3;
+}
+
+function isConstrainedFailSurface(surfaceText: string) {
+  return (
+    (surfaceText.includes("失敗") ||
+      surfaceText.includes("しかし") ||
+      surfaceText.includes("うまく") ||
+      surfaceText.includes("うまぐ") ||
+      surfaceText.includes("うま")) &&
+    includesAny(surfaceText, ["決ま", "きま"]) &&
+    includesAny(surfaceText, ["なかった", "なかつた"])
+  );
+}
+
+function isConstrainedRedirectionSurface(surfaceText: string) {
+  return (
+    surfaceText.includes("注目の的") ||
+    (surfaceText.includes("注目") && surfaceText.includes("なった")) ||
+    (surfaceText.includes("的") && surfaceText.includes("なった"))
+  );
+}
+
+function isConstrainedActivateSurface(surfaceText: string) {
+  return (
+    (surfaceText.includes("メガ") && includesAny(surfaceText, ["シンカ", "シン力", "シソカ"])) ||
+    (surfaceText.includes("お茶") && surfaceText.includes("飲"))
+  );
+}
+
+function isConstrainedDamageSurface(surfaceText: string) {
+  return surfaceText.includes("砂あらし") && includesAny(surfaceText, ["襲", "おそう"]);
 }
 
 function isConstrainedStatusCureSurface(surfaceText: string) {
@@ -1797,6 +1872,32 @@ function selectConstrainedTemplateSurfaces(
       return true;
     }
 
+    if (
+      eventTypes.has("supereffective") &&
+      isConstrainedSupereffectiveSurface(surface.matchText)
+    ) {
+      return true;
+    }
+
+    if (eventTypes.has("fail") && isConstrainedFailSurface(surface.matchText)) {
+      return true;
+    }
+
+    if (
+      eventTypes.has("redirection") &&
+      isConstrainedRedirectionSurface(surface.matchText)
+    ) {
+      return true;
+    }
+
+    if (eventTypes.has("activate") && isConstrainedActivateSurface(surface.matchText)) {
+      return true;
+    }
+
+    if (eventTypes.has("damage") && isConstrainedDamageSurface(surface.matchText)) {
+      return true;
+    }
+
     return false;
   });
 }
@@ -1862,6 +1963,12 @@ function selectConstrainedTemplateRules(
   const hasStatusCureShape = surfaceTexts.some(isConstrainedStatusCureSurface);
   const hasStatusShape = surfaceTexts.some(isConstrainedStatusSurface);
   const hasImmuneShape = surfaceTexts.some(isConstrainedImmuneSurface);
+  const hasSupereffectiveShape = surfaceTexts.some(isConstrainedSupereffectiveSurface);
+  const hasSupereffectiveTargetShape = surfaceTexts.some(hasEffectTargetSurfaceShape);
+  const hasFailShape = surfaceTexts.some(isConstrainedFailSurface);
+  const hasRedirectionShape = surfaceTexts.some(isConstrainedRedirectionSurface);
+  const hasActivateShape = surfaceTexts.some(isConstrainedActivateSurface);
+  const hasDamageShape = surfaceTexts.some(isConstrainedDamageSurface);
 
   return templateRules.filter((rule) => {
     if (!rule.id.startsWith("champout_")) {
@@ -1894,6 +2001,30 @@ function selectConstrainedTemplateRules(
 
     if (rule.eventType === "immune") {
       return hasImmuneShape;
+    }
+
+    if (rule.eventType === "supereffective") {
+      return (
+        hasSupereffectiveShape &&
+        (!hasSupereffectiveTargetShape ||
+          rule.patterns.some((pattern) => pattern.includes("{target}")))
+      );
+    }
+
+    if (rule.eventType === "fail") {
+      return hasFailShape;
+    }
+
+    if (rule.eventType === "redirection") {
+      return hasRedirectionShape;
+    }
+
+    if (rule.eventType === "activate") {
+      return hasActivateShape;
+    }
+
+    if (rule.eventType === "damage") {
+      return hasDamageShape;
     }
 
     return false;

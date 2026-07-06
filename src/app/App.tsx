@@ -652,6 +652,7 @@ function formatEventType(type: string) {
     miss: "外れ",
     move: "技",
     protect: "まもる",
+    redirection: "注目誘導",
     resisted: "半減",
     side_end: "サイド終了",
     side_start: "サイド開始",

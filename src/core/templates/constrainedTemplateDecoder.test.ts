@@ -109,6 +109,53 @@ describe("decodeConstrainedTemplate", () => {
     });
   });
 
+  it("projects noisy generated btl_set effect templates for real-log OCR variants", () => {
+    const rules = STANDARD_TEMPLATE_RULES.filter((rule) =>
+      [
+        "BTL_STRID_SET_MegaEvo_E",
+        "BTL_STRID_SET_Konoyubi",
+        "BTL_STRID_SET_AffGood_1",
+      ].includes(rule.source?.labelName ?? ""),
+    );
+    const megaEvolution = decodeConstrainedTemplate({
+      surfaces: [surface("相手の バンギラスは\nメ力八ンギラスに メガシン力した/")],
+      dictionary: BATTLE_DICTIONARY,
+      rules,
+      ocrConfidence: 0.82,
+    });
+    const redirection = decodeConstrainedTemplate({
+      surfaces: [surface("ヤハバソチヤは\n注目の的に なった/")],
+      dictionary: BATTLE_DICTIONARY,
+      rules,
+      ocrConfidence: 0.9,
+    });
+    const supereffective = decodeConstrainedTemplate({
+      surfaces: [surface("ヤハソチヤに\n効果は バウツグンただ/")],
+      dictionary: BATTLE_DICTIONARY,
+      rules,
+      ocrConfidence: 0.83,
+    });
+
+    expect(megaEvolution).toMatchObject({
+      accepted: true,
+      eventType: "activate",
+      actor: { name: "バンギラス", side: "opponent" },
+      rule: { id: "champout_activate_5yixin" },
+    });
+    expect(redirection).toMatchObject({
+      accepted: true,
+      eventType: "redirection",
+      actor: { name: "ヤバソチャ" },
+      rule: { id: "champout_redirection_zp3lh" },
+    });
+    expect(supereffective).toMatchObject({
+      accepted: true,
+      eventType: "supereffective",
+      target: { name: "ヤバソチャ" },
+      rule: { id: "champout_supereffective_hqpe25" },
+    });
+  });
+
   it("keeps short suffix noise as evidence without contaminating placeholders", () => {
     const result = decodeConstrainedTemplate({
       surfaces: [surface("相手の キュウコンの オームーヒードヒ/ bh、亜")],

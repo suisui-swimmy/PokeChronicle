@@ -312,6 +312,13 @@ function createTemplateMatch(
   };
 }
 
+function scoreRuleSideSpecificity(rule: BattleTemplateRule) {
+  return (
+    (rule.constants?.["actor.side"] ? 1 : 0) +
+    (rule.constants?.["target.side"] ? 1 : 0)
+  );
+}
+
 export function matchTemplateRules(
   surfaces: readonly TemplateMatchSurface[],
   dictionary: TemplateDictionary,
@@ -340,6 +347,7 @@ export function matchTemplateRules(
   return matches.sort(
     (left, right) =>
       right.rule.priority - left.rule.priority ||
+      scoreRuleSideSpecificity(right.rule) - scoreRuleSideSpecificity(left.rule) ||
       right.confidenceScore - left.confidenceScore ||
       (left.surface.priority ?? 0) - (right.surface.priority ?? 0),
   )[0] ?? null;

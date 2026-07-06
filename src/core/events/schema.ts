@@ -32,6 +32,7 @@ export type BattleEventType =
   | "item"
   | "ability"
   | "activate"
+  | "redirection"
   | "unknown";
 
 export type ClassificationMethod =

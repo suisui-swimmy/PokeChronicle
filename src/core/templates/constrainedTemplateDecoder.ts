@@ -555,6 +555,22 @@ function createEvidence(
     .join(":");
 }
 
+function scoreExplicitSideConstants(
+  candidate: Pick<ConstrainedTemplateMatch, "rule">,
+) {
+  return (
+    (candidate.rule.constants?.["actor.side"] ? 1 : 0) +
+    (candidate.rule.constants?.["target.side"] ? 1 : 0)
+  );
+}
+
+function scoreResolvedDictionaryPlaceholders(
+  candidate: Pick<ConstrainedTemplateMatch, "placeholderResolutions">,
+) {
+  return candidate.placeholderResolutions.filter((resolution) => resolution.kind !== "text")
+    .length;
+}
+
 function tryDecodePattern(
   rule: BattleTemplateRule,
   pattern: string,
@@ -702,12 +718,21 @@ export function decodeConstrainedTemplate({
     }
   }
 
-  const sortedCandidates = candidates.sort(
-    (left, right) =>
-      right.confidenceScore - left.confidenceScore ||
+  const sortedCandidates = candidates.sort((left, right) => {
+    const confidenceDelta = right.confidenceScore - left.confidenceScore;
+
+    if (Math.abs(confidenceDelta) > 0.12) {
+      return confidenceDelta;
+    }
+
+    return (
+      scoreExplicitSideConstants(right) - scoreExplicitSideConstants(left) ||
+      scoreResolvedDictionaryPlaceholders(right) - scoreResolvedDictionaryPlaceholders(left) ||
+      confidenceDelta ||
       right.literalScore - left.literalScore ||
-      right.dictionaryScore - left.dictionaryScore,
-  );
+      right.dictionaryScore - left.dictionaryScore
+    );
+  });
   if (sortedCandidates.length === 0) {
     return null;
   }
