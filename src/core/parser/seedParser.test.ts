@@ -721,7 +721,18 @@ describe("parseBattleMessage", () => {
   });
 
   it("parses requested champout/live resolution messages from real-log review", () => {
-    expect(parseBattleMessage("相手の ガメノデスは ひるんで 技が だせない!")).toMatchObject({
+    const flinch = parseBattleMessage("相手の ガメノデスは\nひるんで 技が だせない!");
+    const priorityItem = parseBattleMessage(
+      "相手の ガメノデスは せんせいのツメで\n行動が はやくなった!",
+    );
+    const megaEvolution = parseBattleMessage(
+      "相手の バンギラスは メガバンギラスに メガシンカした!",
+    );
+    const teaEffect = parseBattleMessage(
+      "ヤバソチャが たてた お茶を\nメタグロスは 飲みほした!",
+    );
+
+    expect(flinch).toMatchObject({
       status: "event",
       event: {
         type: "flinch",
@@ -729,9 +740,7 @@ describe("parseBattleMessage", () => {
         classification: { method: "template_dictionary" },
       },
     });
-    expect(
-      parseBattleMessage("相手の ガメノデスは せんせいのツメで 行動が はやくなった!"),
-    ).toMatchObject({
+    expect(priorityItem).toMatchObject({
       status: "event",
       event: {
         type: "item",
@@ -739,7 +748,7 @@ describe("parseBattleMessage", () => {
         classification: { method: "template_dictionary" },
       },
     });
-    expect(parseBattleMessage("相手の バンギラスは メガバンギラスに メガシンカした!")).toMatchObject({
+    expect(megaEvolution).toMatchObject({
       status: "event",
       event: {
         type: "activate",
@@ -747,7 +756,7 @@ describe("parseBattleMessage", () => {
         classification: { method: "template_dictionary" },
       },
     });
-    expect(parseBattleMessage("ヤバソチャが たてた お茶を メタグロスは 飲みほした!")).toMatchObject({
+    expect(teaEffect).toMatchObject({
       status: "event",
       event: {
         type: "activate",
@@ -756,6 +765,25 @@ describe("parseBattleMessage", () => {
         classification: { templateId: "champout_activate_1gp6nis" },
       },
     });
+    expect(
+      flinch.status === "event" ? renderBattleEventCanonicalText(flinch.event) : null,
+    ).toBe("相手の ガメノデスは ひるんで 技が だせない!");
+    expect(
+      priorityItem.status === "event"
+        ? renderBattleEventCanonicalText({
+            ...priorityItem.event,
+            normalizedText: priorityItem.normalizedText,
+          })
+        : null,
+    ).toBe("相手の ガメノデスは せんせいのツメで 行動が はやくなった!");
+    expect(
+      teaEffect.status === "event"
+        ? renderBattleEventCanonicalText({
+            ...teaEffect.event,
+            normalizedText: teaEffect.normalizedText,
+          })
+        : null,
+    ).toBe("ヤバソチャが たてた お茶を メタグロスは 飲みほした!");
     expect(parseBattleMessage("雨が 降り始めた!")).toMatchObject({
       status: "event",
       event: { type: "weather_start" },

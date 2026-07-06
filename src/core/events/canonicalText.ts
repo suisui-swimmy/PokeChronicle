@@ -46,6 +46,7 @@ export function renderBattleEventCanonicalText(
   const targetObject = formatTargetObject(event);
   const textCapture = extractTextCapture(event.classification);
   const classificationEvidence = event.classification.alternatives.join(":");
+  const canonicalSignalText = `${event.normalizedText ?? ""}:${classificationEvidence}`;
 
   switch (event.type) {
     case "move":
@@ -124,6 +125,46 @@ export function renderBattleEventCanonicalText(
       return actorSubject ? `${actorSubject}の 効果が 発動した!` : "効果が 発動した!";
     case "redirection":
       return actorSubject ? `${actorSubject}は 注目の的に なった!` : "注目の的に なった!";
+    case "weather_start":
+      if (
+        canonicalSignalText.includes("砂あらし") ||
+        canonicalSignalText.includes("砂 あら") ||
+        canonicalSignalText.includes("あらじし")
+      ) {
+        return "砂あらしが 吹き始めた!";
+      }
+
+      if (canonicalSignalText.includes("雨")) {
+        return "雨が 降り始めた!";
+      }
+
+      if (canonicalSignalText.includes("雪") || canonicalSignalText.includes("ゆき")) {
+        return "雪が 降り始めた!";
+      }
+
+      if (canonicalSignalText.includes("日差し")) {
+        return "日差しが 強くなった!";
+      }
+
+      return "天候が 変わった!";
+    case "weather_end":
+      if (canonicalSignalText.includes("砂あらし")) {
+        return "砂あらしが 止んだ!";
+      }
+
+      if (canonicalSignalText.includes("雨")) {
+        return "雨が 上がった!";
+      }
+
+      if (canonicalSignalText.includes("雪") || canonicalSignalText.includes("ゆき")) {
+        return "雪が 止んだ!";
+      }
+
+      if (canonicalSignalText.includes("日差し")) {
+        return "日差しが 元に戻った!";
+      }
+
+      return "天候が 元に戻った!";
     case "side_end":
       return "追い風が 止んだ!";
     case "battle_end":

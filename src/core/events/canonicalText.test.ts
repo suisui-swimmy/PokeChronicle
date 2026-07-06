@@ -135,6 +135,32 @@ describe("renderBattleEventCanonicalText", () => {
     ).toBe("ヤバソチャが たてた お茶を メタグロスは 飲みほした!");
     expect(
       renderBattleEventCanonicalText(
+        event({
+          type: "weather_start",
+          normalizedText: "砂あらしが 吹き始めた!",
+          classification: {
+            method: "template_dictionary",
+            templateId: "champout_weather_start_19zhw7i",
+            alternatives: [],
+          },
+        }),
+      ),
+    ).toBe("砂あらしが 吹き始めた!");
+    expect(
+      renderBattleEventCanonicalText(
+        event({
+          type: "weather_start",
+          normalizedText: "雨が 降り始めた!",
+          classification: {
+            method: "template_dictionary",
+            templateId: "champout_weather_start_1clktbb",
+            alternatives: [],
+          },
+        }),
+      ),
+    ).toBe("雨が 降り始めた!");
+    expect(
+      renderBattleEventCanonicalText(
         event({ type: "fail", target: { name: "ヤバソチャ", side: null } }),
       ),
     ).toBe("しかし ヤバソチャには うまく 決まらなかった!");
