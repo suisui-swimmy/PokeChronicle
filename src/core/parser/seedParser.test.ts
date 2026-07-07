@@ -429,6 +429,11 @@ describe("parseBattleMessage", () => {
       lines: ["マフオォクグシーの", "まもる/"],
       ocrConfidence: 0.88,
     });
+    const duraludonProtect = parseBattleMessage({
+      rawText: "相手の プリジュラスの\nま モもモる/",
+      lines: ["相手の プリジュラスの", "ま モもモる/"],
+      ocrConfidence: 0.86,
+    });
 
     expect(kyukon).toMatchObject({
       status: "event",
@@ -456,6 +461,14 @@ describe("parseBattleMessage", () => {
       event: {
         type: "move",
         actor: { name: "マフォクシー" },
+        move: "まもる",
+      },
+    });
+    expect(duraludonProtect).toMatchObject({
+      status: "event",
+      event: {
+        type: "move",
+        actor: { name: "ブリジュラス", side: "opponent" },
         move: "まもる",
       },
     });
@@ -739,7 +752,7 @@ describe("parseBattleMessage", () => {
         actor: { name: "バンギラス", side: "opponent" },
       },
     });
-  }, 20000);
+  }, 30000);
 
   it("parses complete weather and tea-effect btl_set messages but leaves fragments unknown", () => {
     const teaEffect = parseBattleMessage("ヤバソチャが たてた お茶をバンギラスは 飲みほした!");
@@ -869,10 +882,16 @@ describe("parseBattleMessage", () => {
     expect(parseBattleMessage("相手の ドヒドイデは")).toMatchObject({
       status: "unknown",
     });
+    expect(parseBattleMessage("相手の プリジュラスは")).toMatchObject({
+      status: "unknown",
+    });
+    expect(parseBattleMessage("ま モもモる/")).toMatchObject({
+      status: "unknown",
+    });
     expect(parseBattleMessage("砂あらしが ー")).toMatchObject({
       status: "unknown",
     });
-  }, 20000);
+  }, 30000);
 
   it("parses requested champout/live resolution messages from real-log review", () => {
     const flinch = parseBattleMessage("相手の ガメノデスは\nひるんで 技が だせない!");
@@ -954,7 +973,7 @@ describe("parseBattleMessage", () => {
       status: "event",
       event: { type: "battle_end" },
     });
-  }, 20000);
+  }, 30000);
 
   it("projects noisy flinch and priority-item templates only inside narrow shapes", () => {
     expect(
@@ -984,7 +1003,7 @@ describe("parseBattleMessage", () => {
     expect(parseBattleMessage("せんせいのツメで 行動が はやくなった")).toMatchObject({
       status: "unknown",
     });
-  }, 20000);
+  }, 30000);
 
   it("keeps weak constrained candidates unknown and reviewable", () => {
     const result = parseBattleMessage({

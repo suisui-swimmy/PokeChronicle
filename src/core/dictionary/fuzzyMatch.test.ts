@@ -4,7 +4,7 @@ import {
   normalizedOcrWeightedSimilarity,
   normalizedSimilarity,
 } from "./fuzzyMatch";
-import { SEED_POKEMON_DICTIONARY } from "./seedBattleDictionary";
+import { SEED_MOVE_DICTIONARY, SEED_POKEMON_DICTIONARY } from "./seedBattleDictionary";
 
 describe("matchDictionaryEntry", () => {
   it("accepts exact dictionary matches", () => {
@@ -38,6 +38,24 @@ describe("matchDictionaryEntry", () => {
       status: "needs_review",
       reason: "low-ocr-confidence",
     });
+  });
+
+  it("accepts kana-script OCR noise for moves only when score and confidence are high", () => {
+    const match = matchDictionaryEntry("ま モもモる", SEED_MOVE_DICTIONARY, {
+      acceptScore: 0.72,
+      reviewScore: 0.68,
+      acceptMargin: 0.12,
+      minOcrConfidenceForFuzzy: 0.68,
+      ocrConfidence: 0.86,
+      similarity: "ocr_weighted",
+    });
+
+    expect(match).toMatchObject({
+      best: "まもる",
+      method: "fuzzy",
+      status: "accepted",
+    });
+    expect(match.score).toBeGreaterThan(normalizedSimilarity("まモもモる", "まもる"));
   });
 });
 

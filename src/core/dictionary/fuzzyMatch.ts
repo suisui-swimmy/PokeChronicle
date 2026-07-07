@@ -17,7 +17,6 @@ const DEFAULT_MIN_OCR_CONFIDENCE_FOR_FUZZY = 0.65;
 
 interface ScoredDictionaryEntry {
   entry: DictionaryEntry;
-  key: string;
   score: number;
 }
 
@@ -104,8 +103,54 @@ const OCR_CONFUSION_GROUPS = [
   new Set(["ミ", "三"]),
 ];
 
+const kanaScriptFoldCache = new Map<string, string>();
+const ocrConfusableCache = new Map<string, boolean>();
+const keyedEntriesCache = new WeakMap<readonly DictionaryEntry[], KeyedDictionaryEntry[]>();
+const similarityScoreCache = new Map<string, number>();
+const MAX_SIMILARITY_SCORE_CACHE_SIZE = 50000;
+
 function getNormalizedOcrChar(value: string) {
   return SMALL_KANA_MAP.get(value) ?? value;
+}
+
+function foldKanaScript(value: string) {
+  const cached = kanaScriptFoldCache.get(value);
+
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const codePoint = value.codePointAt(0);
+
+  if (codePoint === undefined) {
+    kanaScriptFoldCache.set(value, value);
+    return value;
+  }
+
+  if (codePoint >= 0x30a1 && codePoint <= 0x30f6) {
+    const folded = String.fromCodePoint(codePoint - 0x60);
+    kanaScriptFoldCache.set(value, folded);
+    return folded;
+  }
+
+  kanaScriptFoldCache.set(value, value);
+  return value;
+}
+
+function createCharPairKey(left: string, right: string) {
+  return left <= right ? `${left}\u0000${right}` : `${right}\u0000${left}`;
+}
+
+function createSimilarityScoreCacheKey(
+  normalizedInput: string,
+  key: string,
+  mode: DictionaryMatchOptions["similarity"],
+) {
+  return `${mode ?? "standard"}\u0000${normalizedInput}\u0000${key}`;
+}
+
+function areSameOcrSound(left: string, right: string) {
+  return getNormalizedOcrChar(left) === getNormalizedOcrChar(right);
 }
 
 function areOcrConfusable(left: string, right: string) {
@@ -116,9 +161,18 @@ function areOcrConfusable(left: string, right: string) {
     return true;
   }
 
-  return OCR_CONFUSION_GROUPS.some(
+  const cacheKey = createCharPairKey(normalizedLeft, normalizedRight);
+  const cached = ocrConfusableCache.get(cacheKey);
+
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const isConfusable = OCR_CONFUSION_GROUPS.some(
     (group) => group.has(normalizedLeft) && group.has(normalizedRight),
   );
+  ocrConfusableCache.set(cacheKey, isConfusable);
+  return isConfusable;
 }
 
 function substitutionCost(left: string, right: string) {
@@ -126,7 +180,7 @@ function substitutionCost(left: string, right: string) {
     return 0;
   }
 
-  if (getNormalizedOcrChar(left) === getNormalizedOcrChar(right)) {
+  if (areSameOcrSound(left, right)) {
     return 0.15;
   }
 
@@ -149,7 +203,7 @@ function insertionDeletionCost(
     return 0.2;
   }
 
-  if (index > 0 && getNormalizedOcrChar(chars[index - 1]) === getNormalizedOcrChar(char)) {
+  if (index > 0 && areSameOcrSound(chars[index - 1], char)) {
     return 0.25;
   }
 
@@ -219,6 +273,58 @@ function createEntryKeys(entry: DictionaryEntry) {
   return [entry.label, ...(entry.aliases ?? [])].map((value) => createOcrMatchText(value));
 }
 
+function hasHiragana(value: string) {
+  return /[ぁ-ん]/u.test(value);
+}
+
+function hasKatakana(value: string) {
+  return /[ァ-ヶ]/u.test(value);
+}
+
+function foldKanaScriptText(value: string) {
+  return toCharacters(value)
+    .map((char) => foldKanaScript(getNormalizedOcrChar(char)))
+    .join("");
+}
+
+function collapseRepeatedCharacters(value: string) {
+  let collapsed = "";
+
+  for (const char of toCharacters(value)) {
+    if (collapsed.endsWith(char)) {
+      continue;
+    }
+
+    collapsed += char;
+  }
+
+  return collapsed;
+}
+
+function createMixedKanaOcrVariant(value: string) {
+  if (!hasHiragana(value) || !hasKatakana(value)) {
+    return null;
+  }
+
+  const variant = collapseRepeatedCharacters(foldKanaScriptText(value));
+  return variant === value ? null : variant;
+}
+
+function getKeyedDictionaryEntries(entries: readonly DictionaryEntry[]) {
+  const cached = keyedEntriesCache.get(entries);
+
+  if (cached) {
+    return cached;
+  }
+
+  const keyedEntries = entries.map((entry) => ({
+    entry,
+    keys: createEntryKeys(entry),
+  }));
+  keyedEntriesCache.set(entries, keyedEntries);
+  return keyedEntries;
+}
+
 function getOcrWeightedLengthDeltaLimit(inputLength: number) {
   if (inputLength <= 4) {
     return 1;
@@ -232,14 +338,45 @@ function getOcrWeightedLengthDeltaLimit(inputLength: number) {
 }
 
 function scoreEntryKey(normalizedInput: string, key: string, mode: DictionaryMatchOptions["similarity"]) {
-  if (mode !== "ocr_weighted") {
-    return normalizedSimilarity(normalizedInput, key);
+  const cacheKey = createSimilarityScoreCacheKey(normalizedInput, key, mode);
+  const cached = similarityScoreCache.get(cacheKey);
+
+  if (cached !== undefined) {
+    return cached;
   }
 
-  const lengthDelta = Math.abs(countCharacters(normalizedInput) - countCharacters(key));
-  const lengthPenalty = Math.max(0, lengthDelta - 1) * 0.08;
+  let score: number;
 
-  return Math.max(0, normalizedOcrWeightedSimilarity(normalizedInput, key) - lengthPenalty);
+  if (mode !== "ocr_weighted") {
+    score = normalizedSimilarity(normalizedInput, key);
+  } else {
+    const lengthDelta = Math.abs(countCharacters(normalizedInput) - countCharacters(key));
+    const lengthPenalty = Math.max(0, lengthDelta - 1) * 0.08;
+
+    score = Math.max(0, normalizedOcrWeightedSimilarity(normalizedInput, key) - lengthPenalty);
+
+    const mixedKanaVariant = createMixedKanaOcrVariant(normalizedInput);
+
+    if (mixedKanaVariant) {
+      const foldedKey = foldKanaScriptText(key);
+      const variantLengthDelta = Math.abs(
+        countCharacters(mixedKanaVariant) - countCharacters(foldedKey),
+      );
+      const variantLengthPenalty = Math.max(0, variantLengthDelta - 1) * 0.08;
+
+      score = Math.max(
+        score,
+        normalizedOcrWeightedSimilarity(mixedKanaVariant, foldedKey) - variantLengthPenalty,
+      );
+    }
+  }
+
+  if (similarityScoreCache.size >= MAX_SIMILARITY_SCORE_CACHE_SIZE) {
+    similarityScoreCache.clear();
+  }
+
+  similarityScoreCache.set(cacheKey, score);
+  return score;
 }
 
 function createNoMatch(input: string, normalizedInput: string, reason: string): DictionaryMatch {
@@ -268,10 +405,7 @@ export function matchDictionaryEntry(
     return createNoMatch(input, normalizedInput, "empty-input");
   }
 
-  const keyedEntries: KeyedDictionaryEntry[] = entries.map((entry) => ({
-    entry,
-    keys: createEntryKeys(entry),
-  }));
+  const keyedEntries = getKeyedDictionaryEntries(entries);
 
   for (const keyedEntry of keyedEntries) {
     if (keyedEntry.keys.includes(normalizedInput)) {
@@ -295,33 +429,34 @@ export function matchDictionaryEntry(
     options.similarity === "ocr_weighted"
       ? getOcrWeightedLengthDeltaLimit(inputLength)
       : Number.POSITIVE_INFINITY;
-  const scoredEntries = keyedEntries
-    .map<ScoredDictionaryEntry>(({ entry, keys }) => {
-      const candidateKeys = keys.filter(
-        (key) => Math.abs(countCharacters(normalizedInput) - countCharacters(key)) <= maxLengthDelta,
-      );
-      const score =
-        candidateKeys.length > 0
-          ? Math.max(
-              ...candidateKeys.map((key) => scoreEntryKey(normalizedInput, key, options.similarity)),
-            )
-          : 0;
+  let best: ScoredDictionaryEntry | null = null;
+  let second: ScoredDictionaryEntry | null = null;
 
-      return {
-        entry,
-        key: createOcrMatchText(entry.label),
-        score,
-      };
-    })
-    .sort((left, right) => right.score - left.score);
+  for (const { entry, keys } of keyedEntries) {
+    let score = 0;
 
-  const best = scoredEntries[0] ?? null;
+    for (const key of keys) {
+      if (Math.abs(countCharacters(normalizedInput) - countCharacters(key)) > maxLengthDelta) {
+        continue;
+      }
+
+      score = Math.max(score, scoreEntryKey(normalizedInput, key, options.similarity));
+    }
+
+    const scoredEntry = { entry, score };
+
+    if (!best || scoredEntry.score > best.score) {
+      second = best;
+      best = scoredEntry;
+    } else if (!second || scoredEntry.score > second.score) {
+      second = scoredEntry;
+    }
+  }
 
   if (!best) {
     return createNoMatch(input, normalizedInput, "empty-dictionary");
   }
 
-  const second = scoredEntries[1] ?? null;
   const acceptScore = options.acceptScore ?? DEFAULT_ACCEPT_SCORE;
   const reviewScore = options.reviewScore ?? DEFAULT_REVIEW_SCORE;
   const acceptMargin = options.acceptMargin ?? DEFAULT_ACCEPT_MARGIN;
