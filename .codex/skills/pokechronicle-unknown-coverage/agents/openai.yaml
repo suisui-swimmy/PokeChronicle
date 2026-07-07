@@ -1,0 +1,4 @@
+interface:
+  display_name: "PokeChronicle Unknown Coverage"
+  short_description: "Replay logs and plan safe parser coverage fixes"
+  default_prompt: "Use $pokechronicle-unknown-coverage to analyze PokeChronicle battle-log exports and implement safe unknown coverage improvements."
