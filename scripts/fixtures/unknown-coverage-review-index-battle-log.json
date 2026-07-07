@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "0.1.0",
+  "appVersion": "0.1.0",
+  "exportedAt": "1970-01-01T00:00:00.000Z",
+  "battle": {
+    "id": "fixture_unknown_coverage_review_index",
+    "title": "Unknown coverage review index fixture",
+    "startedAt": null
+  },
+  "ocrMessages": [
+    {
+      "id": "ocr-review-index-1",
+      "battleId": "fixture_unknown_coverage_review_index",
+      "rawText": "ガブリアスの 攻撃は 下がらない!",
+      "normalizedText": "ガブリアスの 攻撃は 下がらない!",
+      "matchText": "ガブリアスの攻撃は下がらない",
+      "ocrConfidence": 0.91,
+      "timestampMs": 1000,
+      "frameIndex": 1,
+      "roi": { "x": 0, "y": 0, "w": 1, "h": 1 },
+      "lines": [
+        { "text": "ガブリアスの 攻撃は 下がらない!", "confidence": 0.91, "bbox": null }
+      ]
+    }
+  ],
+  "events": [],
+  "unknowns": [],
+  "frameEvidence": [],
+  "manualCorrections": []
+}

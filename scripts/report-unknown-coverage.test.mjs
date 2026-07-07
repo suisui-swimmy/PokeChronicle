@@ -106,10 +106,18 @@ describe("unknown coverage report", () => {
             fileName: "btl_set.json",
             labelName: "BTL_SET_RankupLv3",
             eventType: "boost",
-            sourceStatus: "enabled",
+            sourceStatus: "review_index",
             allowedByCurrentConfig: false,
+            blockedByCurrentConfig: true,
             blockedByDenyPattern: false,
             requiresPlaceholderPolicy: true,
+            riskHints: [
+              "review_index_only",
+              "blocked_by_current_config",
+              "placeholder_policy_required",
+              "risky_placeholder",
+            ],
+            notes: "placeholderの意味が未確定のためreviewで確認する候補。",
             matchText: "0の1がぐーんと上がった",
             skeletonMatchText: "攻撃がぐーんと上がった",
           },
@@ -117,10 +125,17 @@ describe("unknown coverage report", () => {
             fileName: "btl_state_syn.json",
             labelName: "STATE_HELP",
             eventType: "status",
-            sourceStatus: "unknown",
+            sourceStatus: "review_index",
             allowedByCurrentConfig: false,
+            blockedByCurrentConfig: true,
             blockedByDenyPattern: true,
             requiresPlaceholderPolicy: false,
+            riskHints: [
+              "review_index_only",
+              "blocked_by_current_config",
+              "blocked_by_deny_pattern",
+            ],
+            notes: "deny/text denyに該当するためactive化は保留。",
             matchText: "状態異常について",
             skeletonMatchText: "状態異常について",
           },
@@ -136,12 +151,81 @@ describe("unknown coverage report", () => {
       kind: "hold_review",
       risk: "high",
     });
+    expect(champoutProposal.rootCauses).toEqual(
+      expect.arrayContaining([
+        "champout_source_candidate",
+        "blocked_by_current_config",
+        "placeholder_policy_required",
+        "risky_placeholder",
+      ]),
+    );
+    expect(champoutProposal.recommendedActions).toContain("hold_review");
     expect(report.clusters.some((cluster) =>
       cluster.champoutCandidates.some((candidate) =>
-        candidate.fileName === "btl_set.json" && candidate.requiresPlaceholderPolicy,
+        candidate.fileName === "btl_set.json" &&
+          candidate.sourceStatus === "review_index" &&
+          candidate.requiresPlaceholderPolicy &&
+          candidate.riskHints.includes("risky_placeholder"),
       ),
     )).toBe(true);
     expect(report.proposals.every((proposal) => proposal.kind !== "champout_config_patch")).toBe(true);
+  });
+
+  it("placeholder不要のreview/index候補は低riskのallowlist候補として出す", () => {
+    const replay = createReplayResult([
+      createReplayItem({
+        ocrId: "ocr-shine",
+        rawText: "日差しが 強くなった!",
+        normalizedText: "日差しが 強くなった!",
+        matchText: "日差しが強くなった",
+      }),
+    ]);
+    const report = createUnknownCoverageReport(replay, {
+      top: 10,
+      champoutIndex: {
+        available: true,
+        warnings: [],
+        entries: [
+          {
+            fileName: "btl_std.json",
+            labelName: "BTL_STRID_STD_ShineStart",
+            eventType: "weather_start",
+            sourceStatus: "review_index",
+            allowedByCurrentConfig: false,
+            blockedByCurrentConfig: true,
+            blockedByDenyPattern: false,
+            requiresPlaceholderPolicy: false,
+            riskHints: ["review_index_only", "blocked_by_current_config"],
+            notes: "現在のactive allowlist外のreview/index候補。",
+            matchText: "日差しが強くなった",
+            skeletonMatchText: "日差しが強くなった",
+          },
+        ],
+      },
+    });
+
+    expect(report.clusters[0]).toMatchObject({
+      classification: "champout_source_candidate",
+      rootCauses: expect.arrayContaining([
+        "champout_source_candidate",
+        "blocked_by_current_config",
+      ]),
+      recommendedActions: expect.arrayContaining(["add_champout_allowlist", "hold_review"]),
+      champoutCandidates: [
+        expect.objectContaining({
+          fileName: "btl_std.json",
+          labelName: "BTL_STRID_STD_ShineStart",
+          sourceStatus: "review_index",
+          allowedByCurrentConfig: false,
+          blockedByCurrentConfig: true,
+          riskHints: ["review_index_only", "blocked_by_current_config"],
+        }),
+      ],
+    });
+    expect(report.proposals[0]).toMatchObject({
+      kind: "champout_config_patch",
+      risk: "low",
+    });
   });
 
   it("generated near missはconstrained decoder review proposalへ寄せる", () => {

@@ -11,7 +11,7 @@
     "report:unknown-coverage": "node scripts/report-unknown-coverage.mjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "vitest run",
+    "test": "vitest run --pool forks --maxWorkers 1 --minWorkers 1",
     "test:watch": "vitest"
   },
   "dependencies": {

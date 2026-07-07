@@ -34,6 +34,10 @@ export type RootCause =
   | "near_existing_event"
   | "generated_rule_near_miss"
   | "champout_source_candidate"
+  | "placeholder_policy_required"
+  | "blocked_by_current_config"
+  | "blocked_by_deny_pattern"
+  | "risky_placeholder"
   | "dictionary_ocr_gap"
   | "ui_noise"
   | "manual_note_hint"
@@ -76,10 +80,13 @@ export interface ChampoutCoverageEntry {
   labelName: string | null;
   eventType: BattleEventType | "unknown_candidate" | "unclassified";
   score?: number;
-  sourceStatus: "enabled" | "hold" | "disabled" | "unknown";
+  sourceStatus: "enabled" | "review_index" | "hold" | "disabled";
   allowedByCurrentConfig: boolean;
+  blockedByCurrentConfig: boolean;
   blockedByDenyPattern: boolean;
   requiresPlaceholderPolicy: boolean;
+  riskHints: string[];
+  notes: string;
   matchText?: string;
   skeletonMatchText?: string;
 }
@@ -450,8 +457,11 @@ function sanitizeChampoutCandidate(
     score: candidate.score,
     sourceStatus: candidate.sourceStatus,
     allowedByCurrentConfig: candidate.allowedByCurrentConfig,
+    blockedByCurrentConfig: candidate.blockedByCurrentConfig,
     blockedByDenyPattern: candidate.blockedByDenyPattern,
     requiresPlaceholderPolicy: candidate.requiresPlaceholderPolicy,
+    riskHints: candidate.riskHints,
+    notes: candidate.notes,
   };
 }
 
@@ -567,6 +577,19 @@ function addRootCauseActions(
     recommendedActions.add("add_champout_allowlist");
   }
 
+  if (rootCauses.has("blocked_by_current_config")) {
+    recommendedActions.add("add_champout_allowlist");
+    recommendedActions.add("hold_review");
+  }
+
+  if (rootCauses.has("placeholder_policy_required")) {
+    recommendedActions.add("hold_review");
+  }
+
+  if (rootCauses.has("blocked_by_deny_pattern") || rootCauses.has("risky_placeholder")) {
+    recommendedActions.add("hold_review");
+  }
+
   if (rootCauses.has("insufficient_trace")) {
     recommendedActions.add("add_export_trace");
   }
@@ -617,6 +640,26 @@ function createClusterAccumulators(
 
     if (champoutCandidates.length > 0) {
       cluster.rootCauses.add("champout_source_candidate");
+      if (champoutCandidates.some((candidate) => candidate.blockedByCurrentConfig)) {
+        cluster.rootCauses.add("blocked_by_current_config");
+      }
+
+      if (champoutCandidates.some((candidate) => candidate.blockedByDenyPattern)) {
+        cluster.rootCauses.add("blocked_by_deny_pattern");
+      }
+
+      if (champoutCandidates.some((candidate) => candidate.requiresPlaceholderPolicy)) {
+        cluster.rootCauses.add("placeholder_policy_required");
+      }
+
+      if (
+        champoutCandidates.some((candidate) =>
+          candidate.riskHints.includes("risky_placeholder"),
+        )
+      ) {
+        cluster.rootCauses.add("risky_placeholder");
+      }
+
       cluster.champoutCandidates = [
         ...cluster.champoutCandidates,
         ...champoutCandidates.map(sanitizeChampoutCandidate),
@@ -683,6 +726,10 @@ function proposalKindForCluster(cluster: UnknownCoverageCluster): ProposalKind {
       (candidate) =>
         candidate.requiresPlaceholderPolicy ||
         candidate.blockedByDenyPattern ||
+        candidate.riskHints.includes("risky_placeholder") ||
+        candidate.sourceStatus === "hold" ||
+        candidate.sourceStatus === "disabled" ||
+        candidate.eventType === "unclassified" ||
         ["btl_state_syn.json", "btl_condition.json"].includes(candidate.fileName),
     );
 
@@ -760,11 +807,11 @@ function targetFilesForCluster(cluster: UnknownCoverageCluster, kind: ProposalKi
 
 function createProposalNotes(cluster: UnknownCoverageCluster, kind: ProposalKind) {
   if (kind === "hold_review" && cluster.champoutCandidates.length > 0) {
-    return "champout候補はあるが、placeholder policy不足または説明文リスクがあるため自動追加せず保留。";
+    return "champout候補はあるが、placeholder policy不足、deny、または誤分類リスクがあるため自動追加せず保留。";
   }
 
   if (kind === "champout_config_patch") {
-    return "既存enabled sourceやbtl_set内カテゴリを優先し、allowlistを狭く追加する候補。";
+    return "btl_set/btl_stdのreview/index候補。安全ならallowlistを狭く追加する候補。";
   }
 
   if (kind === "duplicate_suppression_patch") {

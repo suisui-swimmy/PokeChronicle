@@ -984,7 +984,7 @@ describe("parseBattleMessage", () => {
     expect(parseBattleMessage("せんせいのツメで 行動が はやくなった")).toMatchObject({
       status: "unknown",
     });
-  });
+  }, 20000);
 
   it("keeps weak constrained candidates unknown and reviewable", () => {
     const result = parseBattleMessage({

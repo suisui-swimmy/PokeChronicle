@@ -14,15 +14,16 @@ import {
   inferEventType,
   isNonLiveText,
   loadChampoutSourceConfig,
+  matchesAnyPattern,
   readJson,
   repoRoot,
-  sourceAllowsLabel,
 } from "./champout-tools.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const isDirectRun = process.argv[1] ? path.resolve(process.argv[1]) === scriptPath : false;
 const coreEntryPath = path.join(repoRoot, "src", "tools", "unknownCoverageCore.ts");
 const proposalFileName = "unknown-coverage-proposals.json";
+const reviewIndexSourceFileNames = ["btl_set.json", "btl_std.json"];
 
 function usage() {
   return [
@@ -216,17 +217,111 @@ function loadCsvHints(options) {
 function getSourceStatus(sourceConfig) {
   return ["enabled", "hold", "disabled"].includes(sourceConfig?.status)
     ? sourceConfig.status
-    : "unknown";
+    : "review_index";
 }
 
-function requiresPlaceholderPolicy(extracted) {
+function isBlockedByCurrentAllowlist(extracted, sourceConfig = {}) {
+  return (
+    sourceConfig.labelAllowPatterns?.length > 0 &&
+    !matchesAnyPattern(extracted.labelName ?? "", sourceConfig.labelAllowPatterns)
+  );
+}
+
+function isBlockedByDenyPattern(extracted, sourceConfig = {}) {
+  return isNonLiveText(extracted, {
+    ...sourceConfig,
+    labelAllowPatterns: [],
+  });
+}
+
+function getCandidateSourceStatus(configStatus, allowedByCurrentConfig) {
+  if (allowedByCurrentConfig) {
+    return "enabled";
+  }
+
+  if (configStatus === "hold" || configStatus === "disabled") {
+    return configStatus;
+  }
+
+  return "review_index";
+}
+
+function getPlaceholderCount(text) {
+  return (text.match(/\{\s*\d+\s*\}/g) ?? []).length;
+}
+
+function requiresPlaceholderPolicy(extracted, sourceConfig = {}, allowedByCurrentConfig = false) {
   const labelName = extracted.labelName ?? "";
-  const placeholderCount = (extracted.text.match(/\{\s*\d+\s*\}/g) ?? []).length;
+  const placeholderCount = getPlaceholderCount(extracted.text);
+
+  if (placeholderCount === 0) {
+    return false;
+  }
+
+  if (allowedByCurrentConfig && sourceConfig.placeholderPolicy) {
+    return false;
+  }
 
   return (
     /Rank(?:up|down)Lv/i.test(labelName) ||
-    (placeholderCount > 1 && /上がった|下がった|ぐーん|がくっと/u.test(extracted.text))
+    (extracted.fileName === "btl_set.json" && !allowedByCurrentConfig) ||
+    (placeholderCount > 1 && /上がった|下がった|ぐーん|がくっと/u.test(extracted.text)) ||
+    !sourceConfig.placeholderPolicy
   );
+}
+
+function isRiskyPlaceholderCandidate(extracted, allowedByCurrentConfig) {
+  if (allowedByCurrentConfig) {
+    return false;
+  }
+
+  const labelName = extracted.labelName ?? "";
+  const placeholderCount = getPlaceholderCount(extracted.text);
+
+  return (
+    placeholderCount >= 2 ||
+    /Rank(?:up|down)Lv[123]_[2-5]_/i.test(labelName) ||
+    /_(?:PP|EE)_syn$/i.test(labelName)
+  );
+}
+
+function createCandidateRiskHints({
+  sourceStatus,
+  allowedByCurrentConfig,
+  blockedByCurrentConfig,
+  blockedByDenyPattern,
+  requiresPlaceholderPolicy,
+  riskyPlaceholder,
+}) {
+  return [
+    sourceStatus === "review_index" ? "review_index_only" : null,
+    !allowedByCurrentConfig && blockedByCurrentConfig ? "blocked_by_current_config" : null,
+    blockedByDenyPattern ? "blocked_by_deny_pattern" : null,
+    requiresPlaceholderPolicy ? "placeholder_policy_required" : null,
+    riskyPlaceholder ? "risky_placeholder" : null,
+  ].filter(Boolean);
+}
+
+function createCandidateNotes({
+  sourceStatus,
+  blockedByCurrentConfig,
+  blockedByDenyPattern,
+  requiresPlaceholderPolicy,
+  riskyPlaceholder,
+}) {
+  if (blockedByDenyPattern) {
+    return "deny/text denyに該当するためactive化は保留。";
+  }
+
+  if (requiresPlaceholderPolicy || riskyPlaceholder) {
+    return "placeholderの意味が未確定のためreviewで確認する候補。";
+  }
+
+  if (blockedByCurrentConfig || sourceStatus === "review_index") {
+    return "現在のactive allowlist外のreview/index候補。";
+  }
+
+  return "";
 }
 
 export function loadChampoutCoverageIndex() {
@@ -255,21 +350,50 @@ export function loadChampoutCoverageIndex() {
 
   const sourceConfig = loadChampoutSourceConfig();
   const configByFileName = new Map(sourceConfig.sources.map((source) => [source.fileName, source]));
-  const files = fs
-    .readdirSync(champoutSourceRoot)
-    .filter((fileName) => /^btl_.*\.json$/u.test(fileName))
-    .sort();
+  const files = reviewIndexSourceFileNames.filter((fileName) => {
+    const exists = fs.existsSync(path.join(champoutSourceRoot, fileName));
+
+    if (!exists) {
+      warnings.push(`${fileName} が見つからないため、review/index candidate照合から除外しました。`);
+    }
+
+    return exists;
+  });
   const entries = [];
 
   for (const fileName of files) {
     const filePath = path.join(champoutSourceRoot, fileName);
     const fileSourceConfig = configByFileName.get(fileName) ?? {};
-    const sourceStatus = getSourceStatus(fileSourceConfig);
+    const configStatus = getSourceStatus(fileSourceConfig);
     const extractedTexts = extractOriginalTexts(readJson(filePath), fileName);
 
     for (const extracted of extractedTexts) {
-      const allowedByLabel = sourceAllowsLabel(extracted, fileSourceConfig);
-      const nonLiveText = isNonLiveText(extracted, fileSourceConfig);
+      const blockedByCurrentAllowlist = isBlockedByCurrentAllowlist(
+        extracted,
+        fileSourceConfig,
+      );
+      const blockedByDenyPattern = isBlockedByDenyPattern(extracted, fileSourceConfig);
+      const blockedByCurrentConfig = configStatus !== "enabled" || blockedByCurrentAllowlist;
+      const allowedByCurrentConfig =
+        configStatus === "enabled" && !blockedByCurrentConfig && !blockedByDenyPattern;
+      const sourceStatus = getCandidateSourceStatus(configStatus, allowedByCurrentConfig);
+      const needsPlaceholderPolicy = requiresPlaceholderPolicy(
+        extracted,
+        fileSourceConfig,
+        allowedByCurrentConfig,
+      );
+      const riskyPlaceholder = isRiskyPlaceholderCandidate(
+        extracted,
+        allowedByCurrentConfig,
+      );
+      const riskHints = createCandidateRiskHints({
+        sourceStatus,
+        allowedByCurrentConfig,
+        blockedByCurrentConfig,
+        blockedByDenyPattern,
+        requiresPlaceholderPolicy: needsPlaceholderPolicy,
+        riskyPlaceholder,
+      });
       const matchText = createOcrMatchText(extracted.text);
       const skeletonMatchText = createOcrMatchText(
         extracted.text.replace(/\{\s*\d+\s*\}/g, ""),
@@ -280,9 +404,18 @@ export function loadChampoutCoverageIndex() {
         labelName: extracted.labelName,
         eventType: inferEventType(extracted, fileSourceConfig) ?? "unclassified",
         sourceStatus,
-        allowedByCurrentConfig: sourceStatus === "enabled" && allowedByLabel && !nonLiveText,
-        blockedByDenyPattern: !allowedByLabel || nonLiveText,
-        requiresPlaceholderPolicy: requiresPlaceholderPolicy(extracted),
+        allowedByCurrentConfig,
+        blockedByCurrentConfig,
+        blockedByDenyPattern,
+        requiresPlaceholderPolicy: needsPlaceholderPolicy,
+        riskHints,
+        notes: createCandidateNotes({
+          sourceStatus,
+          blockedByCurrentConfig,
+          blockedByDenyPattern,
+          requiresPlaceholderPolicy: needsPlaceholderPolicy,
+          riskyPlaceholder,
+        }),
         matchText,
         skeletonMatchText,
       });
