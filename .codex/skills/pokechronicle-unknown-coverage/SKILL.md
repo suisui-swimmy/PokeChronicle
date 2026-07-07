@@ -1,6 +1,6 @@
 ---
 name: pokechronicle-unknown-coverage
-description: Use this skill when working on PokeChronicle battle-log exports to improve Japanese battle message coverage: analyzing Battle Log JSON, optional unknowns/events CSVs, running report:unknown-coverage, interpreting replay/proposal output, safely extending champout generated template coverage, parser/dictionary/constrained decoder behavior, tests, build verification, and PROGRESS.md updates.
+description: Use this skill when working on PokeChronicle battle-log exports to improve Japanese battle message coverage: analyzing Battle Log JSON, optional unknowns/events CSVs, running report:unknown-coverage, interpreting active-rule and champout review/index proposal output, safely extending champout generated template coverage, parser/dictionary/constrained decoder behavior, tests, build verification, and PROGRESS.md updates.
 ---
 
 # PokeChronicle Unknown Coverage
@@ -24,6 +24,8 @@ Optionally accept:
 - user notes, screenshots, or copied battle messages
 
 Use the Battle Log JSON as the source of truth. Use CSVs only as auxiliary evidence when IDs or timestamps line up.
+
+Do not require the user to hand-list every missed message first. Start from the Battle Log JSON, let the report cluster unknowns and propose candidates, then ask for copied messages or screenshots only when OCR/preprocess context or battle context is still ambiguous.
 
 ## First Pass
 
@@ -57,6 +59,14 @@ Do not commit temporary proposal JSON.
 
 Inspect `rootCauses[]`, `recommendedActions[]`, `risk`, `weightedLoss`, `champoutCandidates`, and negative test suggestions together. Do not rank by count alone.
 
+For `champoutCandidates`, check:
+
+- `sourceStatus`: `enabled` means active generated pack coverage; `review_index` means a Node-only candidate from broad champout review/index sources; `hold` or `disabled` means current config is intentionally not active.
+- `allowedByCurrentConfig` and `blockedByCurrentConfig`: whether the current champout config would bundle the label into active generated rules.
+- `blockedByDenyPattern`: whether a deny rule stopped a near source match.
+- `requiresPlaceholderPolicy`: whether placeholder meaning must be defined before safe event creation.
+- `riskHints` and `notes`: why a candidate should stay in review, need placeholder policy, or avoid promotion.
+
 Prefer actions in this order when evidence supports them:
 
 1. unknown gating or duplicate suppression for noise, fragments, prefix-only text, near accepted events, timer/UI fragments
@@ -68,6 +78,8 @@ Prefer actions in this order when evidence supports them:
 
 Treat `champout_config_patch` proposals as candidates requiring human judgment. Never auto-apply them.
 
+Keep broad `btl_set.json` / `btl_std.json` matches as proposal or review evidence by default. Promote only narrow, tested label categories when placeholder meaning, event type, actor/target capture, canonical display, and negative tests are safe.
+
 ## Champout Rules
 
 Maintain the static browser-app boundary:
@@ -77,6 +89,8 @@ Maintain the static browser-app boundary:
 - Do not commit raw dump files, large reports, screenshots, videos, or unrestricted `OriginalText` dumps.
 - Do not hand-edit `data/generated/champout-event-rules.ja.json`.
 - Regenerate generated champout data from config/scripts.
+- Treat `others/champout/rom-txt/jpn/btl_set.json` and `others/champout/rom-txt/jpn/btl_std.json` as Node-script review/index sources when available. Missing `others/champout` should warn and continue, not fail the report.
+- Do not active-bundle all of `btl_set.json` or `btl_std.json`.
 
 Before changing champout coverage:
 
@@ -135,6 +149,8 @@ rg -n "others/champout|rom-txt|node:fs|node:path|fs\.|path\." src
 If champout config changed, also run:
 
 ```powershell
+npm run report:unknown-coverage -- <battle-log.json> --json
+npm run report:unknown-coverage -- <battle-log.json> --write-proposals tmp/unknown-proposals
 npm run report:champout
 npm run generate:champout-templates
 npm run test -- src/core/templates/generatedChampoutTemplateRules.test.ts
