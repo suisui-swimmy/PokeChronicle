@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BATTLE_DICTIONARY } from "../dictionary/generatedBattleDictionary";
+import { STAT_DICTIONARY } from "../dictionary/statDictionary";
 import { SEED_TEMPLATE_RULES } from "./seedTemplateRules";
 import { matchTemplateRules } from "./templateMatcher";
 import type { BattleTemplateRule } from "./types";
@@ -77,5 +78,27 @@ describe("matchTemplateRules", () => {
       actor: { name: "カラマネロ", side: null },
     });
     expect(result?.evidence).toContain("text=あまのじゃく");
+  });
+
+  it("supports stat placeholders with exact dictionary evidence", () => {
+    const rules: readonly BattleTemplateRule[] = [
+      {
+        id: "stat_boost_template_test",
+        eventType: "boost",
+        priority: 1,
+        patterns: ["{pokemon}の{stat}が 上がった!"],
+      },
+    ];
+    const result = matchTemplateRules(
+      [{ id: "full", matchText: "ガブリアスの攻撃が上がった", priority: 0 }],
+      { ...BATTLE_DICTIONARY, stats: STAT_DICTIONARY },
+      rules,
+    );
+
+    expect(result).toMatchObject({
+      rule: { id: "stat_boost_template_test", eventType: "boost" },
+      actor: { name: "ガブリアス", side: null },
+    });
+    expect(result?.evidence).toContain("stat:攻撃->攻撃");
   });
 });

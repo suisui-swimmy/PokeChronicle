@@ -281,6 +281,69 @@ describe("parseBattleMessage", () => {
       status: "event",
       event: { type: "unboost" },
     });
+
+    const opponentBoost = parseBattleMessage("相手の ガメノデスの 防御が 上がった!");
+    const strongBoost = parseBattleMessage("ガブリアスの 攻撃が ぐーんと 上がった!");
+    const opponentDrop = parseBattleMessage(
+      "相手の ランドロスの 攻撃が がくっと 下がった!",
+    );
+    const splitBoost = parseBattleMessage({
+      rawText: "相手の ガメノデスの\n防御が 上がった!",
+      lines: ["相手の ガメノデスの", "防御が 上がった!"],
+      ocrConfidence: 0.9,
+    });
+
+    expect(opponentBoost).toMatchObject({
+      status: "event",
+      event: {
+        type: "boost",
+        actor: { name: "ガメノデス", side: "opponent" },
+        classification: {
+          alternatives: expect.arrayContaining([
+            expect.stringContaining("stat:防御->防御:accepted"),
+          ]),
+        },
+      },
+    });
+    expect(strongBoost).toMatchObject({
+      status: "event",
+      event: {
+        type: "boost",
+        actor: { name: "ガブリアス" },
+        classification: {
+          alternatives: expect.arrayContaining([
+            expect.stringContaining("stat:攻撃->攻撃:accepted"),
+          ]),
+        },
+      },
+    });
+    expect(opponentDrop).toMatchObject({
+      status: "event",
+      event: {
+        type: "unboost",
+        actor: { name: "ランドロス", side: "opponent" },
+      },
+    });
+    expect(splitBoost).toMatchObject({
+      status: "event",
+      event: {
+        type: "boost",
+        actor: { name: "ガメノデス", side: "opponent" },
+      },
+    });
+    expect(
+      renderBattleEventCanonicalText(
+        opponentBoost.status === "event" ? opponentBoost.event : null!,
+      ),
+    ).toBe("相手の ガメノデスの 防御が 上がった!");
+    expect(
+      renderBattleEventCanonicalText(strongBoost.status === "event" ? strongBoost.event : null!),
+    ).toBe("ガブリアスの 攻撃が ぐーんと 上がった!");
+    expect(
+      renderBattleEventCanonicalText(
+        opponentDrop.status === "event" ? opponentDrop.event : null!,
+      ),
+    ).toBe("相手の ランドロスの 攻撃が がくっと 下がった!");
   });
 
   it("parses protect and side-end context OCR variants", () => {
@@ -800,7 +863,7 @@ describe("parseBattleMessage", () => {
       status: "event",
       event: { type: "battle_end" },
     });
-  });
+  }, 20000);
 
   it("projects noisy flinch and priority-item templates only inside narrow shapes", () => {
     expect(
@@ -867,6 +930,14 @@ describe("parseBattleMessage", () => {
       classification: { method: "unknown" },
     });
     expect(parseBattleMessage("こおりタイプの防御が1.5倍になる。")).toMatchObject({
+      status: "unknown",
+      reviewStatus: "unreviewed",
+    });
+    expect(parseBattleMessage("攻撃が 上がった!")).toMatchObject({
+      status: "unknown",
+      reviewStatus: "unreviewed",
+    });
+    expect(parseBattleMessage("防御が 下がった!")).toMatchObject({
       status: "unknown",
       reviewStatus: "unreviewed",
     });

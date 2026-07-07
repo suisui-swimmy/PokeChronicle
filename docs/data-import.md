@@ -63,6 +63,8 @@ Output:
 
 The generator verifies the MIT license and records source commit `d2885a864f041744df1de1b35f4ab3d2e52cf4db` in the generated pack. It keeps source file, key path, label name, and original source text per compact rule. It does not copy the raw dump wholesale.
 
+The current `btl_set.json` allowlist is intentionally narrow. It includes reviewed live categories such as status/faint/effectiveness plus single-stat `RankupLv` / `RankdownLv` Lv1-Lv2 messages, using `{stat}` placeholders resolved by the in-app stat dictionary. Multi-stat rank labels and broader explanation/UI text remain out of the active pack.
+
 The runtime app imports only the generated JSON from the repository. It never reads `others/champout` directly. Third-party source and license details are recorded in `THIRD_PARTY_NOTICES.md`.
 
 ## Generated pack expansion workflow
@@ -79,6 +81,7 @@ To expand the standard pack:
 
 - Add at most one new `btl_*.json` source at a time to `data/champout/champout-template-sources.ja.json`.
 - Prefer narrow `labelAllowPatterns` and explicit `eventTypeRules` over broad keyword inference.
+- Use `slotsByIndex` when champout placeholder indexes skip positions, such as `{0}` for Pokemon and `{4}` for stat names in rank-change messages.
 - Add `labelDenyPatterns` or `textDenyHints` for UI, tutorial, explanatory, or ambiguous text.
 - Run `npm run generate:champout-templates`; do not hand-edit `data/generated/champout-event-rules.ja.json`.
 - Update parser/decoder only for event types that can be accepted without loosening confidence or margin rules broadly.

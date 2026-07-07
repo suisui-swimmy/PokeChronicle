@@ -7,6 +7,7 @@ import { createOcrMatchText, normalizeOcrText } from "../normalize/ocrText";
 import { matchDictionaryEntry } from "../dictionary/fuzzyMatch";
 import { BATTLE_DICTIONARY } from "../dictionary/generatedBattleDictionary";
 import { findDictionarySpans, type DictionarySpan } from "../dictionary/spanMatch";
+import { STAT_DICTIONARY } from "../dictionary/statDictionary";
 import type { DictionaryEntry, DictionaryMatch } from "../dictionary/types";
 import {
   decodeConstrainedTemplate,
@@ -25,6 +26,7 @@ export interface BattleMessageParseInput {
 export interface BattleMessageDictionary {
   pokemon: readonly DictionaryEntry[];
   moves: readonly DictionaryEntry[];
+  stats?: readonly DictionaryEntry[];
   sessionRosterDictionary?: readonly DictionaryEntry[];
   observedMoveDictionary?: readonly DictionaryEntry[];
 }
@@ -130,6 +132,13 @@ const OCR_WEIGHTED_GLOBAL_MOVE_OPTIONS = {
   minOcrConfidenceForFuzzy: 0.55,
   similarity: "ocr_weighted",
 } as const;
+const OCR_WEIGHTED_STAT_OPTIONS = {
+  acceptScore: 0.84,
+  reviewScore: 0.78,
+  acceptMargin: 0.08,
+  minOcrConfidenceForFuzzy: 0.65,
+  similarity: "ocr_weighted",
+} as const;
 
 interface MatchSurface {
   id: string;
@@ -147,7 +156,7 @@ interface SpanMoveCandidate {
   confidenceScore: number;
 }
 
-function formatDictionaryCandidate(kind: "pokemon" | "move", match: DictionaryMatch) {
+function formatDictionaryCandidate(kind: "pokemon" | "move" | "stat", match: DictionaryMatch) {
   if (!match.best) {
     return `${kind}:${match.normalizedInput}:not_found:${match.reason}`;
   }
@@ -162,6 +171,7 @@ function createRuntimeDictionary(
 ): BattleMessageDictionary {
   return {
     ...dictionary,
+    stats: dictionary.stats ?? STAT_DICTIONARY,
     sessionRosterDictionary:
       options.sessionRosterDictionary ?? dictionary.sessionRosterDictionary ?? [],
     observedMoveDictionary:
@@ -234,6 +244,22 @@ function matchMoveEntry(
     SESSION_MOVE_MATCH_OPTIONS,
     fallbackOptions,
   );
+}
+
+function matchStatEntry(
+  input: string,
+  dictionary: BattleMessageDictionary,
+  ocrConfidence: number | null | undefined,
+) {
+  const match = matchDictionaryEntry(input, dictionary.stats ?? STAT_DICTIONARY, {
+    ...OCR_WEIGHTED_STAT_OPTIONS,
+    ocrConfidence,
+  });
+
+  return {
+    match,
+    candidateMatch: formatDictionaryCandidate("stat", match),
+  };
 }
 
 function combineConfidence(ocrConfidence: number | null | undefined, scores: number[]) {
@@ -486,8 +512,10 @@ function createContextEventWithParticipant(input: {
   actor?: BattleEvent["actor"];
   target?: BattleEvent["target"];
   participantMatch: DictionaryMatch;
+  extraCandidateMatches?: readonly string[];
 }): EventParseResult {
   const participantCandidate = formatDictionaryCandidate("pokemon", input.participantMatch);
+  const alternatives = [participantCandidate, ...(input.extraCandidateMatches ?? [])];
 
   return {
     status: "event",
@@ -503,10 +531,10 @@ function createContextEventWithParticipant(input: {
       classification: createClassification(
         input.participantMatch.method === "fuzzy" ? "fuzzy_dictionary" : "seed_rule",
         input.templateId,
-        [participantCandidate],
+        alternatives,
       ),
     },
-    candidateMatches: [input.templateId, participantCandidate],
+    candidateMatches: [input.templateId, ...alternatives],
   };
 }
 
@@ -607,6 +635,98 @@ function extractContextParticipant(
   return null;
 }
 
+function findRankChangeKeywordIndex(type: BattleEventType, surfaceText: string) {
+  const keywords =
+    type === "boost"
+      ? ["ぐーんと上がった", "上がった"]
+      : ["がくっと下がった", "下がった", "下かった", "下がっだ"];
+
+  return keywords
+    .map((keyword) => surfaceText.indexOf(createOcrMatchText(keyword)))
+    .filter((index) => index >= 0)
+    .sort((left, right) => left - right)[0] ?? -1;
+}
+
+function extractRankStatCandidate(type: BattleEventType, surfaceText: string) {
+  if (type !== "boost" && type !== "unboost") {
+    return null;
+  }
+
+  const keywordIndex = findRankChangeKeywordIndex(type, surfaceText);
+
+  if (keywordIndex <= 0) {
+    return null;
+  }
+
+  const beforeKeyword = surfaceText.slice(0, keywordIndex);
+  const possessiveIndex = beforeKeyword.lastIndexOf("の");
+
+  if (possessiveIndex < 0) {
+    return null;
+  }
+
+  const statPhrase = beforeKeyword.slice(possessiveIndex + 1);
+  const statMarkerIndex = statPhrase.indexOf("が");
+
+  if (statMarkerIndex <= 0) {
+    return null;
+  }
+
+  const statCandidate = statPhrase.slice(0, statMarkerIndex);
+  return countCharacters(statCandidate) >= 2 && countCharacters(statCandidate) <= 4
+    ? statCandidate
+    : null;
+}
+
+function extractRankStatEvidence(
+  type: BattleEventType,
+  surfaceMatchTexts: readonly string[],
+  dictionary: BattleMessageDictionary,
+  ocrConfidence: number | null | undefined,
+) {
+  if (type !== "boost" && type !== "unboost") {
+    return null;
+  }
+
+  for (const surfaceText of surfaceMatchTexts) {
+    const statCandidate = extractRankStatCandidate(type, surfaceText);
+
+    if (!statCandidate) {
+      continue;
+    }
+
+    const { match, candidateMatch } = matchStatEntry(
+      statCandidate,
+      dictionary,
+      ocrConfidence,
+    );
+
+    if (match.status === "accepted") {
+      return candidateMatch;
+    }
+  }
+
+  return null;
+}
+
+function extractRankModifierEvidence(
+  type: BattleEventType,
+  surfaceMatchTexts: readonly string[],
+) {
+  if (type === "boost" && surfaceMatchTexts.some((surfaceText) => surfaceText.includes("ぐーん"))) {
+    return "rank:ぐーんと";
+  }
+
+  if (
+    type === "unboost" &&
+    surfaceMatchTexts.some((surfaceText) => surfaceText.includes("がくっと"))
+  ) {
+    return "rank:がくっと";
+  }
+
+  return null;
+}
+
 function parseContextEvent(
   rawText: string,
   normalizedText: string,
@@ -689,6 +809,13 @@ function parseContextEvent(
                   side: participant.side,
                 },
               };
+        const statCandidate = extractRankStatEvidence(
+          type,
+          surfaceMatchTexts,
+          dictionary,
+          ocrConfidence,
+        );
+        const rankModifier = extractRankModifierEvidence(type, surfaceMatchTexts);
 
         return createContextEventWithParticipant({
           type,
@@ -698,8 +825,15 @@ function parseContextEvent(
           ocrConfidence,
           templateId,
           participantMatch: participant.match,
+          extraCandidateMatches: [statCandidate, rankModifier].filter(
+            (value): value is string => Boolean(value),
+          ),
           ...participantField,
         });
+      }
+
+      if (type === "boost" || type === "unboost") {
+        return null;
       }
 
       return createSimpleEvent(type, normalizedText, matchText, rawText, ocrConfidence, templateId);
@@ -1486,6 +1620,13 @@ function parseTemplateEvent(
     return null;
   }
 
+  if (
+    (templateMatch.rule.eventType === "boost" || templateMatch.rule.eventType === "unboost") &&
+    !templateMatch.actor.name
+  ) {
+    return null;
+  }
+
   const actor =
     templateMatch.actor.name && !templateMatch.actor.side
       ? {
@@ -1648,6 +1789,18 @@ function parseConstrainedTemplateEvent(
   }
 
   if (!constrainedMatch.accepted) {
+    return {
+      candidateMatches: [
+        `constrained-review:${constrainedMatch.evidence}`,
+        formatConstrainedCandidateMatch(constrainedMatch),
+      ],
+    };
+  }
+
+  if (
+    (constrainedMatch.eventType === "boost" || constrainedMatch.eventType === "unboost") &&
+    !constrainedMatch.actor.name
+  ) {
     return {
       candidateMatches: [
         `constrained-review:${constrainedMatch.evidence}`,
@@ -1838,6 +1991,20 @@ function isConstrainedImmuneSurface(surfaceText: string) {
   );
 }
 
+function isConstrainedBoostSurface(surfaceText: string) {
+  return (
+    surfaceText.includes("が") &&
+    includesAny(surfaceText, ["上がった", "上がつた", "ぐーん"])
+  );
+}
+
+function isConstrainedUnboostSurface(surfaceText: string) {
+  return (
+    surfaceText.includes("が") &&
+    includesAny(surfaceText, ["下がった", "下かった", "下がっだ", "がくっと"])
+  );
+}
+
 function selectConstrainedTemplateSurfaces(
   surfaces: readonly MatchSurface[],
   templateRules: readonly BattleTemplateRule[],
@@ -1883,6 +2050,14 @@ function selectConstrainedTemplateSurfaces(
     }
 
     if (eventTypes.has("immune") && isConstrainedImmuneSurface(surface.matchText)) {
+      return true;
+    }
+
+    if (eventTypes.has("boost") && isConstrainedBoostSurface(surface.matchText)) {
+      return true;
+    }
+
+    if (eventTypes.has("unboost") && isConstrainedUnboostSurface(surface.matchText)) {
       return true;
     }
 
@@ -1985,6 +2160,8 @@ function selectConstrainedTemplateRules(
   const hasStatusCureShape = surfaceTexts.some(isConstrainedStatusCureSurface);
   const hasStatusShape = surfaceTexts.some(isConstrainedStatusSurface);
   const hasImmuneShape = surfaceTexts.some(isConstrainedImmuneSurface);
+  const hasBoostShape = surfaceTexts.some(isConstrainedBoostSurface);
+  const hasUnboostShape = surfaceTexts.some(isConstrainedUnboostSurface);
   const hasSupereffectiveShape = surfaceTexts.some(isConstrainedSupereffectiveSurface);
   const hasSupereffectiveTargetShape = surfaceTexts.some(hasEffectTargetSurfaceShape);
   const hasFailShape = surfaceTexts.some(isConstrainedFailSurface);
@@ -2025,6 +2202,24 @@ function selectConstrainedTemplateRules(
 
     if (rule.eventType === "immune") {
       return hasImmuneShape;
+    }
+
+    if (rule.eventType === "boost") {
+      return (
+        hasBoostShape &&
+        rule.patterns.some(
+          (pattern) => pattern.includes("{pokemon}") && pattern.includes("{stat}"),
+        )
+      );
+    }
+
+    if (rule.eventType === "unboost") {
+      return (
+        hasUnboostShape &&
+        rule.patterns.some(
+          (pattern) => pattern.includes("{pokemon}") && pattern.includes("{stat}"),
+        )
+      );
     }
 
     if (rule.eventType === "supereffective") {

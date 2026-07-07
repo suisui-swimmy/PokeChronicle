@@ -38,6 +38,36 @@ function extractTextCapture(classification: BattleEvent["classification"]) {
   return null;
 }
 
+function extractStatCapture(classification: BattleEvent["classification"]) {
+  for (const alternative of classification.alternatives) {
+    const dictionaryMatch = alternative.match(/(?:^|:)stat:([^:]+)->([^:]+)/);
+
+    if (dictionaryMatch?.[2]) {
+      return dictionaryMatch[2].trim();
+    }
+
+    const exactMatch = alternative.match(/(?:^|:)stat=([^:]+)/);
+
+    if (exactMatch?.[1]) {
+      return exactMatch[1].trim();
+    }
+  }
+
+  return null;
+}
+
+function getRankChangeModifier(type: "boost" | "unboost", signalText: string) {
+  if (type === "boost" && signalText.includes("ぐーん")) {
+    return "ぐーんと ";
+  }
+
+  if (type === "unboost" && signalText.includes("がくっと")) {
+    return "がくっと ";
+  }
+
+  return "";
+}
+
 export function renderBattleEventCanonicalText(
   event: Pick<BattleEvent, "type" | "actor" | "move" | "target" | "classification"> &
     Partial<Pick<BattleEvent, "normalizedText">>,
@@ -45,6 +75,7 @@ export function renderBattleEventCanonicalText(
   const actorSubject = formatActorSubject(event.actor);
   const targetObject = formatTargetObject(event);
   const textCapture = extractTextCapture(event.classification);
+  const statCapture = extractStatCapture(event.classification);
   const classificationEvidence = event.classification.alternatives.join(":");
   const canonicalSignalText = `${event.normalizedText ?? ""}:${classificationEvidence}`;
 
@@ -85,10 +116,24 @@ export function renderBattleEventCanonicalText(
       return actorSubject ? `${actorSubject}は たおれた!` : "たおれた!";
     case "damage":
       return targetObject ? `${targetObject}は ダメージを 受けた!` : "ダメージを 受けた!";
-    case "boost":
+    case "boost": {
+      const modifier = getRankChangeModifier("boost", canonicalSignalText);
+
+      if (actorSubject && statCapture) {
+        return `${actorSubject}の ${statCapture}が ${modifier}上がった!`;
+      }
+
       return actorSubject ? `${actorSubject}の 能力が 上がった!` : "能力が 上がった!";
-    case "unboost":
+    }
+    case "unboost": {
+      const modifier = getRankChangeModifier("unboost", canonicalSignalText);
+
+      if (actorSubject && statCapture) {
+        return `${actorSubject}の ${statCapture}が ${modifier}下がった!`;
+      }
+
       return actorSubject ? `${actorSubject}の 能力が 下がった!` : "能力が 下がった!";
+    }
     case "fail":
       return targetObject
         ? `しかし ${targetObject}には うまく 決まらなかった!`

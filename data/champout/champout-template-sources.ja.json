@@ -33,9 +33,9 @@
     {
       "fileName": "btl_set.json",
       "status": "enabled",
-      "reason": "narrow live battle resolution messages for status, faint, flinch, item priority, effectiveness, fail, redirection, mega evolution, weather damage, and tea effect",
+      "reason": "narrow live battle resolution messages for status, stat rank, faint, flinch, item priority, effectiveness, fail, redirection, mega evolution, weather damage, and tea effect",
       "labelAllowPatterns": [
-        "^BTL_STRID_SET_(Dead|ShrinkExe|NoEffect|AffGood_1|DokuGet|YakedoGet|MahiGet|KoriGet|NemuriGet|MeromeroGet|KonranGet|DokuCure|YakedoCure|MahiCure|KoriMelt|NemuriWake|KonranCure|MeromeroCure|UseItem_Cure(Doku|Mahi|Nemuri|Koori|Yakedo|Konran|Mero)|UseItem_PriorityUpOnce|WazaFailPoke|FushokugasuMiss|WeatherDmg_Sand|Konoyubi|MegaEvo|MotenashiNoKokoro)(_E)?$"
+        "^BTL_STRID_SET_(Dead|ShrinkExe|NoEffect|AffGood_1|DokuGet|YakedoGet|MahiGet|KoriGet|NemuriGet|MeromeroGet|KonranGet|DokuCure|YakedoCure|MahiCure|KoriMelt|NemuriWake|KonranCure|MeromeroCure|UseItem_Cure(Doku|Mahi|Nemuri|Koori|Yakedo|Konran|Mero)|UseItem_PriorityUpOnce|WazaFailPoke|FushokugasuMiss|WeatherDmg_Sand|Konoyubi|MegaEvo|MotenashiNoKokoro)(_E)?$|^BTL_STRID_SET_Rank(up|down)Lv[12]_1_(P|E)_syn$"
       ],
       "labelDenyPatterns": ["Already", "Act$", "Damage", "TUTORIAL", "HELP", "BUTTON", "SELECT"],
       "textDenyHints": [],
@@ -95,6 +95,18 @@
           }
         },
         {
+          "eventType": "boost",
+          "when": {
+            "labelPatterns": ["^BTL_STRID_SET_RankupLv[12]_1_(P|E)_syn$"]
+          }
+        },
+        {
+          "eventType": "unboost",
+          "when": {
+            "labelPatterns": ["^BTL_STRID_SET_RankdownLv[12]_1_(P|E)_syn$"]
+          }
+        },
+        {
           "eventType": "status_cure",
           "when": {
             "labelPatterns": ["^BTL_STRID_SET_(DokuCure|YakedoCure|MahiCure|KoriMelt|NemuriWake|KonranCure|MeromeroCure|UseItem_Cure(Doku|Mahi|Nemuri|Koori|Yakedo|Konran|Mero))(_E)?$"]
@@ -132,6 +144,13 @@
           {
             "pattern": "^BTL_STRID_SET_UseItem_PriorityUpOnce(_E)?$",
             "slots": ["pokemon", "text"]
+          },
+          {
+            "pattern": "^BTL_STRID_SET_Rank(up|down)Lv[12]_1_(P|E)_syn$",
+            "slotsByIndex": {
+              "0": "pokemon",
+              "4": "stat"
+            }
           }
         ]
       }

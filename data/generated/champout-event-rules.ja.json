@@ -19,15 +19,15 @@
   "stats": {
     "sourceFileCount": 3,
     "extractedTextCount": 851,
-    "battleCandidateCount": 155,
-    "generatedRuleCount": 151,
-    "skippedTextCount": 700,
+    "battleCandidateCount": 163,
+    "generatedRuleCount": 159,
+    "skippedTextCount": 692,
     "duplicateRuleCount": 4,
     "maxGeneratedRules": 600,
     "eventTypeDistribution": {
       "activate": 4,
       "battle_end": 10,
-      "boost": 9,
+      "boost": 13,
       "critical": 1,
       "damage": 3,
       "fail": 12,
@@ -50,6 +50,7 @@
       "switch_in": 4,
       "switch_out": 2,
       "terrain_start": 1,
+      "unboost": 4,
       "weather_end": 4,
       "weather_start": 3
     },
@@ -96,13 +97,14 @@
       },
       {
         "fileName": "btl_set.json",
-        "reason": "narrow live battle resolution messages for status, faint, flinch, item priority, effectiveness, fail, redirection, mega evolution, weather damage, and tea effect",
+        "reason": "narrow live battle resolution messages for status, stat rank, faint, flinch, item priority, effectiveness, fail, redirection, mega evolution, weather damage, and tea effect",
         "extractedTextCount": 734,
-        "battleCandidateCount": 64,
-        "generatedRuleCount": 64,
-        "skippedTextCount": 670,
+        "battleCandidateCount": 72,
+        "generatedRuleCount": 72,
+        "skippedTextCount": 662,
         "eventTypeDistribution": {
           "activate": 4,
+          "boost": 4,
           "damage": 2,
           "fail": 4,
           "faint": 2,
@@ -112,7 +114,8 @@
           "redirection": 2,
           "status": 14,
           "status_cure": 28,
-          "supereffective": 2
+          "supereffective": 2,
+          "unboost": 4
         }
       }
     ]
@@ -2989,6 +2992,162 @@
         "keyPath": "mSDataSet[566].OriginalText",
         "labelName": "BTL_STRID_SET_MotenashiNoKokoro_E",
         "originalText": "相手の {0}が たてた お茶を{1}は 飲みほした!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_boost_rx605e",
+      "eventType": "boost",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}の{stat}が 上がった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[574].OriginalText",
+        "labelName": "BTL_STRID_SET_RankupLv1_1_P_syn",
+        "originalText": "{0}の{4}が 上がった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_boost_qx7sux",
+      "eventType": "boost",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}の{stat}が ぐーんと上がった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[579].OriginalText",
+        "labelName": "BTL_STRID_SET_RankupLv2_1_P_syn",
+        "originalText": "{0}の{4}が ぐーんと上がった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_unboost_1ke3qr3",
+      "eventType": "unboost",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}の{stat}が 下がった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[589].OriginalText",
+        "labelName": "BTL_STRID_SET_RankdownLv1_1_P_syn",
+        "originalText": "{0}の{4}が 下がった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_unboost_1k5gaz2",
+      "eventType": "unboost",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}の{stat}が がくっと下がった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[594].OriginalText",
+        "labelName": "BTL_STRID_SET_RankdownLv2_1_P_syn",
+        "originalText": "{0}の{4}が がくっと下がった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_boost_mif9sn",
+      "eventType": "boost",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}の{stat}が 上がった!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[654].OriginalText",
+        "labelName": "BTL_STRID_SET_RankupLv1_1_E_syn",
+        "originalText": "相手の {0}の{4}が 上がった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_boost_aog3mc",
+      "eventType": "boost",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}の{stat}が ぐーんと上がった!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[659].OriginalText",
+        "labelName": "BTL_STRID_SET_RankupLv2_1_E_syn",
+        "originalText": "相手の {0}の{4}が ぐーんと上がった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_unboost_1xz212e",
+      "eventType": "unboost",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}の{stat}が 下がった!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[669].OriginalText",
+        "labelName": "BTL_STRID_SET_RankdownLv1_1_E_syn",
+        "originalText": "相手の {0}の{4}が 下がった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_unboost_itsgan",
+      "eventType": "unboost",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}の{stat}が がくっと下がった!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[674].OriginalText",
+        "labelName": "BTL_STRID_SET_RankdownLv2_1_E_syn",
+        "originalText": "相手の {0}の{4}が がくっと下がった!",
         "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
       }
     }

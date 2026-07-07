@@ -6,10 +6,11 @@ import type { BattleTemplateRule, TemplateMatch, TemplateMatchSurface } from "./
 interface TemplateDictionary {
   pokemon: readonly DictionaryEntry[];
   moves: readonly DictionaryEntry[];
+  stats?: readonly DictionaryEntry[];
 }
 
-type PlaceholderKind = "pokemon" | "move" | "text";
-type CaptureSlot = "actor" | "target" | "move" | "text";
+type PlaceholderKind = "pokemon" | "move" | "stat" | "text";
+type CaptureSlot = "actor" | "target" | "move" | "stat" | "text";
 
 type CompiledTemplateToken =
   | { type: "literal"; value: string }
@@ -21,6 +22,8 @@ interface TemplateMatchState {
   actorName: string | null;
   targetName: string | null;
   moveName: string | null;
+  statName: string | null;
+  statEvidences: readonly string[];
   textCaptures: readonly string[];
 }
 
@@ -47,6 +50,10 @@ function parsePlaceholder(rawPlaceholder: string): CompiledTemplateToken {
 
   if (raw === "move") {
     return { type: "placeholder", kind: "move", slot: "move", raw };
+  }
+
+  if (raw === "stat") {
+    return { type: "placeholder", kind: "stat", slot: "stat", raw };
   }
 
   return { type: "placeholder", kind: "text", slot: "text", raw };
@@ -94,9 +101,30 @@ function updateCapture(
     return { ...state, moveName: value };
   }
 
+  if (token.slot === "stat") {
+    return { ...state, statName: value };
+  }
+
   return {
     ...state,
     textCaptures: [...state.textCaptures, value],
+  };
+}
+
+function updateDictionaryCapture(
+  state: TemplateMatchState,
+  token: Extract<CompiledTemplateToken, { type: "placeholder" }>,
+  span: DictionarySpan,
+): TemplateMatchState {
+  const nextState = updateCapture(state, token, span.entry.label);
+
+  if (token.kind !== "stat") {
+    return nextState;
+  }
+
+  return {
+    ...nextState,
+    statEvidences: [...state.statEvidences, `stat:${span.key}->${span.entry.label}`],
   };
 }
 
@@ -119,6 +147,10 @@ function findDictionaryTokenSpans(
 
   if (token.kind === "move") {
     return findDictionarySpans(text, dictionary.moves);
+  }
+
+  if (token.kind === "stat") {
+    return findDictionarySpans(text, dictionary.stats ?? []);
   }
 
   return [];
@@ -174,7 +206,7 @@ function matchDictionaryToken(
     }
 
     nextStates.push({
-      ...updateCapture(state, token, span.entry.label),
+      ...updateDictionaryCapture(state, token, span),
       cursor: span.end,
       gapPenalty: state.gapPenalty + createGapPenalty(tokenIndex, gap),
     });
@@ -222,6 +254,8 @@ function matchTokens(
       actorName: null,
       targetName: null,
       moveName: null,
+      statName: null,
+      statEvidences: [],
       textCaptures: [],
     },
   ];
@@ -275,6 +309,8 @@ function createEvidence(
     state.actorName ? `actor=${state.actorName}` : null,
     state.targetName ? `target=${state.targetName}` : null,
     state.moveName ? `move=${state.moveName}` : null,
+    state.statName ? `stat=${state.statName}` : null,
+    ...state.statEvidences,
     formatTextCaptures(state.textCaptures) || null,
   ]
     .filter(Boolean)

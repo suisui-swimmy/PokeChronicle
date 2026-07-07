@@ -19,9 +19,10 @@ describe("generated champout template rules", () => {
     expect(CHAMPOUT_TEMPLATE_STATS).toMatchObject({
       sourceFileCount: 3,
       extractedTextCount: 851,
-      generatedRuleCount: 151,
+      generatedRuleCount: 159,
       eventTypeDistribution: {
         activate: 4,
+        boost: 13,
         damage: 3,
         fail: 12,
         flinch: 2,
@@ -32,9 +33,10 @@ describe("generated champout template rules", () => {
         item: 5,
         redirection: 2,
         supereffective: 4,
+        unboost: 4,
       },
     });
-    expect(CHAMPOUT_TEMPLATE_RULES.length).toBe(151);
+    expect(CHAMPOUT_TEMPLATE_RULES.length).toBe(159);
     expect(CHAMPOUT_TEMPLATE_RULES[0].source).toMatchObject({
       fileName: "btl_attack_syn.json",
       keyPath: "mSDataSet[0].OriginalText",
@@ -45,8 +47,12 @@ describe("generated champout template rules", () => {
       expect.objectContaining({
         fileName: "btl_set.json",
         reason:
-          "narrow live battle resolution messages for status, faint, flinch, item priority, effectiveness, fail, redirection, mega evolution, weather damage, and tea effect",
-        generatedRuleCount: 64,
+          "narrow live battle resolution messages for status, stat rank, faint, flinch, item priority, effectiveness, fail, redirection, mega evolution, weather damage, and tea effect",
+        generatedRuleCount: 72,
+        eventTypeDistribution: expect.objectContaining({
+          boost: 4,
+          unboost: 4,
+        }),
       }),
     );
   });
@@ -181,6 +187,25 @@ describe("generated champout template rules", () => {
       eventType: "activate",
       patterns: ["{pokemon}が たてた お茶を{target}は 飲みほした!"],
     });
+    expect(
+      CHAMPOUT_TEMPLATE_RULES.find(
+        (rule) => rule.source?.labelName === "BTL_STRID_SET_RankupLv2_1_E_syn",
+      ),
+    ).toMatchObject({
+      id: "champout_boost_aog3mc",
+      eventType: "boost",
+      patterns: ["相手の {pokemon}の{stat}が ぐーんと上がった!"],
+      constants: { "actor.side": "opponent" },
+    });
+    expect(
+      CHAMPOUT_TEMPLATE_RULES.find(
+        (rule) => rule.source?.labelName === "BTL_STRID_SET_RankdownLv2_1_P_syn",
+      ),
+    ).toMatchObject({
+      id: "champout_unboost_1k5gaz2",
+      eventType: "unboost",
+      patterns: ["{pokemon}の{stat}が がくっと下がった!"],
+    });
   });
 
   it("does not bundle obvious non-battle UI text into active rules", () => {
@@ -192,6 +217,9 @@ describe("generated champout template rules", () => {
     expect(allPatterns).not.toContain("ボタン");
     expect(allPatterns).not.toContain("こおりタイプの防御が1.5倍");
     expect(labels.some((label) => /Already|Act$|Damage/.test(label))).toBe(false);
+    expect(labels.some((label) => label.includes("btl_state_syn"))).toBe(false);
+    expect(labels).not.toContain("BTL_STRID_SET_RankupLv3_1_P_syn");
+    expect(labels).not.toContain("BTL_STRID_SET_RankupLv1_2_P_syn");
   });
 
   it("feeds generated rules into the parser default template set", () => {
@@ -277,6 +305,25 @@ describe("generated champout template rules", () => {
         classification: {
           method: "template_dictionary",
         },
+      },
+    });
+    expect(parseBattleMessage("相手の ガメノデスの 防御が ぐーんと 上がった!")).toMatchObject({
+      status: "event",
+      event: {
+        type: "boost",
+        actor: { name: "ガメノデス", side: "opponent" },
+        classification: {
+          alternatives: expect.arrayContaining([
+            expect.stringContaining("stat:防御->防御:accepted"),
+          ]),
+        },
+      },
+    });
+    expect(parseBattleMessage("ランドロスの 攻撃が がくっと 下がった!")).toMatchObject({
+      status: "event",
+      event: {
+        type: "unboost",
+        actor: { name: "ランドロス" },
       },
     });
   });

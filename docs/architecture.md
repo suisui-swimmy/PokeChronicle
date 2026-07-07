@@ -56,6 +56,7 @@ M4 keeps classification as pure browser-side TypeScript:
 - `src/core/normalize/ocrText.ts` derives display text and compact `matchText` without overwriting raw OCR text.
 - `scripts/generate-battle-dictionaries.mjs` reads local reference name lists from `others/pokemon-names` and `others/move-names`, then writes runtime-safe generated dictionaries under `src/core/dictionary` and `data/dictionaries`. When source Pokemon names only provide trailing gender markers, the generated dictionary also includes the genderless base label for OCR text that omits the marker.
 - `src/core/dictionary/generatedBattleDictionary.ts` is the parser's default dictionary and contains generated Pokemon and move name entries only. The runtime app does not read `others/`.
+- `src/core/dictionary/statDictionary.ts` is a small hand-written stat-name dictionary used only for constrained `{stat}` placeholders and canonical rank-change display.
 - `src/core/dictionary/seedBattleDictionary.ts` remains a tiny test/support dictionary, not the default parser dictionary.
 - `src/core/dictionary/fuzzyMatch.ts` accepts exact matches and only accepts fuzzy corrections when score, margin, and OCR confidence are high enough.
 - `src/core/parser/seedParser.ts` classifies the first seed rules: observed move messages, effectiveness messages, critical/miss/fail/protect/faint/switch hints, and unknown fallback.
@@ -66,7 +67,7 @@ M4 keeps classification as pure browser-side TypeScript:
 M4.5 adds the template matcher that later generated champout rules can feed:
 
 - `data/rules/event_rules.ja.json` is the version-controlled seed rule source for frequent non-move messages.
-- `src/core/templates/templateMatcher.ts` compiles seed patterns with placeholders such as `{pokemon}`, `{move}`, and bounded `{text}`.
+- `src/core/templates/templateMatcher.ts` compiles seed patterns with placeholders such as `{pokemon}`, `{move}`, `{stat}`, and bounded `{text}`.
 - Template matching runs after high-priority context rules and before flexible move span matching.
 - Seed templates can classify damage, healing, weather, terrain, ability, and item activation messages without bundling champout-derived full template dumps.
 - No browser JSON/ZIP import UI, IndexedDB template persistence, or champout-derived full text is included in M4.5.
@@ -99,7 +100,7 @@ M7 includes a standard generated champout template pack:
 - `scripts/report-champout-files.mjs` scans `others/champout/rom-txt/jpn/btl_*.json`, summarizes candidate counts, label prefixes, placeholder patterns, event type distribution, and risk hints, and intentionally omits raw `OriginalText` dumps from committed output.
 - `data/champout/champout-template-sources.ja.json` is the hand-reviewed source configuration. It supports `enabled`, `hold`, and `disabled` source statuses; only `enabled` files are generated into the runtime pack.
 - `scripts/generate-champout-templates.mjs` is a development/build-time Node script. It verifies the local `others/champout` MIT license and source commit, reads selected Japanese battle text files, and writes `data/generated/champout-event-rules.ja.json`.
-- The generated pack is compact: it currently uses `OriginalText` from `btl_attack_syn.json`, `btl_std.json`, and the narrowly allow-listed status/faint/no-effect labels from `btl_set.json`. It records source file, key path, label name, original text, and source commit for each generated rule. Short but high-signal templates such as `{pokemon}の{move}!` and `{pokemon}戻れ!` are allowed because the parser constrains their placeholders to dictionaries.
+- The generated pack is compact: it currently uses `OriginalText` from `btl_attack_syn.json`, `btl_std.json`, and narrowly allow-listed live-message labels from `btl_set.json`, including status/faint/effectiveness and single-stat `RankupLv` / `RankdownLv` Lv1-Lv2 messages. It records source file, key path, label name, original text, and source commit for each generated rule. Short but high-signal templates such as `{pokemon}の{move}!`, `{pokemon}戻れ!`, and `{pokemon}の{stat}が 上がった!` are allowed because the parser constrains their placeholders to dictionaries.
 - `src/core/templates/generatedChampoutTemplateRules.ts` imports the generated JSON. Runtime code does not read from `others/champout`.
 - `src/core/templates/standardTemplateRules.ts` combines `SEED_TEMPLATE_RULES` with generated champout rules for live parsing.
 - Third-party source, MIT license, source commit, and notice details are recorded in `THIRD_PARTY_NOTICES.md`.
@@ -111,9 +112,9 @@ The parser treats generated champout rules as a constrained search problem befor
 
 - `src/core/templates/constrainedTemplateDecoder.ts` evaluates match surfaces derived from the raw OCR text, normalized text, OCR lines, and short line windows.
 - Fixed template text is fuzzy-aligned against the OCR surface. Placeholders are not free-form except for bounded `{text}`.
-- `{pokemon}` and `{target}` resolve only through the Pokemon dictionary. `{move}` resolves only through the move dictionary. `{text}` is capped and stored as evidence for trainer names or OCR noise; it does not decide the event type.
+- `{pokemon}` and `{target}` resolve only through the Pokemon dictionary. `{move}` resolves only through the move dictionary. `{stat}` resolves only through the small stat dictionary. `{text}` is capped and stored as evidence for trainer names or OCR noise; it does not decide the event type.
 - Candidate acceptance uses a combined score from literal alignment, dictionary match quality, OCR confidence, and surface priority. Fuzzy dictionary matches also require clear margin and enough OCR confidence.
-- Constrained decoding is intentionally narrow. It currently admits generated champout candidates for move, switch-in, switch-out, and tightly keyword-gated status/status-cure/faint/immune surfaces only.
+- Constrained decoding is intentionally narrow. It admits generated champout candidates only for reviewed live-message shapes such as move, switch-in, switch-out, status/status-cure, faint, immune/effectiveness, flinch/item priority, activation/damage, and stat rank up/down surfaces.
 - Rejected but plausible candidates are returned as `constrained-review:` evidence so the unknown bucket remains reviewable instead of silently accepting ambiguous OCR.
 - Parsed events preserve the original `rawText`; normalized and match text remain derived values.
 - The decoder is pure TypeScript and uses no Node, OpenCV, backend, cloud OCR, uploads, or runtime `others/champout` reads.

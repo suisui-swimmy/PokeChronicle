@@ -7,11 +7,12 @@ import type { BattleTemplateRule, TemplateMatchSurface } from "./types";
 interface ConstrainedTemplateDictionary {
   pokemon: readonly DictionaryEntry[];
   moves: readonly DictionaryEntry[];
+  stats?: readonly DictionaryEntry[];
   sessionRosterDictionary?: readonly DictionaryEntry[];
   observedMoveDictionary?: readonly DictionaryEntry[];
 }
 
-type PlaceholderKind = "pokemon" | "move" | "target" | "text";
+type PlaceholderKind = "pokemon" | "move" | "target" | "stat" | "text";
 
 type CompiledToken =
   | { type: "literal"; value: string }
@@ -99,6 +100,10 @@ function parsePlaceholder(rawPlaceholder: string): PlaceholderKind {
 
   if (raw === "target") {
     return "target";
+  }
+
+  if (raw === "stat") {
+    return "stat";
   }
 
   return "text";
@@ -265,7 +270,7 @@ function formatDictionaryEvidence(kind: PlaceholderKind, match: DictionaryMatch,
 }
 
 function resolveDictionaryPlaceholder(
-  kind: "pokemon" | "move" | "target",
+  kind: "pokemon" | "move" | "target" | "stat",
   segmentText: string,
   dictionary: ConstrainedTemplateDictionary,
   start: number,
@@ -273,11 +278,18 @@ function resolveDictionaryPlaceholder(
 ): PlaceholderResolution | null {
   const normalizedSegmentText = createOcrMatchText(segmentText);
   const normalizedSegmentLength = countCharacters(normalizedSegmentText);
-  const entries = kind === "move" ? dictionary.moves : dictionary.pokemon;
+  const entries =
+    kind === "move"
+      ? dictionary.moves
+      : kind === "stat"
+        ? dictionary.stats ?? []
+        : dictionary.pokemon;
   const priorityEntries =
     kind === "move"
       ? dictionary.observedMoveDictionary ?? []
-      : dictionary.sessionRosterDictionary ?? [];
+      : kind === "stat"
+        ? []
+        : dictionary.sessionRosterDictionary ?? [];
   let best:
     | (PlaceholderResolution & { rankingScore: number; secondScore: number | null })
     | null = null;
@@ -304,13 +316,18 @@ function resolveDictionaryPlaceholder(
       priorityMatch?.status === "accepted"
         ? priorityMatch
         : matchDictionaryEntry(segment.text, entries, {
-            acceptScore: MIN_DICTIONARY_SCORE,
-            reviewScore: 0.52,
-            acceptMargin: MIN_MARGIN,
-            minOcrConfidenceForFuzzy: 0.45,
+            acceptScore: kind === "stat" ? 0.84 : MIN_DICTIONARY_SCORE,
+            reviewScore: kind === "stat" ? 0.78 : 0.52,
+            acceptMargin: kind === "stat" ? 0.08 : MIN_MARGIN,
+            minOcrConfidenceForFuzzy:
+              kind === "stat" ? 0.65 : 0.45,
             ocrConfidence,
             similarity: "ocr_weighted",
           });
+
+    if (kind === "stat" && match.status !== "accepted") {
+      continue;
+    }
 
     if (!match.best || match.score === null || match.score < MIN_DICTIONARY_SCORE) {
       continue;

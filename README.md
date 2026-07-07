@@ -27,8 +27,8 @@ The M8 MVP is closed on top of the static app foundation:
 - Safe fuzzy dictionary matching that keeps low-confidence corrections reviewable
 - Seed parser coverage for observed move messages, effectiveness messages, and unknown fallback
 - Seed template matcher coverage for frequent damage, heal, weather, terrain, ability, and item messages
-- Build-time generated champout template pack for additional battle-message coverage
-- Constrained champout decoding that projects noisy OCR onto template + Pokemon dictionary + move dictionary candidates when confidence and margin are safe
+- Build-time generated champout template pack for additional battle-message coverage, including narrow `btl_set` status and stat rank messages
+- Constrained champout decoding that projects noisy OCR onto template + Pokemon dictionary + move dictionary + stat dictionary candidates when confidence and margin are safe
 - OCR log entries show the current parser classification candidate
 - Event timeline and unknown bucket views fed by the real-time OCR stream
 - Review tabs for timeline, resolved events, unknowns, raw OCR, and system logs so the live page does not grow with every log category
@@ -76,7 +76,7 @@ npm run report:champout
 npm run generate:champout-templates
 ```
 
-The current enabled source files are `btl_attack_syn.json`, `btl_std.json`, and the narrowly selected `btl_set.json`. Add more `btl_*.json` files one at a time only after checking the scan report, label allow/deny patterns, event type distribution, parser behavior, and tests.
+The current enabled source files are `btl_attack_syn.json`, `btl_std.json`, and the narrowly selected `btl_set.json`. The `btl_set.json` allowlist includes only reviewed live-message categories such as status/faint/effectiveness and the single-stat `RankupLv` / `RankdownLv` Lv1-Lv2 messages. Add more `btl_*.json` files one at a time only after checking the scan report, label allow/deny patterns, event type distribution, parser behavior, and tests.
 
 The runtime app imports only `data/generated/champout-event-rules.ja.json`. It does not read `others/champout`, and it does not bundle the full raw dump. Source files, source commit, license, and notice details are recorded in the generated JSON and `THIRD_PARTY_NOTICES.md`.
 

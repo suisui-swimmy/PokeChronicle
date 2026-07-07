@@ -518,8 +518,33 @@ export function inferEventType(extracted, sourceConfig = {}) {
 }
 
 function policyTokenToPlaceholder(token) {
-  if (token === "pokemon" || token === "move" || token === "target" || token === "text") {
+  if (
+    token === "pokemon" ||
+    token === "move" ||
+    token === "target" ||
+    token === "stat" ||
+    token === "text"
+  ) {
     return `{${token}}`;
+  }
+
+  return null;
+}
+
+function normalizePlaceholderPolicy(policy) {
+  if (!policy) {
+    return null;
+  }
+
+  if (Array.isArray(policy)) {
+    return { slots: policy };
+  }
+
+  if (Array.isArray(policy.slots) || policy.slotsByIndex) {
+    return {
+      slots: Array.isArray(policy.slots) ? policy.slots : null,
+      slotsByIndex: policy.slotsByIndex ?? null,
+    };
   }
 
   return null;
@@ -536,15 +561,19 @@ function findPlaceholderPolicy(extracted, eventType, sourceConfig = {}) {
     matchesAnyPattern(extracted.labelName ?? "", [entry.pattern]),
   );
 
-  if (labelPolicy?.slots) {
-    return labelPolicy.slots;
+  const normalizedLabelPolicy = normalizePlaceholderPolicy(labelPolicy);
+
+  if (normalizedLabelPolicy) {
+    return normalizedLabelPolicy;
   }
 
-  if (policy.byEventType?.[eventType]) {
-    return policy.byEventType[eventType];
+  const normalizedEventPolicy = normalizePlaceholderPolicy(policy.byEventType?.[eventType]);
+
+  if (normalizedEventPolicy) {
+    return normalizedEventPolicy;
   }
 
-  return policy.default ?? null;
+  return normalizePlaceholderPolicy(policy.default);
 }
 
 function placeholderForIndex(index, eventType, normalizedText, labelName) {
@@ -572,13 +601,21 @@ function placeholderForIndex(index, eventType, normalizedText, labelName) {
 }
 
 export function replacePlaceholders(text, eventType, extracted, sourceConfig = {}) {
-  const policySlots = findPlaceholderPolicy(extracted, eventType, sourceConfig);
+  const placeholderPolicy = findPlaceholderPolicy(extracted, eventType, sourceConfig);
 
   return text.replace(/\{\s*(\d+)\s*\}/g, (_, rawIndex) => {
     const index = Number(rawIndex);
-    const policyPlaceholder = policySlots
-      ? policyTokenToPlaceholder(policySlots[index] ?? policySlots[policySlots.length - 1])
-      : null;
+    const explicitToken =
+      placeholderPolicy?.slotsByIndex && Object.hasOwn(placeholderPolicy.slotsByIndex, rawIndex)
+        ? placeholderPolicy.slotsByIndex[rawIndex]
+        : null;
+    const indexedToken =
+      explicitToken ??
+      (placeholderPolicy?.slots
+        ? placeholderPolicy.slots[index] ??
+          placeholderPolicy.slots[placeholderPolicy.slots.length - 1]
+        : null);
+    const policyPlaceholder = policyTokenToPlaceholder(indexedToken);
 
     return (
       policyPlaceholder ??
@@ -592,6 +629,7 @@ export function patternLiteralLength(pattern) {
     .replaceAll("pokemon", "")
     .replaceAll("target", "")
     .replaceAll("move", "")
+    .replaceAll("stat", "")
     .replaceAll("text", "").length;
 }
 

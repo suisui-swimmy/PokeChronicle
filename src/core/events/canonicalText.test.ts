@@ -165,4 +165,41 @@ describe("renderBattleEventCanonicalText", () => {
       ),
     ).toBe("しかし ヤバソチャには うまく 決まらなかった!");
   });
+
+  it("renders stat-aware rank changes and falls back when stat evidence is missing", () => {
+    expect(
+      renderBattleEventCanonicalText(
+        event({
+          type: "boost",
+          actor: { name: "ガブリアス", side: null },
+          normalizedText: "ガブリアスの 攻撃が ぐーんと 上がった!",
+          classification: {
+            method: "template_dictionary",
+            templateId: "champout_boost_test",
+            alternatives: ["constrained:champout_boost_test:stat:攻撃->攻撃:accepted:1.00"],
+          },
+        }),
+      ),
+    ).toBe("ガブリアスの 攻撃が ぐーんと 上がった!");
+    expect(
+      renderBattleEventCanonicalText(
+        event({
+          type: "unboost",
+          actor: { name: "ランドロス", side: "opponent" },
+          normalizedText: "相手の ランドロスの 特攻が がくっと 下がった!",
+          classification: {
+            method: "template_dictionary",
+            templateId: "champout_unboost_test",
+            alternatives: ["constrained:champout_unboost_test:stat:特攻->特攻:accepted:1.00"],
+          },
+        }),
+      ),
+    ).toBe("相手の ランドロスの 特攻が がくっと 下がった!");
+    expect(
+      renderBattleEventCanonicalText(
+        event({ type: "boost", actor: { name: "ガメノデス", side: "opponent" } }),
+      ),
+    ).toBe("相手の ガメノデスの 能力が 上がった!");
+    expect(renderBattleEventCanonicalText(event({ type: "unboost" }))).toBe("能力が 下がった!");
+  });
 });
