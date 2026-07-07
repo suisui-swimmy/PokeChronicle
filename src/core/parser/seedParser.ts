@@ -775,7 +775,16 @@ function parseContextEvent(
     ["faint", "faint", ["倒れた", "たおれた", "たおれだ", "だたおれだ", "ひんし"]],
     ["switch_out", "switch_out", ["引っこめた", "ひっこめた"]],
     ["side_end", "tailwind_end", ["追い風が止んだ", "追い風か止んだ"]],
-    ["battle_end", "battle_end_surrender", ["降参が選ばれました", "降参が選はばれました"]],
+    [
+      "battle_end",
+      "battle_end_surrender",
+      [
+        "降参が選ばれました",
+        "降参か選ばれました",
+        "降参が選はばれました",
+        "降参か選はばれました",
+      ],
+    ],
     ["battle_end", "battle_end_loss", ["勝負に負けた", "勝負に口けた"]],
   ];
 

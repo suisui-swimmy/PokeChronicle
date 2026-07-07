@@ -164,6 +164,32 @@ describe("renderBattleEventCanonicalText", () => {
         event({ type: "fail", target: { name: "ヤバソチャ", side: null } }),
       ),
     ).toBe("しかし ヤバソチャには うまく 決まらなかった!");
+    expect(
+      renderBattleEventCanonicalText(
+        event({
+          type: "battle_end",
+          normalizedText: "降参か 選ばれました",
+          classification: {
+            method: "seed_rule",
+            templateId: "battle_end_surrender",
+            alternatives: [],
+          },
+        }),
+      ),
+    ).toBe("降参が 選ばれました!");
+    expect(
+      renderBattleEventCanonicalText(
+        event({
+          type: "battle_end",
+          normalizedText: "勝負に 口けた",
+          classification: {
+            method: "seed_rule",
+            templateId: "battle_end_loss",
+            alternatives: [],
+          },
+        }),
+      ),
+    ).toBe("勝負に 負けた!");
   });
 
   it("renders stat-aware rank changes and falls back when stat evidence is missing", () => {

@@ -213,6 +213,21 @@ export function renderBattleEventCanonicalText(
     case "side_end":
       return "追い風が 止んだ!";
     case "battle_end":
+      if (
+        event.classification.templateId === "battle_end_surrender" ||
+        event.classification.templateId === "champout_battle_end_1rxarh9" ||
+        canonicalSignalText.includes("降参")
+      ) {
+        return "降参が 選ばれました!";
+      }
+
+      if (
+        event.classification.templateId === "battle_end_loss" ||
+        canonicalSignalText.includes("勝負に")
+      ) {
+        return "勝負に 負けた!";
+      }
+
       return "勝負が 終了した!";
     default:
       return actorSubject ? `${actorSubject}: ${event.type}` : event.type;
