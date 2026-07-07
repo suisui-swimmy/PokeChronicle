@@ -28,16 +28,29 @@
       "reason": "standard live battle messages",
       "labelDenyPatterns": ["INFO", "TUTORIAL", "HELP", "BUTTON", "SELECT"],
       "textDenyHints": [],
-      "eventTypeRules": []
+      "eventTypeRules": [
+        {
+          "eventType": "weather_start",
+          "when": {
+            "labelPatterns": ["^BTL_STRID_STD_(Shine|Rain|Storm|Snow)Start$"]
+          }
+        },
+        {
+          "eventType": "weather_end",
+          "when": {
+            "labelPatterns": ["^BTL_STRID_STD_(Shine|Rain|Storm|Snow)End$"]
+          }
+        }
+      ]
     },
     {
       "fileName": "btl_set.json",
       "status": "enabled",
-      "reason": "narrow live battle resolution messages for status, stat rank, faint, flinch, item priority, effectiveness, fail, redirection, mega evolution, weather damage, and tea effect",
+      "reason": "narrow live battle resolution messages for status, stat rank, faint, flinch, item priority/endure, effectiveness, fail, protection, redirection, mega evolution, weather/poison damage, and tea effect",
       "labelAllowPatterns": [
-        "^BTL_STRID_SET_(Dead|ShrinkExe|NoEffect|AffGood_1|DokuGet|YakedoGet|MahiGet|KoriGet|NemuriGet|MeromeroGet|KonranGet|DokuCure|YakedoCure|MahiCure|KoriMelt|NemuriWake|KonranCure|MeromeroCure|UseItem_Cure(Doku|Mahi|Nemuri|Koori|Yakedo|Konran|Mero)|UseItem_PriorityUpOnce|WazaFailPoke|FushokugasuMiss|WeatherDmg_Sand|Konoyubi|MegaEvo|MotenashiNoKokoro)(_E)?$|^BTL_STRID_SET_Rank(up|down)Lv[12]_1_(P|E)_syn$"
+        "^BTL_STRID_SET_(Dead|ShrinkExe|NoEffect|AffGood_1|DokuGet|YakedoGet|MahiGet|KoriGet|NemuriGet|MeromeroGet|KonranGet|DokuCure|YakedoCure|MahiCure|KoriMelt|NemuriWake|KonranCure|MeromeroCure|UseItem_Cure(Doku|Mahi|Nemuri|Koori|Yakedo|Konran|Mero)|UseItem_PriorityUpOnce|KoraeItem|WazaFailPoke|FushokugasuMiss|CantAction|WeatherDmg_Sand|DokuDamage|WideGuard|Konoyubi|MegaEvo|MotenashiNoKokoro)(_E)?$|^BTL_STRID_SET_Rank(up|down)Lv[12]_1_(P|E)_syn$"
       ],
-      "labelDenyPatterns": ["Already", "Act$", "Damage", "TUTORIAL", "HELP", "BUTTON", "SELECT"],
+      "labelDenyPatterns": ["Already", "Act$", "TUTORIAL", "HELP", "BUTTON", "SELECT"],
       "textDenyHints": [],
       "eventTypeRules": [
         {
@@ -67,19 +80,25 @@
         {
           "eventType": "item",
           "when": {
-            "labelPatterns": ["^BTL_STRID_SET_UseItem_PriorityUpOnce(_E)?$"]
+            "labelPatterns": ["^BTL_STRID_SET_(UseItem_PriorityUpOnce|KoraeItem)(_E)?$"]
           }
         },
         {
           "eventType": "fail",
           "when": {
-            "labelPatterns": ["^BTL_STRID_SET_(WazaFailPoke|FushokugasuMiss)(_E)?$"]
+            "labelPatterns": ["^BTL_STRID_SET_(WazaFailPoke|FushokugasuMiss|CantAction)(_E)?$"]
           }
         },
         {
           "eventType": "damage",
           "when": {
-            "labelPatterns": ["^BTL_STRID_SET_WeatherDmg_Sand(_E)?$"]
+            "labelPatterns": ["^BTL_STRID_SET_(WeatherDmg_Sand|DokuDamage)(_E)?$"]
+          }
+        },
+        {
+          "eventType": "protect",
+          "when": {
+            "labelPatterns": ["^BTL_STRID_SET_WideGuard(_E)?$"]
           }
         },
         {
@@ -130,8 +149,16 @@
             "slots": ["target", "text"]
           },
           {
-            "pattern": "^BTL_STRID_SET_WeatherDmg_Sand(_E)?$",
+            "pattern": "^BTL_STRID_SET_CantAction(_E)?$",
+            "slots": ["pokemon", "text"]
+          },
+          {
+            "pattern": "^BTL_STRID_SET_(WeatherDmg_Sand|DokuDamage)(_E)?$",
             "slots": ["target", "text"]
+          },
+          {
+            "pattern": "^BTL_STRID_SET_WideGuard(_E)?$",
+            "slots": ["pokemon", "text"]
           },
           {
             "pattern": "^BTL_STRID_SET_MegaEvo(_E)?$",
@@ -143,6 +170,10 @@
           },
           {
             "pattern": "^BTL_STRID_SET_UseItem_PriorityUpOnce(_E)?$",
+            "slots": ["pokemon", "text"]
+          },
+          {
+            "pattern": "^BTL_STRID_SET_KoraeItem(_E)?$",
             "slots": ["pokemon", "text"]
           },
           {

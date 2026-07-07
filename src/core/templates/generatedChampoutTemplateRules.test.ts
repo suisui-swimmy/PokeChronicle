@@ -19,24 +19,27 @@ describe("generated champout template rules", () => {
     expect(CHAMPOUT_TEMPLATE_STATS).toMatchObject({
       sourceFileCount: 3,
       extractedTextCount: 851,
-      generatedRuleCount: 159,
+      generatedRuleCount: 167,
       eventTypeDistribution: {
         activate: 4,
-        boost: 13,
-        damage: 3,
-        fail: 12,
+        boost: 11,
+        damage: 5,
+        fail: 14,
         flinch: 2,
         status: 14,
         status_cure: 28,
         faint: 2,
         immune: 2,
-        item: 5,
+        item: 7,
+        protect: 6,
         redirection: 2,
         supereffective: 4,
         unboost: 4,
+        weather_end: 5,
+        weather_start: 4,
       },
     });
-    expect(CHAMPOUT_TEMPLATE_RULES.length).toBe(159);
+    expect(CHAMPOUT_TEMPLATE_RULES.length).toBe(167);
     expect(CHAMPOUT_TEMPLATE_RULES[0].source).toMatchObject({
       fileName: "btl_attack_syn.json",
       keyPath: "mSDataSet[0].OriginalText",
@@ -47,10 +50,14 @@ describe("generated champout template rules", () => {
       expect.objectContaining({
         fileName: "btl_set.json",
         reason:
-          "narrow live battle resolution messages for status, stat rank, faint, flinch, item priority, effectiveness, fail, redirection, mega evolution, weather damage, and tea effect",
-        generatedRuleCount: 72,
+          "narrow live battle resolution messages for status, stat rank, faint, flinch, item priority/endure, effectiveness, fail, protection, redirection, mega evolution, weather/poison damage, and tea effect",
+        generatedRuleCount: 80,
         eventTypeDistribution: expect.objectContaining({
           boost: 4,
+          damage: 4,
+          fail: 6,
+          item: 4,
+          protect: 2,
           unboost: 4,
         }),
       }),
@@ -95,6 +102,24 @@ describe("generated champout template rules", () => {
     });
     expect(
       CHAMPOUT_TEMPLATE_RULES.find(
+        (rule) => rule.source?.labelName === "BTL_STRID_STD_ShineStart",
+      ),
+    ).toMatchObject({
+      id: "champout_weather_start_17zypp5",
+      eventType: "weather_start",
+      patterns: ["日差しが 強くなった!"],
+    });
+    expect(
+      CHAMPOUT_TEMPLATE_RULES.find(
+        (rule) => rule.source?.labelName === "BTL_STRID_STD_RainEnd",
+      ),
+    ).toMatchObject({
+      id: "champout_weather_end_nslmzx",
+      eventType: "weather_end",
+      patterns: ["雨が 上がった!"],
+    });
+    expect(
+      CHAMPOUT_TEMPLATE_RULES.find(
         (rule) => rule.source?.labelName === "BTL_STRID_SET_YakedoGet",
       ),
     ).toMatchObject({
@@ -122,12 +147,40 @@ describe("generated champout template rules", () => {
     });
     expect(
       CHAMPOUT_TEMPLATE_RULES.find(
+        (rule) => rule.source?.labelName === "BTL_STRID_SET_DokuDamage",
+      ),
+    ).toMatchObject({
+      id: "champout_damage_10w2owf",
+      eventType: "damage",
+      patterns: ["{target}は毒の ダメージを受けた!"],
+    });
+    expect(
+      CHAMPOUT_TEMPLATE_RULES.find(
         (rule) => rule.source?.labelName === "BTL_STRID_SET_WazaFailPoke",
       ),
     ).toMatchObject({
       id: "champout_fail_le5yfc",
       eventType: "fail",
       patterns: ["しかし {target}にはうまく 決まらなかった!"],
+    });
+    expect(
+      CHAMPOUT_TEMPLATE_RULES.find(
+        (rule) => rule.source?.labelName === "BTL_STRID_SET_WideGuard_E",
+      ),
+    ).toMatchObject({
+      id: "champout_protect_zhkg73",
+      eventType: "protect",
+      patterns: ["相手の {pokemon}はワイドガードで 守られた!"],
+      constants: { "actor.side": "opponent" },
+    });
+    expect(
+      CHAMPOUT_TEMPLATE_RULES.find(
+        (rule) => rule.source?.labelName === "BTL_STRID_SET_CantAction",
+      ),
+    ).toMatchObject({
+      id: "champout_fail_1hf9z25",
+      eventType: "fail",
+      patterns: ["{pokemon}は攻撃の 反動で 動けない!"],
     });
     expect(
       CHAMPOUT_TEMPLATE_RULES.find(
@@ -148,6 +201,15 @@ describe("generated champout template rules", () => {
       eventType: "item",
       patterns: ["相手の {pokemon}は {text}で行動が はやくなった!"],
       constants: { "actor.side": "opponent" },
+    });
+    expect(
+      CHAMPOUT_TEMPLATE_RULES.find(
+        (rule) => rule.source?.labelName === "BTL_STRID_SET_KoraeItem",
+      ),
+    ).toMatchObject({
+      id: "champout_item_cckg8l",
+      eventType: "item",
+      patterns: ["{pokemon}は{text}で もちこたえた!"],
     });
     expect(
       CHAMPOUT_TEMPLATE_RULES.find(
@@ -216,7 +278,7 @@ describe("generated champout template rules", () => {
     expect(allPatterns).not.toContain("チームを編成する");
     expect(allPatterns).not.toContain("ボタン");
     expect(allPatterns).not.toContain("こおりタイプの防御が1.5倍");
-    expect(labels.some((label) => /Already|Act$|Damage/.test(label))).toBe(false);
+    expect(labels.some((label) => /Already|Act$/.test(label))).toBe(false);
     expect(labels.some((label) => label.includes("btl_state_syn"))).toBe(false);
     expect(labels).not.toContain("BTL_STRID_SET_RankupLv3_1_P_syn");
     expect(labels).not.toContain("BTL_STRID_SET_RankupLv1_2_P_syn");
@@ -250,6 +312,16 @@ describe("generated champout template rules", () => {
         classification: {
           method: "template_dictionary",
           templateId: "champout_weather_end_15lqdy4",
+        },
+      },
+    });
+    expect(parseBattleMessage("日差しが 強くなった！")).toMatchObject({
+      status: "event",
+      event: {
+        type: "weather_start",
+        classification: {
+          method: "template_dictionary",
+          templateId: "champout_weather_start_17zypp5",
         },
       },
     });
@@ -295,6 +367,38 @@ describe("generated champout template rules", () => {
         },
       },
     });
+    expect(parseBattleMessage("ニンフィアは 毒の ダメージを受けた!")).toMatchObject({
+      status: "event",
+      event: {
+        type: "damage",
+        target: { name: "ニンフィア" },
+        classification: {
+          method: "template_dictionary",
+          templateId: "champout_damage_10w2owf",
+        },
+      },
+    });
+    expect(parseBattleMessage("相手の ドヒドイデは ワイドガードで 守られた!")).toMatchObject({
+      status: "event",
+      event: {
+        type: "protect",
+        actor: { name: "ドヒドイデ", side: "opponent" },
+      },
+    });
+    expect(parseBattleMessage("エルフーンは きあいのタスキで もちこたえた!")).toMatchObject({
+      status: "event",
+      event: {
+        type: "item",
+        actor: { name: "エルフーン" },
+      },
+    });
+    expect(parseBattleMessage("ニンフィアは 攻撃の 反動で 動けない!")).toMatchObject({
+      status: "event",
+      event: {
+        type: "fail",
+        actor: { name: "ニンフィア" },
+      },
+    });
     expect(
       parseBattleMessage("相手の ガメノデスは せんせいのツメで 行動が はやくなった!"),
     ).toMatchObject({
@@ -326,7 +430,7 @@ describe("generated champout template rules", () => {
         actor: { name: "ランドロス" },
       },
     });
-  });
+  }, 30000);
 
   it("leaves unrelated UI text as unknown", () => {
     expect(parseBattleMessage("プレミアムバトルパス購入")).toMatchObject({

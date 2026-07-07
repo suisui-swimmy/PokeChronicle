@@ -91,6 +91,18 @@ export function renderBattleEventCanonicalText(
     case "switch_out":
       return actorSubject ? `${actorSubject} 戻れ!` : "戻れ!";
     case "protect":
+      if (canonicalSignalText.includes("ワイドガード")) {
+        return actorSubject
+          ? `${actorSubject}は ワイドガードで 守られた!`
+          : "ワイドガードで 守られた!";
+      }
+
+      if (canonicalSignalText.includes("ファストガード")) {
+        return actorSubject
+          ? `${actorSubject}は ファストガードで 守られた!`
+          : "ファストガードで 守られた!";
+      }
+
       if (event.classification.templateId === "protect_stance") {
         return actorSubject
           ? `${actorSubject}は 守りの 体勢に 入った!`
@@ -101,6 +113,12 @@ export function renderBattleEventCanonicalText(
         ? `${actorSubject}は 攻撃から 身を守った!`
         : "攻撃から 身を守った!";
     case "supereffective":
+      if (canonicalSignalText.includes("ちょう") || canonicalSignalText.includes("ちよう") || canonicalSignalText.includes("ちよ")) {
+        return targetObject
+          ? `${targetObject}に 効果は ちょうバツグンだ!`
+          : "効果は ちょうバツグンだ!";
+      }
+
       return targetObject ? `${targetObject}に 効果は バツグンだ!` : "効果は バツグンだ!";
     case "resisted":
       return targetObject ? `${targetObject}に 効果は いまひとつだ!` : "効果は いまひとつだ!";
@@ -115,6 +133,12 @@ export function renderBattleEventCanonicalText(
     case "faint":
       return actorSubject ? `${actorSubject}は たおれた!` : "たおれた!";
     case "damage":
+      if (canonicalSignalText.includes("毒") || canonicalSignalText.includes("どく")) {
+        return targetObject
+          ? `${targetObject}は 毒の ダメージを 受けた!`
+          : "毒の ダメージを 受けた!";
+      }
+
       return targetObject ? `${targetObject}は ダメージを 受けた!` : "ダメージを 受けた!";
     case "boost": {
       const modifier = getRankChangeModifier("boost", canonicalSignalText);
@@ -135,10 +159,24 @@ export function renderBattleEventCanonicalText(
       return actorSubject ? `${actorSubject}の 能力が 下がった!` : "能力が 下がった!";
     }
     case "fail":
+      if (canonicalSignalText.includes("反動") || canonicalSignalText.includes("動けない")) {
+        return actorSubject
+          ? `${actorSubject}は 攻撃の 反動で 動けない!`
+          : "攻撃の 反動で 動けない!";
+      }
+
       return targetObject
         ? `しかし ${targetObject}には うまく 決まらなかった!`
         : "しかし うまく 決まらなかった!";
     case "item":
+      if (canonicalSignalText.includes("もちこたえ") || canonicalSignalText.includes("持ちこたえ")) {
+        const itemName = textCapture ?? "道具";
+
+        return actorSubject
+          ? `${actorSubject}は ${itemName}で もちこたえた!`
+          : `${itemName}で もちこたえた!`;
+      }
+
       if (textCapture && event.classification.templateId?.startsWith("champout_item_")) {
         return actorSubject
           ? `${actorSubject}は ${textCapture}で 行動が はやくなった!`
@@ -211,6 +249,14 @@ export function renderBattleEventCanonicalText(
 
       return "天候が 元に戻った!";
     case "side_end":
+      if (canonicalSignalText.includes("味方の")) {
+        return "味方の 追い風が 止んだ!";
+      }
+
+      if (canonicalSignalText.includes("相手の")) {
+        return "相手の 追い風が 止んだ!";
+      }
+
       return "追い風が 止んだ!";
     case "battle_end":
       if (

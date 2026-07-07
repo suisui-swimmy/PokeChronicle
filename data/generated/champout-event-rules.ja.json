@@ -19,27 +19,27 @@
   "stats": {
     "sourceFileCount": 3,
     "extractedTextCount": 851,
-    "battleCandidateCount": 163,
-    "generatedRuleCount": 159,
-    "skippedTextCount": 692,
+    "battleCandidateCount": 171,
+    "generatedRuleCount": 167,
+    "skippedTextCount": 684,
     "duplicateRuleCount": 4,
     "maxGeneratedRules": 600,
     "eventTypeDistribution": {
       "activate": 4,
       "battle_end": 10,
-      "boost": 13,
+      "boost": 11,
       "critical": 1,
-      "damage": 3,
-      "fail": 12,
+      "damage": 5,
+      "fail": 14,
       "faint": 2,
       "field_end": 5,
       "field_start": 1,
       "flinch": 2,
       "heal": 1,
       "immune": 2,
-      "item": 5,
+      "item": 7,
       "move": 2,
-      "protect": 4,
+      "protect": 6,
       "redirection": 2,
       "resisted": 2,
       "side_end": 16,
@@ -51,8 +51,8 @@
       "switch_out": 2,
       "terrain_start": 1,
       "unboost": 4,
-      "weather_end": 4,
-      "weather_start": 3
+      "weather_end": 5,
+      "weather_start": 4
     },
     "perFile": [
       {
@@ -75,7 +75,7 @@
         "skippedTextCount": 26,
         "eventTypeDistribution": {
           "battle_end": 14,
-          "boost": 9,
+          "boost": 7,
           "critical": 1,
           "damage": 1,
           "fail": 8,
@@ -91,26 +91,27 @@
           "switch_in": 4,
           "switch_out": 2,
           "terrain_start": 1,
-          "weather_end": 4,
-          "weather_start": 3
+          "weather_end": 5,
+          "weather_start": 4
         }
       },
       {
         "fileName": "btl_set.json",
-        "reason": "narrow live battle resolution messages for status, stat rank, faint, flinch, item priority, effectiveness, fail, redirection, mega evolution, weather damage, and tea effect",
+        "reason": "narrow live battle resolution messages for status, stat rank, faint, flinch, item priority/endure, effectiveness, fail, protection, redirection, mega evolution, weather/poison damage, and tea effect",
         "extractedTextCount": 734,
-        "battleCandidateCount": 72,
-        "generatedRuleCount": 72,
-        "skippedTextCount": 662,
+        "battleCandidateCount": 80,
+        "generatedRuleCount": 80,
+        "skippedTextCount": 654,
         "eventTypeDistribution": {
           "activate": 4,
           "boost": 4,
-          "damage": 2,
-          "fail": 4,
+          "damage": 4,
+          "fail": 6,
           "faint": 2,
           "flinch": 2,
           "immune": 2,
-          "item": 2,
+          "item": 4,
+          "protect": 2,
           "redirection": 2,
           "status": 14,
           "status_cure": 28,
@@ -485,8 +486,8 @@
       }
     },
     {
-      "id": "champout_boost_1l50789",
-      "eventType": "boost",
+      "id": "champout_weather_start_17zypp5",
+      "eventType": "weather_start",
       "priority": 50,
       "patterns": [
         "日差しが 強くなった!"
@@ -575,8 +576,8 @@
       }
     },
     {
-      "id": "champout_boost_jcpys6",
-      "eventType": "boost",
+      "id": "champout_weather_end_nslmzx",
+      "eventType": "weather_end",
       "priority": 50,
       "patterns": [
         "雨が 上がった!"
@@ -1943,6 +1944,45 @@
       }
     },
     {
+      "id": "champout_damage_10w2owf",
+      "eventType": "damage",
+      "priority": 50,
+      "patterns": [
+        "{target}は毒の ダメージを受けた!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[46].OriginalText",
+        "labelName": "BTL_STRID_SET_DokuDamage",
+        "originalText": "{0}は毒の ダメージを受けた!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_damage_1od4j3d",
+      "eventType": "damage",
+      "priority": 50,
+      "patterns": [
+        "相手の {target}は毒の ダメージを受けた!"
+      ],
+      "constants": {
+        "target.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[47].OriginalText",
+        "labelName": "BTL_STRID_SET_DokuDamage_E",
+        "originalText": "相手の {0}は毒の ダメージを受けた!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
       "id": "champout_status_cure_173iunp",
       "eventType": "status_cure",
       "priority": 50,
@@ -2567,6 +2607,84 @@
       }
     },
     {
+      "id": "champout_protect_1lywvyt",
+      "eventType": "protect",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}はワイドガードで 守られた!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[334].OriginalText",
+        "labelName": "BTL_STRID_SET_WideGuard",
+        "originalText": "{0}はワイドガードで 守られた!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_protect_zhkg73",
+      "eventType": "protect",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}はワイドガードで 守られた!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[335].OriginalText",
+        "labelName": "BTL_STRID_SET_WideGuard_E",
+        "originalText": "相手の {0}はワイドガードで 守られた!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_fail_1hf9z25",
+      "eventType": "fail",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}は攻撃の 反動で 動けない!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[358].OriginalText",
+        "labelName": "BTL_STRID_SET_CantAction",
+        "originalText": "{0}は攻撃の 反動で 動けない!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_fail_1px3mbn",
+      "eventType": "fail",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}は攻撃の 反動で 動けない!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[359].OriginalText",
+        "labelName": "BTL_STRID_SET_CantAction_E",
+        "originalText": "相手の {0}は攻撃の 反動で 動けない!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
       "id": "champout_status_cure_1wbh4cj",
       "eventType": "status_cure",
       "priority": 50,
@@ -2836,6 +2954,45 @@
         "keyPath": "mSDataSet[406].OriginalText",
         "labelName": "BTL_STRID_SET_UseItem_CureMero_E",
         "originalText": "相手の {0}は {1}でメロメロ状態が 治った!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_item_cckg8l",
+      "eventType": "item",
+      "priority": 50,
+      "patterns": [
+        "{pokemon}は{text}で もちこたえた!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[409].OriginalText",
+        "labelName": "BTL_STRID_SET_KoraeItem",
+        "originalText": "{0}は{1}で もちこたえた!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_item_d5lkr6",
+      "eventType": "item",
+      "priority": 50,
+      "patterns": [
+        "相手の {pokemon}は{text}で もちこたえた!"
+      ],
+      "constants": {
+        "actor.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[410].OriginalText",
+        "labelName": "BTL_STRID_SET_KoraeItem_E",
+        "originalText": "相手の {0}は{1}で もちこたえた!",
         "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
       }
     },

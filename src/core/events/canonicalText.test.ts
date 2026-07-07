@@ -71,11 +71,34 @@ describe("renderBattleEventCanonicalText", () => {
     expect(
       renderBattleEventCanonicalText(
         event({
+          type: "protect",
+          actor: { name: "ドヒドイデ", side: "opponent" },
+          normalizedText: "相手の ドヒドイデは ワイドガードで 守られた!",
+          classification: {
+            method: "template_dictionary",
+            templateId: "champout_protect_zhkg73",
+            alternatives: [],
+          },
+        }),
+      ),
+    ).toBe("相手の ドヒドイデは ワイドガードで 守られた!");
+    expect(
+      renderBattleEventCanonicalText(
+        event({
           type: "supereffective",
           target: { name: "マフォクシー", side: null },
         }),
       ),
     ).toBe("マフォクシーに 効果は バツグンだ!");
+    expect(
+      renderBattleEventCanonicalText(
+        event({
+          type: "supereffective",
+          target: { name: "サザンドラ", side: "opponent" },
+          normalizedText: "相手の サザンドラに 効果は ちよょうバツグンだ!!",
+        }),
+      ),
+    ).toBe("相手の サザンドラに 効果は ちょうバツグンだ!");
     expect(
       renderBattleEventCanonicalText(
         event({ type: "faint", actor: { name: "エルフーン", side: null } }),
@@ -104,6 +127,20 @@ describe("renderBattleEventCanonicalText", () => {
         }),
       ),
     ).toBe("相手の ガメノデスは せんせいのツメで 行動が はやくなった!");
+    expect(
+      renderBattleEventCanonicalText(
+        event({
+          type: "item",
+          actor: { name: "エルフーン", side: null },
+          normalizedText: "エルフーンは きあいのタスキで もちこたえた!",
+          classification: {
+            method: "template_dictionary",
+            templateId: "champout_item_cckg8l",
+            alternatives: ["template:champout_item_cckg8l:text=きあいのタスキ"],
+          },
+        }),
+      ),
+    ).toBe("エルフーンは きあいのタスキで もちこたえた!");
     expect(
       renderBattleEventCanonicalText(
         event({
@@ -164,6 +201,32 @@ describe("renderBattleEventCanonicalText", () => {
         event({ type: "fail", target: { name: "ヤバソチャ", side: null } }),
       ),
     ).toBe("しかし ヤバソチャには うまく 決まらなかった!");
+    expect(
+      renderBattleEventCanonicalText(
+        event({
+          type: "damage",
+          target: { name: "ニンフィア", side: null },
+          normalizedText: "ニンフィアは 毒の ダメージを受けた!",
+        }),
+      ),
+    ).toBe("ニンフィアは 毒の ダメージを 受けた!");
+    expect(
+      renderBattleEventCanonicalText(
+        event({
+          type: "fail",
+          actor: { name: "ニンフィア", side: null },
+          normalizedText: "ニンフィアは 攻撃の 反動で 動けない!",
+        }),
+      ),
+    ).toBe("ニンフィアは 攻撃の 反動で 動けない!");
+    expect(
+      renderBattleEventCanonicalText(
+        event({
+          type: "side_end",
+          normalizedText: "味方の 追い風が 止んだ!",
+        }),
+      ),
+    ).toBe("味方の 追い風が 止んだ!");
     expect(
       renderBattleEventCanonicalText(
         event({

@@ -196,6 +196,94 @@ describe("decodeConstrainedTemplate", () => {
     });
   });
 
+  it("projects newly enabled btl_set resolution templates from narrow OCR surfaces", () => {
+    const rules = STANDARD_TEMPLATE_RULES.filter((rule) =>
+      [
+        "BTL_STRID_SET_DokuDamage",
+        "BTL_STRID_SET_WideGuard_E",
+        "BTL_STRID_SET_KoraeItem",
+        "BTL_STRID_SET_CantAction",
+        "BTL_STRID_STD_ShineStart",
+        "BTL_STRID_STD_OikazeOff",
+      ].includes(rule.source?.labelName ?? ""),
+    );
+    const poisonDamage = decodeConstrainedTemplate({
+      surfaces: [surface("ニンフイアは\n毒の ダメージを受けだ/")],
+      dictionary: BATTLE_DICTIONARY_WITH_STATS,
+      rules,
+      ocrConfidence: 0.88,
+    });
+    const wideGuard = decodeConstrainedTemplate({
+      surfaces: [surface("相手の ドヒドイデは\nワイドガードで 守られた/")],
+      dictionary: BATTLE_DICTIONARY_WITH_STATS,
+      rules,
+      ocrConfidence: 0.9,
+    });
+    const endureItem = decodeConstrainedTemplate({
+      surfaces: [surface("エルフーンは\nきあいのタスキで もちこたえた/")],
+      dictionary: BATTLE_DICTIONARY_WITH_STATS,
+      rules,
+      ocrConfidence: 0.9,
+    });
+    const cantAction = decodeConstrainedTemplate({
+      surfaces: [surface("ニンフイアは\n攻撃の 反動で 動けない/")],
+      dictionary: BATTLE_DICTIONARY_WITH_STATS,
+      rules,
+      ocrConfidence: 0.88,
+    });
+    const strongSun = decodeConstrainedTemplate({
+      surfaces: [surface("日差しか 強くなった/")],
+      dictionary: BATTLE_DICTIONARY_WITH_STATS,
+      rules,
+      ocrConfidence: 0.88,
+    });
+    const tailwindEnd = decodeConstrainedTemplate({
+      surfaces: [surface("味方の\n追い風が 止んだ/")],
+      dictionary: BATTLE_DICTIONARY_WITH_STATS,
+      rules,
+      ocrConfidence: 0.88,
+    });
+
+    expect(poisonDamage).toMatchObject({
+      accepted: true,
+      eventType: "damage",
+      target: { name: "ニンフィア" },
+      rule: { id: "champout_damage_10w2owf" },
+    });
+    expect(wideGuard).toMatchObject({
+      accepted: true,
+      eventType: "protect",
+      actor: { name: "ドヒドイデ", side: "opponent" },
+      rule: { id: "champout_protect_zhkg73" },
+    });
+    expect(endureItem).toMatchObject({
+      accepted: true,
+      eventType: "item",
+      actor: { name: "エルフーン" },
+      rule: { id: "champout_item_cckg8l" },
+    });
+    expect(endureItem?.placeholderResolutions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "text", value: "きあいのタスキ" }),
+      ]),
+    );
+    expect(cantAction).toMatchObject({
+      accepted: true,
+      eventType: "fail",
+      actor: { name: "ニンフィア" },
+      rule: { id: "champout_fail_1hf9z25" },
+    });
+    expect(strongSun).toMatchObject({
+      accepted: true,
+      eventType: "weather_start",
+      rule: { id: "champout_weather_start_17zypp5" },
+    });
+    expect(tailwindEnd).toMatchObject({
+      accepted: true,
+      eventType: "side_end",
+    });
+  });
+
   it("keeps short suffix noise as evidence without contaminating placeholders", () => {
     const result = decodeConstrainedTemplate({
       surfaces: [surface("相手の キュウコンの オームーヒードヒ/ bh、亜")],

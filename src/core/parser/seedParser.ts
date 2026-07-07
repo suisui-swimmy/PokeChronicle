@@ -743,7 +743,16 @@ function parseContextEvent(
     [
       "supereffective",
       "effect_supereffective",
-      ["効果はバツグンだ", "効果はパツグンだ", "効果はバッグンだ", "効果はパッグンだ", "効果はバックンだ"],
+      [
+        "効果はバツグンだ",
+        "効果はパツグンだ",
+        "効果はバッグンだ",
+        "効果はパッグンだ",
+        "効果はバックンだ",
+        "効果はバウツグンだ",
+        "効果はちようバツグンだ",
+        "効果はちよょうバツグンだ",
+      ],
     ],
     ["resisted", "effect_resisted", ["効果はいまひとつ", "効果はいまひとつだ"]],
     ["immune", "effect_immune", ["効果がない", "効果はない"]],
@@ -765,7 +774,7 @@ function parseContextEvent(
       ],
     ],
     ["miss", "move_miss", ["外れた", "あたらなかった"]],
-    ["fail", "move_fail", ["失敗", "うまく決まらない"]],
+    ["fail", "move_fail", ["失敗", "うまく決まらない", "反動で動けない"]],
     ["protect", "protect_block", ["身を守った", "守られた"]],
     [
       "protect",
@@ -1918,6 +1927,10 @@ function hasEffectTargetSurfaceShape(surfaceText: string) {
 }
 
 function isConstrainedFailSurface(surfaceText: string) {
+  if (surfaceText.includes("反動") && includesAny(surfaceText, ["動けない", "動けな"])) {
+    return true;
+  }
+
   return (
     (surfaceText.includes("失敗") ||
       surfaceText.includes("しかし") ||
@@ -1937,9 +1950,21 @@ function isConstrainedFlinchSurface(surfaceText: string) {
 }
 
 function isConstrainedItemPrioritySurface(surfaceText: string) {
-  return (
+  const priorityItemSurface =
     includesAny(surfaceText, ["行動がはやく", "行動かはやく", "行動が早く"]) &&
-    includesAny(surfaceText, ["なった", "なつた"])
+    includesAny(surfaceText, ["なった", "なつた"]);
+  const endureItemSurface =
+    includesAny(surfaceText, ["もちこたえ", "持ちこたえ"]) &&
+    surfaceText.includes("で");
+
+  return priorityItemSurface || endureItemSurface;
+}
+
+function isConstrainedProtectSurface(surfaceText: string) {
+  return (
+    includesAny(surfaceText, ["身を守", "守りの体勢", "守りの 体勢"]) ||
+    (includesAny(surfaceText, ["ワイドガード", "ファストガード"]) &&
+      includesAny(surfaceText, ["守られた", "守られ"]))
   );
 }
 
@@ -1959,7 +1984,14 @@ function isConstrainedActivateSurface(surfaceText: string) {
 }
 
 function isConstrainedDamageSurface(surfaceText: string) {
-  return surfaceText.includes("砂あらし") && includesAny(surfaceText, ["襲", "おそう"]);
+  const sandstormDamage =
+    surfaceText.includes("砂あらし") && includesAny(surfaceText, ["襲", "おそう"]);
+  const poisonDamage =
+    includesAny(surfaceText, ["毒", "どく"]) &&
+    surfaceText.includes("ダメージ") &&
+    includesAny(surfaceText, ["受けた", "受けだ", "受け"]);
+
+  return sandstormDamage || poisonDamage;
 }
 
 function isConstrainedStatusCureSurface(surfaceText: string) {
@@ -2012,6 +2044,32 @@ function isConstrainedUnboostSurface(surfaceText: string) {
     surfaceText.includes("が") &&
     includesAny(surfaceText, ["下がった", "下かった", "下がっだ", "がくっと"])
   );
+}
+
+function isConstrainedWeatherStartSurface(surfaceText: string) {
+  return (
+    (surfaceText.includes("日差し") && includesAny(surfaceText, ["強くなった", "強くなつた"])) ||
+    (surfaceText.includes("雨") && includesAny(surfaceText, ["降り始め", "ふり始め"])) ||
+    (surfaceText.includes("砂あらし") && includesAny(surfaceText, ["吹き始め", "ふき始め"])) ||
+    (includesAny(surfaceText, ["雪", "ゆき"]) && includesAny(surfaceText, ["降り始め", "ふり始め"]))
+  );
+}
+
+function isConstrainedWeatherEndSurface(surfaceText: string) {
+  return (
+    (surfaceText.includes("日差し") && includesAny(surfaceText, ["元に戻った", "元に戻つた"])) ||
+    (surfaceText.includes("雨") && includesAny(surfaceText, ["上がった", "上がつた"])) ||
+    (surfaceText.includes("砂あらし") && includesAny(surfaceText, ["おさまった", "止んだ"])) ||
+    (includesAny(surfaceText, ["雪", "ゆき"]) && surfaceText.includes("止んだ"))
+  );
+}
+
+function isConstrainedSideStartSurface(surfaceText: string) {
+  return surfaceText.includes("追い風") && includesAny(surfaceText, ["吹き始め", "ふき始め"]);
+}
+
+function isConstrainedSideEndSurface(surfaceText: string) {
+  return surfaceText.includes("追い風") && includesAny(surfaceText, ["止んだ", "やんだ"]);
 }
 
 function selectConstrainedTemplateSurfaces(
@@ -2070,6 +2128,10 @@ function selectConstrainedTemplateSurfaces(
       return true;
     }
 
+    if (eventTypes.has("protect") && isConstrainedProtectSurface(surface.matchText)) {
+      return true;
+    }
+
     if (
       eventTypes.has("supereffective") &&
       isConstrainedSupereffectiveSurface(surface.matchText)
@@ -2101,6 +2163,22 @@ function selectConstrainedTemplateSurfaces(
     }
 
     if (eventTypes.has("damage") && isConstrainedDamageSurface(surface.matchText)) {
+      return true;
+    }
+
+    if (eventTypes.has("weather_start") && isConstrainedWeatherStartSurface(surface.matchText)) {
+      return true;
+    }
+
+    if (eventTypes.has("weather_end") && isConstrainedWeatherEndSurface(surface.matchText)) {
+      return true;
+    }
+
+    if (eventTypes.has("side_start") && isConstrainedSideStartSurface(surface.matchText)) {
+      return true;
+    }
+
+    if (eventTypes.has("side_end") && isConstrainedSideEndSurface(surface.matchText)) {
       return true;
     }
 
@@ -2171,6 +2249,7 @@ function selectConstrainedTemplateRules(
   const hasImmuneShape = surfaceTexts.some(isConstrainedImmuneSurface);
   const hasBoostShape = surfaceTexts.some(isConstrainedBoostSurface);
   const hasUnboostShape = surfaceTexts.some(isConstrainedUnboostSurface);
+  const hasProtectShape = surfaceTexts.some(isConstrainedProtectSurface);
   const hasSupereffectiveShape = surfaceTexts.some(isConstrainedSupereffectiveSurface);
   const hasSupereffectiveTargetShape = surfaceTexts.some(hasEffectTargetSurfaceShape);
   const hasFailShape = surfaceTexts.some(isConstrainedFailSurface);
@@ -2179,6 +2258,10 @@ function selectConstrainedTemplateRules(
   const hasRedirectionShape = surfaceTexts.some(isConstrainedRedirectionSurface);
   const hasActivateShape = surfaceTexts.some(isConstrainedActivateSurface);
   const hasDamageShape = surfaceTexts.some(isConstrainedDamageSurface);
+  const hasWeatherStartShape = surfaceTexts.some(isConstrainedWeatherStartSurface);
+  const hasWeatherEndShape = surfaceTexts.some(isConstrainedWeatherEndSurface);
+  const hasSideStartShape = surfaceTexts.some(isConstrainedSideStartSurface);
+  const hasSideEndShape = surfaceTexts.some(isConstrainedSideEndSurface);
 
   return templateRules.filter((rule) => {
     if (!rule.id.startsWith("champout_")) {
@@ -2231,6 +2314,10 @@ function selectConstrainedTemplateRules(
       );
     }
 
+    if (rule.eventType === "protect") {
+      return hasProtectShape;
+    }
+
     if (rule.eventType === "supereffective") {
       return (
         hasSupereffectiveShape &&
@@ -2261,6 +2348,22 @@ function selectConstrainedTemplateRules(
 
     if (rule.eventType === "damage") {
       return hasDamageShape;
+    }
+
+    if (rule.eventType === "weather_start") {
+      return hasWeatherStartShape;
+    }
+
+    if (rule.eventType === "weather_end") {
+      return hasWeatherEndShape;
+    }
+
+    if (rule.eventType === "side_start") {
+      return hasSideStartShape;
+    }
+
+    if (rule.eventType === "side_end") {
+      return hasSideEndShape;
     }
 
     return false;

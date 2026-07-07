@@ -248,7 +248,7 @@ describe("parseBattleMessage", () => {
       status: "event",
       event: {
         type: "weather_start",
-        classification: { templateId: "weather_start" },
+        classification: { templateId: "champout_weather_start_1btb3pt" },
       },
     });
     expect(parseBattleMessage("エレキフィールドに なった！")).toMatchObject({
@@ -784,6 +784,95 @@ describe("parseBattleMessage", () => {
     expect(partialTea).toMatchObject({ status: "unknown" });
     expect(partialSand).toMatchObject({ status: "unknown" });
   });
+
+  it("parses focused champout resolution messages from the latest live log review", () => {
+    expect(parseBattleMessage("日差しが 強くなった!")).toMatchObject({
+      status: "event",
+      event: {
+        type: "weather_start",
+        classification: { templateId: "champout_weather_start_17zypp5" },
+      },
+    });
+    expect(parseBattleMessage("エルフーンは\nきあいのタスキで もちこたえた!")).toMatchObject({
+      status: "event",
+      event: {
+        type: "item",
+        actor: { name: "エルフーン" },
+      },
+    });
+    expect(parseBattleMessage("マフォクシーには\n効果が ないようだ...")).toMatchObject({
+      status: "event",
+      event: {
+        type: "immune",
+        target: { name: "マフォクシー" },
+      },
+    });
+    expect(parseBattleMessage("相手の ドヒドイデは\nワイドガードで 守られた!")).toMatchObject({
+      status: "event",
+      event: {
+        type: "protect",
+        actor: { name: "ドヒドイデ", side: "opponent" },
+      },
+    });
+    expect(parseBattleMessage("味方の\n追い風が 止んだ!")).toMatchObject({
+      status: "event",
+      event: { type: "side_end" },
+    });
+    expect(parseBattleMessage("ニンフィアの\n特攻が 下がった!")).toMatchObject({
+      status: "event",
+      event: {
+        type: "unboost",
+        actor: { name: "ニンフィア" },
+        classification: {
+          alternatives: expect.arrayContaining([
+            expect.stringContaining("stat:特攻->特攻:accepted"),
+          ]),
+        },
+      },
+    });
+    expect(parseBattleMessage("相手の サザンドラに\n効果は ちよょうバツグンだ!!")).toMatchObject({
+      status: "event",
+      event: {
+        type: "supereffective",
+        target: { name: "サザンドラ", side: "opponent" },
+      },
+    });
+    expect(parseBattleMessage("相手の ドヒドイデの\nどくどく!")).toMatchObject({
+      status: "event",
+      event: {
+        type: "move",
+        actor: { name: "ドヒドイデ", side: "opponent" },
+        move: "どくどく",
+      },
+    });
+    expect(parseBattleMessage("ニンフィアは\n猛毒を あびた!")).toMatchObject({
+      status: "event",
+      event: {
+        type: "status",
+        actor: { name: "ニンフィア" },
+      },
+    });
+    expect(parseBattleMessage("ニンフィアは\n毒の ダメージを受けた!")).toMatchObject({
+      status: "event",
+      event: {
+        type: "damage",
+        target: { name: "ニンフィア" },
+      },
+    });
+    expect(parseBattleMessage("ニンフィアは\n攻撃の 反動で 動けない!")).toMatchObject({
+      status: "event",
+      event: {
+        type: "fail",
+        actor: { name: "ニンフィア" },
+      },
+    });
+    expect(parseBattleMessage("相手の ドヒドイデは")).toMatchObject({
+      status: "unknown",
+    });
+    expect(parseBattleMessage("砂あらしが ー")).toMatchObject({
+      status: "unknown",
+    });
+  }, 20000);
 
   it("parses requested champout/live resolution messages from real-log review", () => {
     const flinch = parseBattleMessage("相手の ガメノデスは\nひるんで 技が だせない!");
