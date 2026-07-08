@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { BattleEvent, OCRMessage, UnknownEvent } from "../core/events/schema";
+import type {
+  BattleEvent,
+  FrameSampleDiagnostic,
+  OCRMessage,
+  UnknownEvent,
+} from "../core/events/schema";
 import {
   createBattleLogDocument,
   createEventsCsv,
@@ -58,6 +63,23 @@ const unknownEvent: UnknownEvent = {
   reviewStatus: "reviewed",
 };
 
+const sampleDiagnostic: FrameSampleDiagnostic = {
+  id: "sample_diag_1",
+  battleId: "battle_test",
+  frameIndex: 4,
+  timestampMs: 1200,
+  stage: "skippedBusy",
+  detail: "pending OCR jobs 1",
+  preprocessVariantId: "default",
+  preprocessRejectReason: null,
+  ocrVariantId: "default",
+  ocrForegroundPixelRatio: 0.032,
+  pendingOcrJobs: 1,
+  ocrJobId: null,
+  ocrConfidence: null,
+  lineCount: null,
+};
+
 describe("battle log export", () => {
   it("builds a schema-versioned document with durable manual corrections", () => {
     const document = createBattleLogDocument(
@@ -90,6 +112,7 @@ describe("battle log export", () => {
             capturedAt: "12:00:00",
           },
         ],
+        sampleDiagnostics: [sampleDiagnostic],
         reviewNotes: { unk_1: "あとでrule化" },
       },
       new Date("2026-06-30T00:00:00.000Z"),
@@ -98,6 +121,7 @@ describe("battle log export", () => {
     expect(document.exportedAt).toBe("2026-06-30T00:00:00.000Z");
     expect(document.media.sourceKind).toBe("video-file");
     expect(document.frameEvidence).toHaveLength(1);
+    expect(document.sampleDiagnostics).toEqual([sampleDiagnostic]);
     expect(document.manualCorrections).toEqual([
       {
         id: "cor_unk_1",
@@ -131,6 +155,7 @@ describe("battle log export", () => {
         events: [],
         unknowns: [],
         frameEvidence: [],
+        sampleDiagnostics: [sampleDiagnostic],
         reviewNotes: {},
       },
       new Date("2026-06-30T00:00:00.000Z"),
@@ -138,12 +163,51 @@ describe("battle log export", () => {
 
     expect(parseBattleLogJson(serializeBattleLogDocument(document))).toMatchObject({
       ok: true,
-      document: { battle: { id: "battle_test" } },
+      document: {
+        battle: { id: "battle_test" },
+        sampleDiagnostics: [{ stage: "skippedBusy", pendingOcrJobs: 1 }],
+      },
     });
     expect(parseBattleLogJson("{")).toEqual({ ok: false, error: "JSONとして読めません。" });
     expect(parseBattleLogJson(JSON.stringify({ schemaVersion: "9.9.9" }))).toEqual({
       ok: false,
       error: "対応していないBattle Log形式です。",
+    });
+  });
+
+  it("imports older JSON without sample diagnostics as an empty diagnostic list", () => {
+    const document = createBattleLogDocument(
+      {
+        battleId: "battle_test",
+        title: "Test battle",
+        startedAt: null,
+        media: {
+          sourceKind: "none",
+          videoLabel: null,
+          audioLabel: null,
+          width: null,
+          height: null,
+          frameRate: null,
+        },
+        roi: { x: 0, y: 0, w: 1, h: 1 },
+        roiName: "Battle message ROI",
+        ocrMessages: [],
+        events: [],
+        unknowns: [],
+        frameEvidence: [],
+        reviewNotes: {},
+      },
+      new Date("2026-06-30T00:00:00.000Z"),
+    );
+    const olderDocument = { ...document } as Partial<typeof document>;
+    delete olderDocument.sampleDiagnostics;
+
+    const result = parseBattleLogJson(JSON.stringify(olderDocument));
+
+    expect(result).toMatchObject({
+      ok: true,
+      document: { sampleDiagnostics: [] },
+      warnings: ["sample diagnosticsがないためサンプラー診断なしで読み込みます。"],
     });
   });
 

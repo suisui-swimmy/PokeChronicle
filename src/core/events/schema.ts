@@ -137,6 +137,33 @@ export interface BattleLogFrameEvidence {
   capturedAt: string | null;
 }
 
+export type FrameSampleDiagnosticStage =
+  | "sampled"
+  | "ocrQueued"
+  | "skippedBusy"
+  | "skippedPreprocess"
+  | "skippedDensity"
+  | "recognized"
+  | "empty"
+  | "error";
+
+export interface FrameSampleDiagnostic {
+  id: string;
+  battleId: string;
+  frameIndex: number;
+  timestampMs: number;
+  stage: FrameSampleDiagnosticStage;
+  detail: string | null;
+  preprocessVariantId: string | null;
+  preprocessRejectReason: string | null;
+  ocrVariantId: string | null;
+  ocrForegroundPixelRatio: number | null;
+  pendingOcrJobs: number | null;
+  ocrJobId: string | null;
+  ocrConfidence: number | null;
+  lineCount: number | null;
+}
+
 export interface ManualCorrection {
   id: string;
   battleId: string;
@@ -162,6 +189,7 @@ export interface BattleLogDocument {
   events: BattleEvent[];
   unknowns: UnknownEvent[];
   frameEvidence: BattleLogFrameEvidence[];
+  sampleDiagnostics: FrameSampleDiagnostic[];
   manualCorrections: ManualCorrection[];
 }
 
@@ -193,6 +221,7 @@ export function createEmptyBattleLog(battleId: string): BattleLogDocument {
     events: [],
     unknowns: [],
     frameEvidence: [],
+    sampleDiagnostics: [],
     manualCorrections: [],
   };
 }

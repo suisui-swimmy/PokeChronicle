@@ -5,6 +5,7 @@ import {
   type BattleLogFrameEvidence,
   type BattleLogMediaMetadata,
   type BattleLogRoiProfile,
+  type FrameSampleDiagnostic,
   type ManualCorrection,
   type NormalizedRoi,
   type OCRMessage,
@@ -24,6 +25,7 @@ export interface BattleLogBuildInput {
   events: readonly BattleEvent[];
   unknowns: readonly UnknownEvent[];
   frameEvidence: readonly BattleLogFrameEvidence[];
+  sampleDiagnostics?: readonly FrameSampleDiagnostic[];
   reviewNotes: Readonly<Record<string, string>>;
 }
 
@@ -89,6 +91,7 @@ export function createBattleLogDocument(
     events: [...input.events].sort(byTimestampThenId),
     unknowns: [...input.unknowns].sort(byTimestampThenId),
     frameEvidence: [...input.frameEvidence],
+    sampleDiagnostics: [...(input.sampleDiagnostics ?? [])].sort(byTimestampThenId),
     manualCorrections: createManualCorrections(
       input.battleId,
       input.unknowns,
@@ -167,6 +170,11 @@ export function parseBattleLogJson(text: string): BattleLogParseResult {
   if (!Array.isArray(parsed.frameEvidence)) {
     warnings.push("frame evidenceがないためcrop previewなしで読み込みます。");
     parsed.frameEvidence = [];
+  }
+
+  if (!Array.isArray(parsed.sampleDiagnostics)) {
+    warnings.push("sample diagnosticsがないためサンプラー診断なしで読み込みます。");
+    parsed.sampleDiagnostics = [];
   }
 
   return { ok: true, document: parsed, warnings };

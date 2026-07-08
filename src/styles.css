@@ -1275,6 +1275,102 @@ button:disabled {
   transition: width 120ms ease;
 }
 
+.ocr-diagnostic-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.ocr-diagnostic-summary span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 5px;
+  background: rgb(255 255 255 / 0.025);
+}
+
+.ocr-diagnostic-summary strong,
+.ocr-diagnostic-summary em {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.ocr-diagnostic-summary strong {
+  color: var(--faint);
+  font-size: var(--app-font-size-label);
+  font-weight: 900;
+}
+
+.ocr-diagnostic-summary em {
+  color: var(--text);
+  font-size: var(--app-font-size-body);
+  font-weight: 900;
+}
+
+.ocr-diagnostic-log {
+  display: grid;
+  gap: 6px;
+  max-height: 150px;
+  min-height: 54px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.ocr-diagnostic-empty,
+.ocr-diagnostic-entry {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 5px;
+  background: rgb(255 255 255 / 0.025);
+}
+
+.ocr-diagnostic-empty {
+  display: grid;
+  place-items: center;
+  min-height: 38px;
+  border-style: dashed;
+  color: var(--faint);
+  font-size: var(--app-font-size-body);
+  font-weight: 800;
+}
+
+.ocr-diagnostic-entry {
+  display: grid;
+  gap: 6px;
+}
+
+.ocr-diagnostic-entry--skippedBusy,
+.ocr-diagnostic-entry--skippedPreprocess,
+.ocr-diagnostic-entry--skippedDensity {
+  border-color: rgb(235 180 67 / 0.46);
+}
+
+.ocr-diagnostic-entry--recognized,
+.ocr-diagnostic-entry--ocrQueued {
+  border-color: rgb(72 187 120 / 0.42);
+}
+
+.ocr-diagnostic-entry--error {
+  border-color: rgb(242 95 76 / 0.54);
+}
+
+.ocr-diagnostic-entry p {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--app-font-size-body);
+  font-weight: 850;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
 .ocr-log-list {
   display: grid;
   gap: 8px;

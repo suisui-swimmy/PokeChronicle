@@ -24,6 +24,8 @@ import {
   type BattleLogFrameEvidence,
   type BattleLogMediaMetadata,
   type BattleEvent,
+  type FrameSampleDiagnostic,
+  type FrameSampleDiagnosticStage,
   type NormalizedRoi,
   type OCRMessage,
   type UnknownEvent,
@@ -94,6 +96,7 @@ const MAX_OCR_MESSAGES = 80;
 const MAX_TIMELINE_ITEMS = 48;
 const MAX_UNKNOWN_EVENTS = 48;
 const MAX_CROP_EVIDENCE = 80;
+const MAX_SAMPLE_DIAGNOSTICS = 600;
 const OCR_RAW_GROUP_LIMIT = 30;
 const DEFAULT_RESOLVED_LOG_PANEL_WIDTH = 260;
 const MIN_RESOLVED_LOG_PANEL_WIDTH = 180;
@@ -112,6 +115,16 @@ const MAX_SESSION_ROSTER_DICTIONARY_ENTRIES = 18;
 const MAX_OBSERVED_MOVE_DICTIONARY_ENTRIES = 96;
 const MIN_TEXT_PIXEL_RATIO = 0.004;
 const MAX_TEXT_PIXEL_RATIO = 0.18;
+const SAMPLE_DIAGNOSTIC_STAGES: readonly FrameSampleDiagnosticStage[] = [
+  "sampled",
+  "ocrQueued",
+  "skippedBusy",
+  "skippedPreprocess",
+  "skippedDensity",
+  "recognized",
+  "empty",
+  "error",
+];
 const DEFAULT_PREPROCESS_OPTIONS: MessagePreprocessOptions = {
   whiteThreshold: 180,
   background: "black",
@@ -602,6 +615,55 @@ function formatConfidence(confidence: number | null) {
 
 function formatTextDensity(ratio: number) {
   return `${(ratio * 100).toFixed(1)}%`;
+}
+
+function formatDiagnosticStage(stage: FrameSampleDiagnosticStage) {
+  const labels: Record<FrameSampleDiagnosticStage, string> = {
+    sampled: "sampled",
+    ocrQueued: "ocrQueued",
+    skippedBusy: "skippedBusy",
+    skippedPreprocess: "skippedPreprocess",
+    skippedDensity: "skippedDensity",
+    recognized: "recognized",
+    empty: "empty",
+    error: "error",
+  };
+
+  return labels[stage];
+}
+
+function formatSampleDiagnosticDetail(diagnostic: FrameSampleDiagnostic) {
+  const details: string[] = [];
+
+  if (diagnostic.detail) {
+    details.push(diagnostic.detail);
+  }
+
+  if (diagnostic.preprocessVariantId) {
+    details.push(`mask ${diagnostic.preprocessVariantId}`);
+  }
+
+  if (diagnostic.ocrVariantId) {
+    details.push(`OCR ${diagnostic.ocrVariantId}`);
+  }
+
+  if (diagnostic.ocrForegroundPixelRatio !== null) {
+    details.push(`density ${formatTextDensity(diagnostic.ocrForegroundPixelRatio)}`);
+  }
+
+  if (diagnostic.pendingOcrJobs !== null) {
+    details.push(`pending ${diagnostic.pendingOcrJobs}`);
+  }
+
+  if (diagnostic.ocrConfidence !== null) {
+    details.push(`conf ${formatConfidence(diagnostic.ocrConfidence)}`);
+  }
+
+  if (diagnostic.lineCount !== null) {
+    details.push(`${diagnostic.lineCount} lines`);
+  }
+
+  return details.length > 0 ? details.join(" / ") : "no detail";
 }
 
 function formatProgress(progress: number) {
@@ -1282,6 +1344,7 @@ export function App() {
   const lastAcceptedEventIdRef = useRef<string | null>(null);
   const frameIndexRef = useRef(0);
   const ocrJobCounterRef = useRef(0);
+  const sampleDiagnosticCounterRef = useRef(0);
   const pendingOcrJobsRef = useRef(0);
   const activeOcrJobRef = useRef<ActiveOcrJob | null>(null);
   const templateRulesRef = useRef<readonly BattleTemplateRule[]>(STANDARD_TEMPLATE_RULES);
@@ -1329,6 +1392,7 @@ export function App() {
   const [pendingOcrJobs, setPendingOcrJobs] = useState(0);
   const [ocrLogs, setOcrLogs] = useState<OCRLogEntry[]>([]);
   const [ocrMessages, setOcrMessages] = useState<OCRMessage[]>([]);
+  const [sampleDiagnostics, setSampleDiagnostics] = useState<FrameSampleDiagnostic[]>([]);
   const [battleEvents, setBattleEvents] = useState<BattleEvent[]>([]);
   const [unknownEvents, setUnknownEvents] = useState<UnknownEvent[]>([]);
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
@@ -1352,6 +1416,46 @@ export function App() {
   const addLog = useCallback((message: string, level: LogLevel = "info") => {
     setLogs((currentLogs) => [createLog(message, level), ...currentLogs].slice(0, 12));
   }, []);
+
+  const appendSampleDiagnostic = useCallback(
+    (diagnostic: Omit<FrameSampleDiagnostic, "id" | "battleId">) => {
+      sampleDiagnosticCounterRef.current += 1;
+      const nextDiagnostic: FrameSampleDiagnostic = {
+        id: `sample_diag_${sampleDiagnosticCounterRef.current}`,
+        battleId: LIVE_BATTLE_ID,
+        ...diagnostic,
+      };
+
+      setSampleDiagnostics((currentDiagnostics) =>
+        [nextDiagnostic, ...currentDiagnostics].slice(0, MAX_SAMPLE_DIAGNOSTICS),
+      );
+    },
+    [],
+  );
+  const appendFrameSampleDiagnostic = useCallback(
+    (
+      sample: FrameSample,
+      stage: FrameSampleDiagnosticStage,
+      detail: string | null = null,
+      ocrJobId: string | null = null,
+    ) => {
+      appendSampleDiagnostic({
+        frameIndex: sample.frameIndex,
+        timestampMs: sample.timestampMs,
+        stage,
+        detail,
+        preprocessVariantId: sample.preprocessVariantId,
+        preprocessRejectReason: sample.preprocessVariantRejectReason,
+        ocrVariantId: sample.ocrVariantId,
+        ocrForegroundPixelRatio: sample.ocrForegroundPixelRatio,
+        pendingOcrJobs: pendingOcrJobsRef.current,
+        ocrJobId,
+        ocrConfidence: null,
+        lineCount: null,
+      });
+    },
+    [appendSampleDiagnostic],
+  );
 
   useEffect(() => {
     latestHeaderMediaSettingsRef.current = {
@@ -1448,9 +1552,26 @@ export function App() {
         errorMessage: message,
       };
 
+      if (meta) {
+        appendSampleDiagnostic({
+          frameIndex: meta.frameIndex,
+          timestampMs: meta.timestampMs,
+          stage: "error",
+          detail: message,
+          preprocessVariantId: null,
+          preprocessRejectReason: null,
+          ocrVariantId: null,
+          ocrForegroundPixelRatio: null,
+          pendingOcrJobs: pendingOcrJobsRef.current,
+          ocrJobId: jobId,
+          ocrConfidence: null,
+          lineCount: null,
+        });
+      }
+
       setOcrLogs((currentLogs) => [errorEntry, ...currentLogs].slice(0, MAX_OCR_LOGS));
     },
-    [],
+    [appendSampleDiagnostic],
   );
 
   const resetOcrWorkerAfterFailure = useCallback(
@@ -1503,6 +1624,20 @@ export function App() {
           lineCount: response.result.lines.length,
           status: hasText ? "recognized" : "empty",
         };
+        appendSampleDiagnostic({
+          frameIndex: response.meta.frameIndex,
+          timestampMs: response.meta.timestampMs,
+          stage: hasText ? "recognized" : "empty",
+          detail: hasText ? null : "OCR result was empty after normalization",
+          preprocessVariantId: null,
+          preprocessRejectReason: null,
+          ocrVariantId: null,
+          ocrForegroundPixelRatio: null,
+          pendingOcrJobs: pendingOcrJobsRef.current,
+          ocrJobId: response.jobId,
+          ocrConfidence: response.result.confidence,
+          lineCount: response.result.lines.length,
+        });
         const observation = createTimelineObservation({
           id: response.jobId,
           battleId: LIVE_BATTLE_ID,
@@ -1623,6 +1758,7 @@ export function App() {
     },
     [
       addLog,
+      appendSampleDiagnostic,
       appendOcrErrorLog,
       clearActiveOcrJob,
       rememberAcceptedEventRecord,
@@ -1699,6 +1835,11 @@ export function App() {
       }
 
       if (sample.preprocessVariantRejectReason) {
+        appendFrameSampleDiagnostic(
+          sample,
+          "skippedPreprocess",
+          sample.preprocessVariantRejectReason,
+        );
         setOcrStatusLabel(
           `OCR skipped: preprocess ${sample.preprocessVariantRejectReason} gate (${sample.preprocessVariantId})`,
         );
@@ -1709,6 +1850,11 @@ export function App() {
         sample.ocrForegroundPixelRatio < MIN_TEXT_PIXEL_RATIO ||
         sample.ocrForegroundPixelRatio > MAX_TEXT_PIXEL_RATIO
       ) {
+        appendFrameSampleDiagnostic(
+          sample,
+          "skippedDensity",
+          `text density ${formatTextDensity(sample.ocrForegroundPixelRatio)}`,
+        );
         setOcrStatusLabel(
           `OCR skipped: text density gate (${formatTextDensity(sample.ocrForegroundPixelRatio)})`,
         );
@@ -1716,6 +1862,11 @@ export function App() {
       }
 
       if (pendingOcrJobsRef.current >= MAX_PENDING_OCR_JOBS) {
+        appendFrameSampleDiagnostic(
+          sample,
+          "skippedBusy",
+          `pending OCR jobs ${pendingOcrJobsRef.current}`,
+        );
         return;
       }
 
@@ -1767,10 +1918,12 @@ export function App() {
       });
       pruneOldestMapEntries(cropEvidenceBySourceRef.current, MAX_CROP_EVIDENCE);
       setPendingOcrJobCount(nextPendingCount);
+      appendFrameSampleDiagnostic(sample, "ocrQueued", null, jobId);
       setOcrStatusLabel("認識リクエスト送信");
       worker.postMessage(message);
     },
     [
+      appendFrameSampleDiagnostic,
       appendOcrErrorLog,
       ensureOcrWorker,
       resetOcrWorkerAfterFailure,
@@ -2428,11 +2581,12 @@ export function App() {
       setFrameSamples((currentSamples) =>
         [nextSample, ...currentSamples].slice(0, MAX_FRAME_BUFFER),
       );
+      appendFrameSampleDiagnostic(nextSample, "sampled");
       queueOcrRecognition(nextSample);
 
       return true;
     },
-    [addLog, queueOcrRecognition],
+    [addLog, appendFrameSampleDiagnostic, queueOcrRecognition],
   );
 
   const handleStartSampling = useCallback(() => {
@@ -2472,11 +2626,13 @@ export function App() {
     setIsOcrEnabled(true);
     setOcrLogs([]);
     setOcrMessages([]);
+    setSampleDiagnostics([]);
     setBattleEvents([]);
     setUnknownEvents([]);
     setReviewNotes({});
     setSuppressedTimelineCount(0);
     cropEvidenceBySourceRef.current.clear();
+    sampleDiagnosticCounterRef.current = 0;
     recentTimelineDeduplicationRecordsRef.current = [];
     recentConstrainedCandidateRecordsRef.current = [];
     recentAcceptedEventRecordsRef.current = [];
@@ -2637,6 +2793,18 @@ export function App() {
     () => groupOcrLogs(ocrLogs, OCR_RAW_GROUP_LIMIT),
     [ocrLogs],
   );
+  const sampleDiagnosticCounts = useMemo(() => {
+    const counts = Object.fromEntries(
+      SAMPLE_DIAGNOSTIC_STAGES.map((stage) => [stage, 0]),
+    ) as Record<FrameSampleDiagnosticStage, number>;
+
+    for (const diagnostic of sampleDiagnostics) {
+      counts[diagnostic.stage] += 1;
+    }
+
+    return counts;
+  }, [sampleDiagnostics]);
+  const latestSampleDiagnostics = sampleDiagnostics.slice(0, 16);
   const battleStats = useMemo(
     () => summarizeBattleStats(battleEvents, unknownEvents),
     [battleEvents, unknownEvents],
@@ -2825,6 +2993,7 @@ export function App() {
       events: battleEvents,
       unknowns: unknownEvents,
       frameEvidence,
+      sampleDiagnostics,
       reviewNotes,
     });
   }, [
@@ -2838,6 +3007,7 @@ export function App() {
     ocrMessages,
     reviewNotes,
     roi,
+    sampleDiagnostics,
     unknownEvents,
   ]);
 
@@ -2859,6 +3029,7 @@ export function App() {
         ]),
       );
       setOcrMessages(sortNewestFirst(document.ocrMessages));
+      setSampleDiagnostics(sortNewestFirst(document.sampleDiagnostics ?? []));
       setBattleEvents(restoredEvents);
       setUnknownEvents(sortNewestFirst(document.unknowns));
       setReviewNotes(
@@ -3580,6 +3751,35 @@ export function App() {
               <div className="ocr-meter" aria-label="OCR progress">
                 <span style={{ width: `${Math.round(clamp(ocrProgress, 0, 1) * 100)}%` }} />
               </div>
+
+              <div className="ocr-diagnostic-summary" aria-label="OCR sampling diagnostics">
+                {SAMPLE_DIAGNOSTIC_STAGES.map((stage) => (
+                  <span key={stage}>
+                    <strong>{formatDiagnosticStage(stage)}</strong>
+                    <em>{sampleDiagnosticCounts[stage]}</em>
+                  </span>
+                ))}
+              </div>
+
+              <ol className="ocr-diagnostic-log" aria-label="OCR sampling diagnostic log">
+                {latestSampleDiagnostics.length === 0 ? (
+                  <li className="ocr-diagnostic-empty">診断ログ空</li>
+                ) : (
+                  latestSampleDiagnostics.map((diagnostic) => (
+                    <li
+                      key={diagnostic.id}
+                      className={`ocr-diagnostic-entry ocr-diagnostic-entry--${diagnostic.stage}`}
+                    >
+                      <div className="ocr-log-meta">
+                        <span>#{diagnostic.frameIndex}</span>
+                        <span>{diagnostic.timestampMs}ms</span>
+                        <span>{formatDiagnosticStage(diagnostic.stage)}</span>
+                      </div>
+                      <p>{formatSampleDiagnosticDetail(diagnostic)}</p>
+                    </li>
+                  ))
+                )}
+              </ol>
 
               <ol className="ocr-log-list" aria-label="OCR result log">
                 {ocrLogs.length === 0 ? (

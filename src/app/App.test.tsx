@@ -323,6 +323,9 @@ describe("App", () => {
       }),
     ).toBeDisabled();
     expect(screen.getByRole("heading", { name: "リアルタイムOCR" })).toBeInTheDocument();
+    expect(screen.getByLabelText("OCR sampling diagnostics")).toHaveTextContent("sampled0");
+    expect(screen.getByLabelText("OCR sampling diagnostics")).toHaveTextContent("ocrQueued0");
+    expect(screen.getByLabelText("OCR sampling diagnostic log")).toHaveTextContent("診断ログ空");
     expect(screen.getByText("OCRログ空")).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "データ" }));
