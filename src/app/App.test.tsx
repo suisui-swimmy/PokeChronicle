@@ -284,6 +284,10 @@ describe("App", () => {
     expect(screen.getByRole("spinbutton", { name: "ROI Y" })).toHaveValue(0.72);
     expect(screen.getByRole("spinbutton", { name: "ROI W" })).toHaveValue(0.5);
     expect(screen.getByRole("spinbutton", { name: "ROI H" })).toHaveValue(0.14);
+    expect(screen.getByRole("spinbutton", { name: "通信待機ROI X" })).toHaveValue(0.42);
+    expect(screen.getByRole("spinbutton", { name: "通信待機ROI Y" })).toHaveValue(0.18);
+    expect(screen.getByRole("spinbutton", { name: "通信待機ROI W" })).toHaveValue(0.18);
+    expect(screen.getByRole("spinbutton", { name: "通信待機ROI H" })).toHaveValue(0.16);
     expect(screen.queryByRole("heading", { name: "統計サマリー" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "ROI" }));
@@ -296,6 +300,7 @@ describe("App", () => {
     expect(screen.getByRole("spinbutton", { name: "ROI Y" })).toHaveValue(0.72);
     expect(screen.getByRole("spinbutton", { name: "ROI W" })).toHaveValue(0.5);
     expect(screen.getByRole("spinbutton", { name: "ROI H" })).toHaveValue(0.14);
+    expect(screen.getByRole("button", { name: "待機ROIリセット" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "ROIリセット" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "サンプラー" }));
@@ -796,11 +801,16 @@ describe("App", () => {
     fireEvent.change(screen.getByRole("spinbutton", { name: "ROI X" }), {
       target: { value: "0.1" },
     });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "通信待機ROI X" }), {
+      target: { value: "0.44" },
+    });
     expect(screen.getByRole("spinbutton", { name: "ROI X" })).toHaveValue(0.1);
+    expect(screen.getByRole("spinbutton", { name: "通信待機ROI X" })).toHaveValue(0.44);
     expect(screen.getByText(/x=0.1000 y=0.7200 w=0.5000 h=0.1400/)).toBeInTheDocument();
     await waitFor(() => {
       expect(JSON.parse(window.localStorage.getItem(ROI_SETTINGS_STORAGE_KEY) ?? "{}")).toMatchObject({
         roi: { x: 0.1, y: 0.72, w: 0.5, h: 0.14 },
+        waitRoi: { x: 0.44, y: 0.18, w: 0.18, h: 0.16 },
         isRoiVisible: false,
       });
     });
@@ -819,6 +829,8 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "ROIリセット" }));
     expect(screen.getByRole("spinbutton", { name: "ROI X" })).toHaveValue(0.15);
     expect(screen.getByRole("spinbutton", { name: "ROI W" })).toHaveValue(0.5);
+    fireEvent.click(screen.getByRole("button", { name: "待機ROIリセット" }));
+    expect(screen.getByRole("spinbutton", { name: "通信待機ROI X" })).toHaveValue(0.42);
     await user.click(screen.getByRole("tab", { name: "ログ" }));
     await user.click(screen.getByRole("tab", { name: /System/ }));
     expect(
@@ -834,6 +846,7 @@ describe("App", () => {
       ROI_SETTINGS_STORAGE_KEY,
       JSON.stringify({
         roi: { x: 0.24, y: 0.66, w: 0.42, h: 0.12 },
+        waitRoi: { x: 0.43, y: 0.2, w: 0.16, h: 0.13 },
         isRoiVisible: true,
       }),
     );
@@ -848,5 +861,9 @@ describe("App", () => {
     expect(screen.getByRole("spinbutton", { name: "ROI Y" })).toHaveValue(0.66);
     expect(screen.getByRole("spinbutton", { name: "ROI W" })).toHaveValue(0.42);
     expect(screen.getByRole("spinbutton", { name: "ROI H" })).toHaveValue(0.12);
+    expect(screen.getByRole("spinbutton", { name: "通信待機ROI X" })).toHaveValue(0.43);
+    expect(screen.getByRole("spinbutton", { name: "通信待機ROI Y" })).toHaveValue(0.2);
+    expect(screen.getByRole("spinbutton", { name: "通信待機ROI W" })).toHaveValue(0.16);
+    expect(screen.getByRole("spinbutton", { name: "通信待機ROI H" })).toHaveValue(0.13);
   });
 });

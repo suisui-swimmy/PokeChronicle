@@ -24,6 +24,7 @@ import {
   type BattleLogFrameEvidence,
   type BattleLogMediaMetadata,
   type BattleEvent,
+  type FrameImageSignalDiagnostic,
   type FrameSampleDiagnostic,
   type FrameSampleDiagnosticStage,
   type NormalizedRoi,
@@ -49,6 +50,10 @@ import {
   type MessagePreprocessOptions,
   type MessageTextMask,
 } from "../core/preprocess/messagePreprocess";
+import {
+  analyzeWaitIndicatorImage,
+  type WaitIndicatorSignal,
+} from "../core/preprocess/waitIndicatorDetection";
 import { mapDisplayRoiToSourceRect } from "../core/media/roiMapping";
 import { createTesseractWorkerConfig } from "../core/ocr/tesseractConfig";
 import type {
@@ -86,6 +91,7 @@ import {
 const LIVE_BATTLE_ID = "battle_live";
 const LIVE_BATTLE_TITLE = "Live OCR battle log";
 const DEFAULT_ROI: NormalizedRoi = { x: 0.15, y: 0.72, w: 0.5, h: 0.14 };
+const DEFAULT_WAIT_INDICATOR_ROI: NormalizedRoi = { x: 0.42, y: 0.18, w: 0.18, h: 0.16 };
 const DEFAULT_IS_ROI_VISIBLE = false;
 const MIN_ROI_SIZE = 0.08;
 const NO_AUDIO_DEVICE_ID = "none";
@@ -117,6 +123,12 @@ const MIN_TEXT_PIXEL_RATIO = 0.004;
 const MAX_TEXT_PIXEL_RATIO = 0.18;
 const SAMPLE_DIAGNOSTIC_STAGES: readonly FrameSampleDiagnosticStage[] = [
   "sampled",
+  "waitSampled",
+  "waitRose",
+  "waitFell",
+  "messageWatchArmed",
+  "messageWatchExpired",
+  "messageWatchEnded",
   "ocrQueued",
   "skippedBusy",
   "skippedPreprocess",
@@ -125,6 +137,9 @@ const SAMPLE_DIAGNOSTIC_STAGES: readonly FrameSampleDiagnosticStage[] = [
   "empty",
   "error",
 ];
+const WAIT_VISIBLE_STREAK_REQUIRED = 2;
+const WAIT_HIDDEN_STREAK_REQUIRED = 2;
+const MESSAGE_WATCH_WINDOW_MS = 4000;
 const DEFAULT_PREPROCESS_OPTIONS: MessagePreprocessOptions = {
   whiteThreshold: 180,
   background: "black",
@@ -184,6 +199,7 @@ type HeaderMediaSettings = {
 
 type RoiSettings = {
   roi: NormalizedRoi;
+  waitRoi: NormalizedRoi;
   isRoiVisible: boolean;
 };
 
@@ -242,6 +258,18 @@ type FrameSample = CapturedFrameImages & {
   roi: NormalizedRoi;
   preprocess: MessagePreprocessOptions;
   upscaleFactor: number;
+};
+
+type WaitIndicatorObservation = {
+  roi: NormalizedRoi;
+  signal: WaitIndicatorSignal;
+};
+
+type WaitIndicatorRuntimeState = {
+  stableVisible: boolean | null;
+  visibleStreak: number;
+  hiddenStreak: number;
+  messageWatchArmedUntilMs: number | null;
 };
 
 type OCRLogEntry = {
@@ -384,23 +412,23 @@ function roundRoiValue(value: number) {
   return Math.round(value * 10000) / 10000;
 }
 
-function normalizeRoi(value: unknown): NormalizedRoi {
+function normalizeRoi(value: unknown, fallback: NormalizedRoi = DEFAULT_ROI): NormalizedRoi {
   if (!isObjectRecord(value)) {
-    return DEFAULT_ROI;
+    return fallback;
   }
 
   const rawX = Number(value.x);
   const rawY = Number(value.y);
   const rawW = Number(value.w);
   const rawH = Number(value.h);
-  const safeW = Number.isFinite(rawW) ? rawW : DEFAULT_ROI.w;
-  const safeH = Number.isFinite(rawH) ? rawH : DEFAULT_ROI.h;
+  const safeW = Number.isFinite(rawW) ? rawW : fallback.w;
+  const safeH = Number.isFinite(rawH) ? rawH : fallback.h;
   const w = roundRoiValue(clamp(safeW, MIN_ROI_SIZE, 1));
   const h = roundRoiValue(clamp(safeH, MIN_ROI_SIZE, 1));
 
   return {
-    x: roundRoiValue(clamp(Number.isFinite(rawX) ? rawX : DEFAULT_ROI.x, 0, 1 - w)),
-    y: roundRoiValue(clamp(Number.isFinite(rawY) ? rawY : DEFAULT_ROI.y, 0, 1 - h)),
+    x: roundRoiValue(clamp(Number.isFinite(rawX) ? rawX : fallback.x, 0, 1 - w)),
+    y: roundRoiValue(clamp(Number.isFinite(rawY) ? rawY : fallback.y, 0, 1 - h)),
     w,
     h,
   };
@@ -412,7 +440,8 @@ function normalizeRoiSettings(value: unknown): RoiSettings | null {
   }
 
   return {
-    roi: normalizeRoi(value.roi),
+    roi: normalizeRoi(value.roi, DEFAULT_ROI),
+    waitRoi: normalizeRoi(value.waitRoi, DEFAULT_WAIT_INDICATOR_ROI),
     isRoiVisible:
       typeof value.isRoiVisible === "boolean" ? value.isRoiVisible : DEFAULT_IS_ROI_VISIBLE,
   };
@@ -620,6 +649,12 @@ function formatTextDensity(ratio: number) {
 function formatDiagnosticStage(stage: FrameSampleDiagnosticStage) {
   const labels: Record<FrameSampleDiagnosticStage, string> = {
     sampled: "sampled",
+    waitSampled: "waitSampled",
+    waitRose: "waitRose",
+    waitFell: "waitFell",
+    messageWatchArmed: "messageWatchArmed",
+    messageWatchExpired: "messageWatchExpired",
+    messageWatchEnded: "messageWatchEnded",
     ocrQueued: "ocrQueued",
     skippedBusy: "skippedBusy",
     skippedPreprocess: "skippedPreprocess",
@@ -632,8 +667,43 @@ function formatDiagnosticStage(stage: FrameSampleDiagnosticStage) {
   return labels[stage];
 }
 
+function formatWaitSignalScore(signal: FrameImageSignalDiagnostic | WaitIndicatorSignal) {
+  return `${Math.round(signal.score * 100)}%`;
+}
+
+function createWaitImageSignalDiagnostic(
+  roi: NormalizedRoi,
+  signal: WaitIndicatorSignal,
+): FrameImageSignalDiagnostic {
+  return {
+    kind: "wait_indicator",
+    roi,
+    score: signal.score,
+    isVisible: signal.isVisible,
+    yellowIconScore: signal.yellowIconScore,
+    whiteTextScore: signal.whiteTextScore,
+    contrastScore: signal.contrastScore,
+    yellowPixelRatio: signal.yellowPixelRatio,
+    whitePixelRatio: signal.whitePixelRatio,
+    whiteRowBandScore: signal.whiteRowBandScore,
+  };
+}
+
 function formatSampleDiagnosticDetail(diagnostic: FrameSampleDiagnostic) {
   const details: string[] = [];
+
+  if (diagnostic.imageSignal) {
+    details.push(
+      `wait ${diagnostic.imageSignal.isVisible ? "visible" : "hidden"} ${formatWaitSignalScore(
+        diagnostic.imageSignal,
+      )}`,
+    );
+    details.push(
+      `icon ${formatConfidence(diagnostic.imageSignal.yellowIconScore)} / text ${formatConfidence(
+        diagnostic.imageSignal.whiteTextScore,
+      )}`,
+    );
+  }
 
   if (diagnostic.detail) {
     details.push(diagnostic.detail);
@@ -1155,12 +1225,10 @@ function imageDataToScaledDataUrl(imageData: ImageData, scale: number) {
   return scaledCanvas.toDataURL("image/png");
 }
 
-function captureRoiFrame(
+function captureRoiImageData(
   source: FrameSourceElement,
   roi: NormalizedRoi,
-  preprocess: MessagePreprocessOptions,
-  upscaleFactor: number,
-): CapturedFrameImages | null {
+) {
   const { width: sourceWidth, height: sourceHeight } = getFrameSourceDimensions(source);
 
   if (!sourceWidth || !sourceHeight) {
@@ -1199,6 +1267,46 @@ function captureRoiFrame(
   );
 
   const rawImageData = rawContext.getImageData(0, 0, crop.width, crop.height);
+
+  return {
+    imageData: rawImageData,
+    dataUrl: rawCanvas.toDataURL("image/png"),
+    sourceWidth,
+    sourceHeight,
+    cropWidth: crop.width,
+    cropHeight: crop.height,
+  };
+}
+
+function captureWaitIndicatorObservation(
+  source: FrameSourceElement,
+  roi: NormalizedRoi,
+): WaitIndicatorObservation | null {
+  const captured = captureRoiImageData(source, roi);
+
+  if (!captured) {
+    return null;
+  }
+
+  return {
+    roi,
+    signal: analyzeWaitIndicatorImage(captured.imageData),
+  };
+}
+
+function captureRoiFrame(
+  source: FrameSourceElement,
+  roi: NormalizedRoi,
+  preprocess: MessagePreprocessOptions,
+  upscaleFactor: number,
+): CapturedFrameImages | null {
+  const captured = captureRoiImageData(source, roi);
+
+  if (!captured) {
+    return null;
+  }
+
+  const rawImageData = captured.imageData;
   const preprocessVariants = createMessagePreprocessVariants(rawImageData, preprocess, {
     minForegroundPixelRatio: MIN_TEXT_PIXEL_RATIO,
     maxForegroundPixelRatio: MAX_TEXT_PIXEL_RATIO,
@@ -1259,8 +1367,8 @@ function captureRoiFrame(
       id: `${selectedTextMask}/full`,
       textMask: selectedTextMask,
       processedDataUrl,
-      cropWidth: crop.width,
-      cropHeight: crop.height,
+      cropWidth: captured.cropWidth,
+      cropHeight: captured.cropHeight,
       sourceY: 0,
       lineCount: detectedLineCount,
       foregroundPixelRatio: metrics.foregroundPixelRatio,
@@ -1287,7 +1395,7 @@ function captureRoiFrame(
   }
 
   return {
-    rawDataUrl: rawCanvas.toDataURL("image/png"),
+    rawDataUrl: captured.dataUrl,
     processedDataUrl,
     preprocessVariantId: selectedTextMask,
     preprocessVariantRejectReason: selectedRejectReason,
@@ -1296,10 +1404,10 @@ function captureRoiFrame(
     ocrForegroundPixelRatio: preferredVariant.foregroundPixelRatio,
     lineBandCount: detectedLineCount,
     lineCropVariants: [...lineCropPreviews, ...fallbackPreviewVariants],
-    sourceWidth,
-    sourceHeight,
-    cropWidth: crop.width,
-    cropHeight: crop.height,
+    sourceWidth: captured.sourceWidth,
+    sourceHeight: captured.sourceHeight,
+    cropWidth: captured.cropWidth,
+    cropHeight: captured.cropHeight,
     foregroundPixelCount: metrics.foregroundPixelCount,
     totalPixelCount: metrics.totalPixelCount,
     foregroundPixelRatio: metrics.foregroundPixelRatio,
@@ -1377,6 +1485,9 @@ export function App() {
   );
   const [isVolumePanelOpen, setIsVolumePanelOpen] = useState(false);
   const [roi, setRoi] = useState<NormalizedRoi>(() => initialRoiSettings?.roi ?? DEFAULT_ROI);
+  const [waitRoi, setWaitRoi] = useState<NormalizedRoi>(
+    () => initialRoiSettings?.waitRoi ?? DEFAULT_WAIT_INDICATOR_ROI,
+  );
   const [isRoiVisible, setIsRoiVisible] = useState(
     () => initialRoiSettings?.isRoiVisible ?? DEFAULT_IS_ROI_VISIBLE,
   );
@@ -1409,6 +1520,13 @@ export function App() {
     createLog("M8 MVP workspace initialized."),
   ]);
   const roiRef = useRef(roi);
+  const waitRoiRef = useRef(waitRoi);
+  const waitIndicatorStateRef = useRef<WaitIndicatorRuntimeState>({
+    stableVisible: null,
+    visibleStreak: 0,
+    hiddenStreak: 0,
+    messageWatchArmedUntilMs: null,
+  });
   const mediaModeRef = useRef(mediaMode);
   const preprocessOptionsRef = useRef(preprocessOptions);
   const upscaleFactorRef = useRef(upscaleFactor);
@@ -1455,6 +1573,120 @@ export function App() {
       });
     },
     [appendSampleDiagnostic],
+  );
+  const appendWaitIndicatorDiagnostic = useCallback(
+    (
+      sample: FrameSample,
+      stage: FrameSampleDiagnosticStage,
+      observation: WaitIndicatorObservation,
+      detail: string | null,
+    ) => {
+      appendSampleDiagnostic({
+        frameIndex: sample.frameIndex,
+        timestampMs: sample.timestampMs,
+        stage,
+        detail,
+        preprocessVariantId: sample.preprocessVariantId,
+        preprocessRejectReason: sample.preprocessVariantRejectReason,
+        ocrVariantId: sample.ocrVariantId,
+        ocrForegroundPixelRatio: sample.ocrForegroundPixelRatio,
+        pendingOcrJobs: pendingOcrJobsRef.current,
+        ocrJobId: null,
+        ocrConfidence: null,
+        lineCount: null,
+        imageSignal: createWaitImageSignalDiagnostic(observation.roi, observation.signal),
+      });
+    },
+    [appendSampleDiagnostic],
+  );
+  const handleWaitIndicatorObservation = useCallback(
+    (sample: FrameSample, observation: WaitIndicatorObservation | null) => {
+      if (!observation) {
+        return;
+      }
+
+      const { signal } = observation;
+      const scoreDetail = `score ${formatWaitSignalScore(signal)} / icon ${formatConfidence(
+        signal.yellowIconScore,
+      )} / text ${formatConfidence(signal.whiteTextScore)}`;
+      const waitState = waitIndicatorStateRef.current;
+
+      appendWaitIndicatorDiagnostic(
+        sample,
+        "waitSampled",
+        observation,
+        `${signal.isVisible ? "visible" : "hidden"} / ${scoreDetail}`,
+      );
+
+      if (signal.isVisible) {
+        waitState.visibleStreak += 1;
+        waitState.hiddenStreak = 0;
+      } else {
+        waitState.hiddenStreak += 1;
+        waitState.visibleStreak = 0;
+      }
+
+      if (
+        signal.isVisible &&
+        waitState.visibleStreak >= WAIT_VISIBLE_STREAK_REQUIRED &&
+        waitState.stableVisible !== true
+      ) {
+        const hadArmedWatch = waitState.messageWatchArmedUntilMs !== null;
+        waitState.stableVisible = true;
+        waitState.messageWatchArmedUntilMs = null;
+        appendWaitIndicatorDiagnostic(sample, "waitRose", observation, scoreDetail);
+        addLog(`通信待機中を検出しました (${scoreDetail})`);
+
+        if (hadArmedWatch) {
+          appendWaitIndicatorDiagnostic(
+            sample,
+            "messageWatchEnded",
+            observation,
+            "通信待機中に戻ったためメッセージ監視を終了",
+          );
+          addLog("通信待機中に戻ったため、メッセージ監視を終了しました。");
+        }
+      }
+
+      if (
+        !signal.isVisible &&
+        waitState.hiddenStreak >= WAIT_HIDDEN_STREAK_REQUIRED &&
+        waitState.stableVisible !== false
+      ) {
+        const wasWaiting = waitState.stableVisible === true;
+        waitState.stableVisible = false;
+
+        if (wasWaiting) {
+          appendWaitIndicatorDiagnostic(sample, "waitFell", observation, scoreDetail);
+          addLog(`通信待機中が消えました (${scoreDetail})`);
+          waitState.messageWatchArmedUntilMs = sample.timestampMs + MESSAGE_WATCH_WINDOW_MS;
+          appendWaitIndicatorDiagnostic(
+            sample,
+            "messageWatchArmed",
+            observation,
+            `${MESSAGE_WATCH_WINDOW_MS}ms`,
+          );
+          addLog(
+            `通信待機中の消失を検出したため、${MESSAGE_WATCH_WINDOW_MS}msだけメッセージ監視をarmedにしました。`,
+          );
+        }
+      }
+
+      if (
+        waitState.messageWatchArmedUntilMs !== null &&
+        sample.timestampMs > waitState.messageWatchArmedUntilMs
+      ) {
+        waitState.messageWatchArmedUntilMs = null;
+        appendWaitIndicatorDiagnostic(
+          sample,
+          "messageWatchExpired",
+          observation,
+          "メッセージ監視armed window expired",
+        );
+        addLog("メッセージ監視armed windowが期限切れになりました。");
+      }
+    },
+    [addLog, appendWaitIndicatorDiagnostic],
   );
 
   useEffect(() => {
@@ -1936,8 +2168,12 @@ export function App() {
   }, [roi]);
 
   useEffect(() => {
-    saveStoredRoiSettings({ roi, isRoiVisible });
-  }, [isRoiVisible, roi]);
+    waitRoiRef.current = waitRoi;
+  }, [waitRoi]);
+
+  useEffect(() => {
+    saveStoredRoiSettings({ roi, waitRoi, isRoiVisible });
+  }, [isRoiVisible, roi, waitRoi]);
 
   useEffect(() => {
     mediaModeRef.current = mediaMode;
@@ -2565,6 +2801,7 @@ export function App() {
         return false;
       }
 
+      const waitObservation = captureWaitIndicatorObservation(source, waitRoiRef.current);
       frameIndexRef.current += 1;
       const timestampMs = Math.max(0, Math.round(performance.now() - samplingStartMsRef.current));
       const nextSample: FrameSample = {
@@ -2582,11 +2819,12 @@ export function App() {
         [nextSample, ...currentSamples].slice(0, MAX_FRAME_BUFFER),
       );
       appendFrameSampleDiagnostic(nextSample, "sampled");
+      handleWaitIndicatorObservation(nextSample, waitObservation);
       queueOcrRecognition(nextSample);
 
       return true;
     },
-    [addLog, appendFrameSampleDiagnostic, queueOcrRecognition],
+    [addLog, appendFrameSampleDiagnostic, handleWaitIndicatorObservation, queueOcrRecognition],
   );
 
   const handleStartSampling = useCallback(() => {
@@ -2600,6 +2838,12 @@ export function App() {
     }
 
     frameIndexRef.current = 0;
+    waitIndicatorStateRef.current = {
+      stableVisible: null,
+      visibleStreak: 0,
+      hiddenStreak: 0,
+      messageWatchArmedUntilMs: null,
+    };
     samplingStartMsRef.current = performance.now();
     setFrameSamples([]);
     setIsSampling(true);
@@ -2633,6 +2877,12 @@ export function App() {
     setSuppressedTimelineCount(0);
     cropEvidenceBySourceRef.current.clear();
     sampleDiagnosticCounterRef.current = 0;
+    waitIndicatorStateRef.current = {
+      stableVisible: null,
+      visibleStreak: 0,
+      hiddenStreak: 0,
+      messageWatchArmedUntilMs: null,
+    };
     recentTimelineDeduplicationRecordsRef.current = [];
     recentConstrainedCandidateRecordsRef.current = [];
     recentAcceptedEventRecordsRef.current = [];
@@ -2722,8 +2972,17 @@ export function App() {
     addLog("ROIを初期位置へ戻しました。");
   }, [addLog]);
 
+  const handleResetWaitRoi = useCallback(() => {
+    setWaitRoi(DEFAULT_WAIT_INDICATOR_ROI);
+    addLog("通信待機ROIを初期位置へ戻しました。");
+  }, [addLog]);
+
   const handleRoiNumberChange = useCallback((field: RoiField, value: string) => {
     setRoi((currentRoi) => updateRoiField(currentRoi, field, Number(value)));
+  }, []);
+
+  const handleWaitRoiNumberChange = useCallback((field: RoiField, value: string) => {
+    setWaitRoi((currentRoi) => updateRoiField(currentRoi, field, Number(value)));
   }, []);
 
   const inputBadge = useMemo(
@@ -2989,6 +3248,8 @@ export function App() {
       },
       roi,
       roiName: "Battle message ROI",
+      waitRoi,
+      waitRoiName: "Communication wait indicator ROI",
       ocrMessages,
       events: battleEvents,
       unknowns: unknownEvents,
@@ -3008,6 +3269,7 @@ export function App() {
     reviewNotes,
     roi,
     sampleDiagnostics,
+    waitRoi,
     unknownEvents,
   ]);
 
@@ -3040,6 +3302,7 @@ export function App() {
         ),
       );
       setRoi(document.roiProfile.roi);
+      setWaitRoi(document.waitIndicatorRoiProfile?.roi ?? DEFAULT_WAIT_INDICATOR_ROI);
       setSuppressedTimelineCount(0);
       recentTimelineDeduplicationRecordsRef.current = [];
       recentConstrainedCandidateRecordsRef.current = [];
@@ -3476,6 +3739,8 @@ export function App() {
                 <span>
                   x={roi.x.toFixed(4)} y={roi.y.toFixed(4)} w={roi.w.toFixed(4)} h=
                   {roi.h.toFixed(4)}
+                  {" / "}wait x={waitRoi.x.toFixed(4)} y={waitRoi.y.toFixed(4)} w=
+                  {waitRoi.w.toFixed(4)} h={waitRoi.h.toFixed(4)}
                 </span>
               </div>
               <div className="roi-setting-actions tool-panel-actions">
@@ -3500,6 +3765,10 @@ export function App() {
             </div>
 
             <div className="roi-detail-panel">
+              <div className="roi-subsection">
+                <div className="roi-subsection-header">
+                  <strong>メッセージROI</strong>
+                </div>
               <div className="roi-number-grid" aria-label="ROI numeric settings">
                 <label className="roi-number-control">
                   <span>X</span>
@@ -3549,6 +3818,72 @@ export function App() {
                     onChange={(event) => handleRoiNumberChange("h", event.target.value)}
                   />
                 </label>
+              </div>
+              </div>
+
+              <div className="roi-subsection">
+                <div className="roi-subsection-header">
+                  <strong>通信待機ROI</strong>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="icon-button icon-button--compact roi-action-button"
+                    onClick={handleResetWaitRoi}
+                  >
+                    <RotateCcw className="action-icon" aria-hidden="true" />
+                    <span>待機ROIリセット</span>
+                  </Button>
+                </div>
+                <div className="roi-number-grid" aria-label="wait indicator ROI numeric settings">
+                  <label className="roi-number-control">
+                    <span>X</span>
+                    <input
+                      aria-label="通信待機ROI X"
+                      type="number"
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      value={waitRoi.x.toFixed(4)}
+                      onChange={(event) => handleWaitRoiNumberChange("x", event.target.value)}
+                    />
+                  </label>
+                  <label className="roi-number-control">
+                    <span>Y</span>
+                    <input
+                      aria-label="通信待機ROI Y"
+                      type="number"
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      value={waitRoi.y.toFixed(4)}
+                      onChange={(event) => handleWaitRoiNumberChange("y", event.target.value)}
+                    />
+                  </label>
+                  <label className="roi-number-control">
+                    <span>W</span>
+                    <input
+                      aria-label="通信待機ROI W"
+                      type="number"
+                      min={MIN_ROI_SIZE}
+                      max={1}
+                      step={0.01}
+                      value={waitRoi.w.toFixed(4)}
+                      onChange={(event) => handleWaitRoiNumberChange("w", event.target.value)}
+                    />
+                  </label>
+                  <label className="roi-number-control">
+                    <span>H</span>
+                    <input
+                      aria-label="通信待機ROI H"
+                      type="number"
+                      min={MIN_ROI_SIZE}
+                      max={1}
+                      step={0.01}
+                      value={waitRoi.h.toFixed(4)}
+                      onChange={(event) => handleWaitRoiNumberChange("h", event.target.value)}
+                    />
+                  </label>
+                </div>
               </div>
             </div>
           </section>

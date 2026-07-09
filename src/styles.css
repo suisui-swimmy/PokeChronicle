@@ -655,6 +655,28 @@ button:disabled {
   gap: 10px;
 }
 
+.roi-subsection {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.roi-subsection-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.roi-subsection-header strong {
+  min-width: 0;
+  color: var(--faint);
+  font-size: var(--app-font-size-label);
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
 .capture-video,
 .test-pattern,
 .roi-layer {

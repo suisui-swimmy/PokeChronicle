@@ -21,6 +21,8 @@ export interface BattleLogBuildInput {
   media: BattleLogMediaMetadata;
   roi: NormalizedRoi;
   roiName: string;
+  waitRoi: NormalizedRoi;
+  waitRoiName: string;
   ocrMessages: readonly OCRMessage[];
   events: readonly BattleEvent[];
   unknowns: readonly UnknownEvent[];
@@ -75,6 +77,12 @@ export function createBattleLogDocument(
     roi: input.roi,
     updatedAt: exportedAtIso,
   };
+  const waitIndicatorRoiProfile: BattleLogRoiProfile = {
+    id: "roi_wait_indicator",
+    name: input.waitRoiName,
+    roi: input.waitRoi,
+    updatedAt: exportedAtIso,
+  };
 
   return {
     schemaVersion: BATTLE_LOG_SCHEMA_VERSION,
@@ -87,6 +95,7 @@ export function createBattleLogDocument(
     },
     media: input.media,
     roiProfile,
+    waitIndicatorRoiProfile,
     ocrMessages: [...input.ocrMessages].sort(byTimestampThenId),
     events: [...input.events].sort(byTimestampThenId),
     unknowns: [...input.unknowns].sort(byTimestampThenId),
@@ -163,6 +172,16 @@ export function parseBattleLogJson(text: string): BattleLogParseResult {
       id: "roi_imported_default",
       name: "Imported default ROI",
       roi: { x: 0, y: 0, w: 1, h: 1 },
+      updatedAt: parsed.exportedAt,
+    };
+  }
+
+  if (!isRecord(parsed.waitIndicatorRoiProfile)) {
+    warnings.push("wait indicator ROI profileがないため既定の通信待機ROIとして扱います。");
+    parsed.waitIndicatorRoiProfile = {
+      id: "roi_wait_indicator_imported_default",
+      name: "Imported wait indicator ROI",
+      roi: { x: 0.42, y: 0.18, w: 0.18, h: 0.16 },
       updatedAt: parsed.exportedAt,
     };
   }

@@ -97,6 +97,8 @@ describe("battle log export", () => {
         },
         roi: { x: 0.1, y: 0.7, w: 0.8, h: 0.2 },
         roiName: "Battle message ROI",
+        waitRoi: { x: 0.42, y: 0.18, w: 0.18, h: 0.16 },
+        waitRoiName: "Communication wait indicator ROI",
         ocrMessages: [ocrMessage],
         events: [battleEvent],
         unknowns: [unknownEvent],
@@ -121,6 +123,7 @@ describe("battle log export", () => {
     expect(document.exportedAt).toBe("2026-06-30T00:00:00.000Z");
     expect(document.media.sourceKind).toBe("video-file");
     expect(document.frameEvidence).toHaveLength(1);
+    expect(document.waitIndicatorRoiProfile.roi).toEqual({ x: 0.42, y: 0.18, w: 0.18, h: 0.16 });
     expect(document.sampleDiagnostics).toEqual([sampleDiagnostic]);
     expect(document.manualCorrections).toEqual([
       {
@@ -151,6 +154,8 @@ describe("battle log export", () => {
         },
         roi: { x: 0, y: 0, w: 1, h: 1 },
         roiName: "Battle message ROI",
+        waitRoi: { x: 0.42, y: 0.18, w: 0.18, h: 0.16 },
+        waitRoiName: "Communication wait indicator ROI",
         ocrMessages: [],
         events: [],
         unknowns: [],
@@ -191,6 +196,8 @@ describe("battle log export", () => {
         },
         roi: { x: 0, y: 0, w: 1, h: 1 },
         roiName: "Battle message ROI",
+        waitRoi: { x: 0.42, y: 0.18, w: 0.18, h: 0.16 },
+        waitRoiName: "Communication wait indicator ROI",
         ocrMessages: [],
         events: [],
         unknowns: [],
@@ -201,13 +208,20 @@ describe("battle log export", () => {
     );
     const olderDocument = { ...document } as Partial<typeof document>;
     delete olderDocument.sampleDiagnostics;
+    delete olderDocument.waitIndicatorRoiProfile;
 
     const result = parseBattleLogJson(JSON.stringify(olderDocument));
 
     expect(result).toMatchObject({
       ok: true,
-      document: { sampleDiagnostics: [] },
-      warnings: ["sample diagnosticsがないためサンプラー診断なしで読み込みます。"],
+      document: {
+        sampleDiagnostics: [],
+        waitIndicatorRoiProfile: { roi: { x: 0.42, y: 0.18, w: 0.18, h: 0.16 } },
+      },
+      warnings: [
+        "wait indicator ROI profileがないため既定の通信待機ROIとして扱います。",
+        "sample diagnosticsがないためサンプラー診断なしで読み込みます。",
+      ],
     });
   });
 

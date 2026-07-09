@@ -139,6 +139,12 @@ export interface BattleLogFrameEvidence {
 
 export type FrameSampleDiagnosticStage =
   | "sampled"
+  | "waitSampled"
+  | "waitRose"
+  | "waitFell"
+  | "messageWatchArmed"
+  | "messageWatchExpired"
+  | "messageWatchEnded"
   | "ocrQueued"
   | "skippedBusy"
   | "skippedPreprocess"
@@ -146,6 +152,19 @@ export type FrameSampleDiagnosticStage =
   | "recognized"
   | "empty"
   | "error";
+
+export interface FrameImageSignalDiagnostic {
+  kind: "wait_indicator";
+  roi: NormalizedRoi;
+  score: number;
+  isVisible: boolean;
+  yellowIconScore: number;
+  whiteTextScore: number;
+  contrastScore: number;
+  yellowPixelRatio: number;
+  whitePixelRatio: number;
+  whiteRowBandScore: number;
+}
 
 export interface FrameSampleDiagnostic {
   id: string;
@@ -162,6 +181,7 @@ export interface FrameSampleDiagnostic {
   ocrJobId: string | null;
   ocrConfidence: number | null;
   lineCount: number | null;
+  imageSignal?: FrameImageSignalDiagnostic | null;
 }
 
 export interface ManualCorrection {
@@ -185,6 +205,7 @@ export interface BattleLogDocument {
   };
   media: BattleLogMediaMetadata;
   roiProfile: BattleLogRoiProfile;
+  waitIndicatorRoiProfile: BattleLogRoiProfile;
   ocrMessages: OCRMessage[];
   events: BattleEvent[];
   unknowns: UnknownEvent[];
@@ -215,6 +236,12 @@ export function createEmptyBattleLog(battleId: string): BattleLogDocument {
       id: "roi_default",
       name: "Default ROI",
       roi: { x: 0, y: 0, w: 1, h: 1 },
+      updatedAt: new Date(0).toISOString(),
+    },
+    waitIndicatorRoiProfile: {
+      id: "roi_wait_indicator_default",
+      name: "Default wait indicator ROI",
+      roi: { x: 0.42, y: 0.18, w: 0.18, h: 0.16 },
       updatedAt: new Date(0).toISOString(),
     },
     ocrMessages: [],
