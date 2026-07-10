@@ -93,6 +93,7 @@ const LIVE_BATTLE_TITLE = "Live OCR battle log";
 const DEFAULT_ROI: NormalizedRoi = { x: 0.15, y: 0.72, w: 0.5, h: 0.14 };
 const DEFAULT_WAIT_INDICATOR_ROI: NormalizedRoi = { x: 0.42, y: 0.18, w: 0.18, h: 0.16 };
 const DEFAULT_IS_ROI_VISIBLE = false;
+const DEFAULT_IS_WAIT_ROI_VISIBLE = false;
 const MIN_ROI_SIZE = 0.08;
 const NO_AUDIO_DEVICE_ID = "none";
 const DEFAULT_SAMPLE_FPS = 3;
@@ -206,6 +207,7 @@ type RoiSettings = {
   roi: NormalizedRoi;
   waitRoi: NormalizedRoi;
   isRoiVisible: boolean;
+  isWaitRoiVisible: boolean;
 };
 
 type DragMode =
@@ -454,6 +456,10 @@ function normalizeRoiSettings(value: unknown): RoiSettings | null {
     waitRoi: normalizeRoi(value.waitRoi, DEFAULT_WAIT_INDICATOR_ROI),
     isRoiVisible:
       typeof value.isRoiVisible === "boolean" ? value.isRoiVisible : DEFAULT_IS_ROI_VISIBLE,
+    isWaitRoiVisible:
+      typeof value.isWaitRoiVisible === "boolean"
+        ? value.isWaitRoiVisible
+        : DEFAULT_IS_WAIT_ROI_VISIBLE,
   };
 }
 
@@ -1527,6 +1533,9 @@ export function App() {
   const [isRoiVisible, setIsRoiVisible] = useState(
     () => initialRoiSettings?.isRoiVisible ?? DEFAULT_IS_ROI_VISIBLE,
   );
+  const [isWaitRoiVisible, setIsWaitRoiVisible] = useState(
+    () => initialRoiSettings?.isWaitRoiVisible ?? DEFAULT_IS_WAIT_ROI_VISIBLE,
+  );
   const [sampleFps, setSampleFps] = useState(DEFAULT_SAMPLE_FPS);
   const [isSampling, setIsSampling] = useState(false);
   const [preprocessOptions, setPreprocessOptions] =
@@ -2211,8 +2220,8 @@ export function App() {
   }, [waitRoi]);
 
   useEffect(() => {
-    saveStoredRoiSettings({ roi, waitRoi, isRoiVisible });
-  }, [isRoiVisible, roi, waitRoi]);
+    saveStoredRoiSettings({ roi, waitRoi, isRoiVisible, isWaitRoiVisible });
+  }, [isRoiVisible, isWaitRoiVisible, roi, waitRoi]);
 
   useEffect(() => {
     mediaModeRef.current = mediaMode;
@@ -3882,7 +3891,17 @@ export function App() {
                   <span>プレビュー待機中</span>
                 </div>
               ) : null}
-              {isRoiVisible ? <RoiOverlay roi={roi} onChange={setRoi} /> : null}
+              {isRoiVisible ? (
+                <RoiOverlay label="メッセージROI" roi={roi} onChange={setRoi} />
+              ) : null}
+              {isWaitRoiVisible ? (
+                <RoiOverlay
+                  label="通信待機ROI"
+                  roi={waitRoi}
+                  tone="wait"
+                  onChange={setWaitRoi}
+                />
+              ) : null}
             </div>
           </section>
         </div>
@@ -3956,38 +3975,40 @@ export function App() {
             <div className="roi-settings-header tool-panel-header">
               <div>
                 <h2>ROI設定</h2>
-                <span>
-                  x={roi.x.toFixed(4)} y={roi.y.toFixed(4)} w={roi.w.toFixed(4)} h=
-                  {roi.h.toFixed(4)}
-                  {" / "}wait x={waitRoi.x.toFixed(4)} y={waitRoi.y.toFixed(4)} w=
-                  {waitRoi.w.toFixed(4)} h={waitRoi.h.toFixed(4)}
-                </span>
-              </div>
-              <div className="roi-setting-actions tool-panel-actions">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="icon-button icon-button--compact roi-action-button"
-                  onClick={handleResetRoi}
-                >
-                  <RotateCcw className="action-icon" aria-hidden="true" />
-                  <span>ROIリセット</span>
-                </Button>
-                <label className="toggle-control roi-visibility-toggle roi-action-button">
-                  <input
-                    type="checkbox"
-                    checked={isRoiVisible}
-                    onChange={(event) => setIsRoiVisible(event.target.checked)}
-                  />
-                  <span>ROI表示</span>
-                </label>
               </div>
             </div>
 
             <div className="roi-detail-panel">
               <div className="roi-subsection">
                 <div className="roi-subsection-header">
-                  <strong>メッセージROI</strong>
+                  <div className="roi-subsection-title">
+                    <strong>メッセージROI</strong>
+                    <span>
+                      x={roi.x.toFixed(4)} y={roi.y.toFixed(4)} w={roi.w.toFixed(4)} h=
+                      {roi.h.toFixed(4)}
+                    </span>
+                  </div>
+                  <div className="roi-subsection-actions">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="icon-button icon-button--compact roi-action-button"
+                      aria-label="メッセージROIリセット"
+                      onClick={handleResetRoi}
+                    >
+                      <RotateCcw className="action-icon" aria-hidden="true" />
+                      <span>ROIリセット</span>
+                    </Button>
+                    <label className="toggle-control roi-visibility-toggle roi-action-button">
+                      <input
+                        type="checkbox"
+                        aria-label="メッセージROI表示"
+                        checked={isRoiVisible}
+                        onChange={(event) => setIsRoiVisible(event.target.checked)}
+                      />
+                      <span>ROI表示</span>
+                    </label>
+                  </div>
                 </div>
               <div className="roi-number-grid" aria-label="ROI numeric settings">
                 <label className="roi-number-control">
@@ -4043,16 +4064,34 @@ export function App() {
 
               <div className="roi-subsection">
                 <div className="roi-subsection-header">
-                  <strong>通信待機ROI</strong>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="icon-button icon-button--compact roi-action-button"
-                    onClick={handleResetWaitRoi}
-                  >
-                    <RotateCcw className="action-icon" aria-hidden="true" />
-                    <span>待機ROIリセット</span>
-                  </Button>
+                  <div className="roi-subsection-title">
+                    <strong>通信待機ROI</strong>
+                    <span>
+                      x={waitRoi.x.toFixed(4)} y={waitRoi.y.toFixed(4)} w=
+                      {waitRoi.w.toFixed(4)} h={waitRoi.h.toFixed(4)}
+                    </span>
+                  </div>
+                  <div className="roi-subsection-actions">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="icon-button icon-button--compact roi-action-button"
+                      aria-label="待機ROIリセット"
+                      onClick={handleResetWaitRoi}
+                    >
+                      <RotateCcw className="action-icon" aria-hidden="true" />
+                      <span>ROIリセット</span>
+                    </Button>
+                    <label className="toggle-control roi-visibility-toggle roi-action-button">
+                      <input
+                        type="checkbox"
+                        aria-label="待機ROI表示"
+                        checked={isWaitRoiVisible}
+                        onChange={(event) => setIsWaitRoiVisible(event.target.checked)}
+                      />
+                      <span>ROI表示</span>
+                    </label>
+                  </div>
                 </div>
                 <div className="roi-number-grid" aria-label="wait indicator ROI numeric settings">
                   <label className="roi-number-control">
@@ -4825,10 +4864,14 @@ export function App() {
 }
 
 function RoiOverlay({
+  label,
   roi,
+  tone = "message",
   onChange,
 }: {
+  label: string;
   roi: NormalizedRoi;
+  tone?: "message" | "wait";
   onChange: (nextRoi: NormalizedRoi) => void;
 }) {
   const overlayRef = useRef<HTMLDivElement | null>(null);
@@ -4932,9 +4975,9 @@ function RoiOverlay({
   useEffect(() => stopDrag, [stopDrag]);
 
   return (
-    <div ref={overlayRef} className="roi-layer" aria-label="ROI adjustment layer">
+    <div ref={overlayRef} className="roi-layer" aria-label={`${label} adjustment layer`}>
       <div
-        className="roi-box"
+        className={`roi-box roi-box--${tone}`}
         style={{
           left: `${roi.x * 100}%`,
           top: `${roi.y * 100}%`,
@@ -4945,33 +4988,33 @@ function RoiOverlay({
         <button
           type="button"
           className="roi-move"
-          aria-label="ROIをドラッグして移動"
+          aria-label={`${label}をドラッグして移動`}
           onPointerDown={(event) => startDrag(event, "move")}
         >
-          <span>ROI</span>
+          <span>{label}</span>
         </button>
         <button
           type="button"
           className="roi-handle roi-handle--nw"
-          aria-label="ROI左上をリサイズ"
+          aria-label={`${label}左上をリサイズ`}
           onPointerDown={(event) => startDrag(event, "resize-nw")}
         />
         <button
           type="button"
           className="roi-handle roi-handle--ne"
-          aria-label="ROI右上をリサイズ"
+          aria-label={`${label}右上をリサイズ`}
           onPointerDown={(event) => startDrag(event, "resize-ne")}
         />
         <button
           type="button"
           className="roi-handle roi-handle--sw"
-          aria-label="ROI左下をリサイズ"
+          aria-label={`${label}左下をリサイズ`}
           onPointerDown={(event) => startDrag(event, "resize-sw")}
         />
         <button
           type="button"
           className="roi-handle roi-handle--se"
-          aria-label="ROI右下をリサイズ"
+          aria-label={`${label}右下をリサイズ`}
           onPointerDown={(event) => startDrag(event, "resize-se")}
         />
       </div>

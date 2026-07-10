@@ -747,12 +747,35 @@ button:disabled {
   min-width: 0;
 }
 
-.roi-subsection-header strong {
+.roi-subsection-title {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.roi-subsection-title strong {
   min-width: 0;
   color: var(--faint);
   font-size: var(--app-font-size-label);
   font-weight: 900;
   overflow-wrap: anywhere;
+}
+
+.roi-subsection-title span {
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--app-font-size-support);
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.roi-subsection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
 }
 
 .capture-video,
@@ -801,26 +824,41 @@ button:disabled {
   pointer-events: auto;
 }
 
+.roi-box--wait {
+  border-color: #ffd166;
+  background: rgb(255 209 102 / 0.18);
+}
+
 .roi-move {
   position: absolute;
   inset: 0;
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
-  padding: 12px 14px;
+  display: block;
+  padding: 0;
   border: 0;
   background: transparent;
   cursor: move;
 }
 
 .roi-move span {
+  position: absolute;
+  top: -28px;
+  left: -2px;
   display: inline-flex;
-  padding: 5px 10px;
-  border-radius: 5px;
+  max-width: max-content;
+  padding: 3px 7px;
+  border-radius: 4px;
   background: var(--green);
   color: #000000;
-  font-size: var(--app-font-size-body);
+  font-size: 11.52px;
   font-weight: 900;
+  line-height: 1.2;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.roi-box--wait .roi-move span,
+.roi-box--wait .roi-handle {
+  background: #ffd166;
 }
 
 .roi-handle {
@@ -909,7 +947,14 @@ button:disabled {
 }
 
 .roi-action-button {
+  box-sizing: border-box;
   min-height: 42px;
+}
+
+.roi-subsection-actions .roi-action-button {
+  min-width: 118px;
+  font-size: 11.52px;
+  line-height: 1.2;
 }
 
 .action-icon {

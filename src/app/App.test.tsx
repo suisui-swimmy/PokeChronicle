@@ -350,8 +350,11 @@ describe("App", () => {
     await user.click(screen.getByRole("tab", { name: "ROI" }));
     expect(screen.getByRole("tab", { name: "ROI" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("heading", { name: "ROI設定" })).toBeInTheDocument();
-    expect(screen.getByRole("checkbox", { name: "ROI表示" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "メッセージROI表示" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "待機ROI表示" })).not.toBeChecked();
     expect(screen.getByText(/x=0.1500 y=0.7200 w=0.5000 h=0.1400/)).toBeInTheDocument();
+    expect(screen.getByText(/x=0.4200 y=0.1800 w=0.1800 h=0.1600/)).toBeInTheDocument();
+    expect(screen.queryByText(/wait x=0.4200/)).not.toBeInTheDocument();
     expect(screen.queryByText("詳細調整")).not.toBeInTheDocument();
     expect(screen.getByRole("spinbutton", { name: "ROI X" })).toHaveValue(0.15);
     expect(screen.getByRole("spinbutton", { name: "ROI Y" })).toHaveValue(0.72);
@@ -374,7 +377,7 @@ describe("App", () => {
     expect(screen.getByRole("spinbutton", { name: "ROI W" })).toHaveValue(0.5);
     expect(screen.getByRole("spinbutton", { name: "ROI H" })).toHaveValue(0.14);
     expect(screen.getByRole("button", { name: "待機ROIリセット" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "ROIリセット" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "メッセージROIリセット" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "サンプラー" }));
     expect(screen.getByRole("combobox", { name: "fps" })).toHaveValue("3");
@@ -865,12 +868,14 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByRole("combobox", { name: "映像デバイス" })).toHaveValue("video-usb");
-    expect(screen.queryByLabelText("ROI adjustment layer")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("メッセージROI adjustment layer")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("通信待機ROI adjustment layer")).not.toBeInTheDocument();
 
     expect(screen.getByLabelText("analysis and data management")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "ROI" }));
     expect(screen.queryByText("詳細調整")).not.toBeInTheDocument();
-    expect(screen.getByRole("checkbox", { name: "ROI表示" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "メッセージROI表示" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "待機ROI表示" })).not.toBeChecked();
     fireEvent.change(screen.getByRole("spinbutton", { name: "ROI X" }), {
       target: { value: "0.1" },
     });
@@ -880,26 +885,37 @@ describe("App", () => {
     expect(screen.getByRole("spinbutton", { name: "ROI X" })).toHaveValue(0.1);
     expect(screen.getByRole("spinbutton", { name: "通信待機ROI X" })).toHaveValue(0.44);
     expect(screen.getByText(/x=0.1000 y=0.7200 w=0.5000 h=0.1400/)).toBeInTheDocument();
+    expect(screen.getByText(/x=0.4400 y=0.1800 w=0.1800 h=0.1600/)).toBeInTheDocument();
     await waitFor(() => {
       expect(JSON.parse(window.localStorage.getItem(ROI_SETTINGS_STORAGE_KEY) ?? "{}")).toMatchObject({
         roi: { x: 0.1, y: 0.72, w: 0.5, h: 0.14 },
         waitRoi: { x: 0.44, y: 0.18, w: 0.18, h: 0.16 },
         isRoiVisible: false,
+        isWaitRoiVisible: false,
       });
     });
 
-    fireEvent.click(screen.getByRole("checkbox", { name: "ROI表示" }));
-    expect(screen.getByLabelText("ROI adjustment layer")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: "メッセージROI表示" }));
+    expect(screen.getByLabelText("メッセージROI adjustment layer")).toBeInTheDocument();
     await waitFor(() => {
       expect(JSON.parse(window.localStorage.getItem(ROI_SETTINGS_STORAGE_KEY) ?? "{}")).toMatchObject({
         isRoiVisible: true,
       });
     });
 
-    fireEvent.click(screen.getByRole("checkbox", { name: "ROI表示" }));
-    expect(screen.queryByLabelText("ROI adjustment layer")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: "待機ROI表示" }));
+    expect(screen.getByLabelText("通信待機ROI adjustment layer")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(JSON.parse(window.localStorage.getItem(ROI_SETTINGS_STORAGE_KEY) ?? "{}")).toMatchObject({
+        isWaitRoiVisible: true,
+      });
+    });
 
-    fireEvent.click(screen.getByRole("button", { name: "ROIリセット" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "メッセージROI表示" }));
+    expect(screen.queryByLabelText("メッセージROI adjustment layer")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("通信待機ROI adjustment layer")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "メッセージROIリセット" }));
     expect(screen.getByRole("spinbutton", { name: "ROI X" })).toHaveValue(0.15);
     expect(screen.getByRole("spinbutton", { name: "ROI W" })).toHaveValue(0.5);
     fireEvent.click(screen.getByRole("button", { name: "待機ROIリセット" }));
@@ -921,15 +937,19 @@ describe("App", () => {
         roi: { x: 0.24, y: 0.66, w: 0.42, h: 0.12 },
         waitRoi: { x: 0.43, y: 0.2, w: 0.16, h: 0.13 },
         isRoiVisible: true,
+        isWaitRoiVisible: true,
       }),
     );
 
     render(<App />);
 
-    expect(await screen.findByLabelText("ROI adjustment layer")).toBeInTheDocument();
+    expect(await screen.findByLabelText("メッセージROI adjustment layer")).toBeInTheDocument();
+    expect(screen.getByLabelText("通信待機ROI adjustment layer")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "ROI" }));
-    expect(screen.getByRole("checkbox", { name: "ROI表示" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "メッセージROI表示" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "待機ROI表示" })).toBeChecked();
     expect(screen.getByText(/x=0.2400 y=0.6600 w=0.4200 h=0.1200/)).toBeInTheDocument();
+    expect(screen.getByText(/x=0.4300 y=0.2000 w=0.1600 h=0.1300/)).toBeInTheDocument();
     expect(screen.getByRole("spinbutton", { name: "ROI X" })).toHaveValue(0.24);
     expect(screen.getByRole("spinbutton", { name: "ROI Y" })).toHaveValue(0.66);
     expect(screen.getByRole("spinbutton", { name: "ROI W" })).toHaveValue(0.42);
