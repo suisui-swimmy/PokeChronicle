@@ -53,6 +53,7 @@ function getBadgeForText(label: string) {
 
 describe("App", () => {
   beforeEach(() => {
+    vi.useRealTimers();
     vi.clearAllMocks();
     window.localStorage.clear();
     Object.defineProperty(document, "fullscreenElement", {
@@ -351,19 +352,33 @@ describe("App", () => {
     expect(screen.getByRole("tab", { name: "ROI" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("heading", { name: "ROI設定" })).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "メッセージROI表示" })).not.toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "待機ROI表示" })).not.toBeChecked();
+    expect(screen.queryByRole("checkbox", { name: "待機ROI表示" })).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "相手HPバーHUD ROI表示" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "味方HPバーHUD ROI表示" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "VS ROI表示" })).not.toBeChecked();
     expect(screen.getByText(/x=0.1500 y=0.7200 w=0.5000 h=0.1400/)).toBeInTheDocument();
-    expect(screen.getByText(/x=0.4200 y=0.1800 w=0.1800 h=0.1600/)).toBeInTheDocument();
+    expect(screen.getByText(/x=0.5500 y=0.0300 w=0.4300 h=0.1400/)).toBeInTheDocument();
+    expect(screen.getByText(/x=0.0200 y=0.8400 w=0.4600 h=0.1400/)).toBeInTheDocument();
+    expect(screen.getByText(/x=0.3400 y=0.3200 w=0.3200 h=0.3200/)).toBeInTheDocument();
     expect(screen.queryByText(/wait x=0.4200/)).not.toBeInTheDocument();
     expect(screen.queryByText("詳細調整")).not.toBeInTheDocument();
     expect(screen.getByRole("spinbutton", { name: "ROI X" })).toHaveValue(0.15);
     expect(screen.getByRole("spinbutton", { name: "ROI Y" })).toHaveValue(0.72);
     expect(screen.getByRole("spinbutton", { name: "ROI W" })).toHaveValue(0.5);
     expect(screen.getByRole("spinbutton", { name: "ROI H" })).toHaveValue(0.14);
-    expect(screen.getByRole("spinbutton", { name: "通信待機ROI X" })).toHaveValue(0.42);
-    expect(screen.getByRole("spinbutton", { name: "通信待機ROI Y" })).toHaveValue(0.18);
-    expect(screen.getByRole("spinbutton", { name: "通信待機ROI W" })).toHaveValue(0.18);
-    expect(screen.getByRole("spinbutton", { name: "通信待機ROI H" })).toHaveValue(0.16);
+    expect(screen.queryByRole("spinbutton", { name: "通信待機ROI X" })).not.toBeInTheDocument();
+    expect(screen.getByRole("spinbutton", { name: "相手HPバーHUD ROI X" })).toHaveValue(0.55);
+    expect(screen.getByRole("spinbutton", { name: "相手HPバーHUD ROI Y" })).toHaveValue(0.03);
+    expect(screen.getByRole("spinbutton", { name: "相手HPバーHUD ROI W" })).toHaveValue(0.43);
+    expect(screen.getByRole("spinbutton", { name: "相手HPバーHUD ROI H" })).toHaveValue(0.14);
+    expect(screen.getByRole("spinbutton", { name: "味方HPバーHUD ROI X" })).toHaveValue(0.02);
+    expect(screen.getByRole("spinbutton", { name: "味方HPバーHUD ROI Y" })).toHaveValue(0.84);
+    expect(screen.getByRole("spinbutton", { name: "味方HPバーHUD ROI W" })).toHaveValue(0.46);
+    expect(screen.getByRole("spinbutton", { name: "味方HPバーHUD ROI H" })).toHaveValue(0.14);
+    expect(screen.getByRole("spinbutton", { name: "VS ROI X" })).toHaveValue(0.34);
+    expect(screen.getByRole("spinbutton", { name: "VS ROI Y" })).toHaveValue(0.32);
+    expect(screen.getByRole("spinbutton", { name: "VS ROI W" })).toHaveValue(0.32);
+    expect(screen.getByRole("spinbutton", { name: "VS ROI H" })).toHaveValue(0.32);
     expect(screen.queryByRole("heading", { name: "統計サマリー" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "ROI" }));
@@ -376,7 +391,10 @@ describe("App", () => {
     expect(screen.getByRole("spinbutton", { name: "ROI Y" })).toHaveValue(0.72);
     expect(screen.getByRole("spinbutton", { name: "ROI W" })).toHaveValue(0.5);
     expect(screen.getByRole("spinbutton", { name: "ROI H" })).toHaveValue(0.14);
-    expect(screen.getByRole("button", { name: "待機ROIリセット" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "待機ROIリセット" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "相手HPバーHUD ROIリセット" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "味方HPバーHUD ROIリセット" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "VS ROIリセット" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "メッセージROIリセット" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "サンプラー" }));
@@ -405,6 +423,9 @@ describe("App", () => {
     ).toBeDisabled();
     expect(screen.getByRole("heading", { name: "リアルタイムOCR" })).toBeInTheDocument();
     expect(screen.getByLabelText("OCR sampling diagnostics")).toHaveTextContent("sampled0");
+    expect(screen.getByLabelText("OCR sampling diagnostics")).toHaveTextContent("hpHudSampled0");
+    expect(screen.getByLabelText("OCR sampling diagnostics")).toHaveTextContent("vsSampled0");
+    expect(screen.getByLabelText("OCR sampling diagnostics")).toHaveTextContent("skippedPhase0");
     expect(screen.getByLabelText("OCR sampling diagnostics")).toHaveTextContent("ocrQueued0");
     expect(screen.getByLabelText("OCR sampling diagnostic log")).toHaveTextContent("診断ログ空");
     expect(screen.getByText("OCRログ空")).toBeInTheDocument();
@@ -870,28 +891,34 @@ describe("App", () => {
     expect(await screen.findByRole("combobox", { name: "映像デバイス" })).toHaveValue("video-usb");
     expect(screen.queryByLabelText("メッセージROI adjustment layer")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("通信待機ROI adjustment layer")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("HPバーHUD ROI（相手） adjustment layer")).not.toBeInTheDocument();
 
     expect(screen.getByLabelText("analysis and data management")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "ROI" }));
     expect(screen.queryByText("詳細調整")).not.toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "メッセージROI表示" })).not.toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "待機ROI表示" })).not.toBeChecked();
+    expect(screen.queryByRole("checkbox", { name: "待機ROI表示" })).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "相手HPバーHUD ROI表示" })).not.toBeChecked();
     fireEvent.change(screen.getByRole("spinbutton", { name: "ROI X" }), {
       target: { value: "0.1" },
     });
-    fireEvent.change(screen.getByRole("spinbutton", { name: "通信待機ROI X" }), {
+    fireEvent.change(screen.getByRole("spinbutton", { name: "相手HPバーHUD ROI X" }), {
       target: { value: "0.44" },
     });
     expect(screen.getByRole("spinbutton", { name: "ROI X" })).toHaveValue(0.1);
-    expect(screen.getByRole("spinbutton", { name: "通信待機ROI X" })).toHaveValue(0.44);
+    expect(screen.getByRole("spinbutton", { name: "相手HPバーHUD ROI X" })).toHaveValue(0.44);
     expect(screen.getByText(/x=0.1000 y=0.7200 w=0.5000 h=0.1400/)).toBeInTheDocument();
-    expect(screen.getByText(/x=0.4400 y=0.1800 w=0.1800 h=0.1600/)).toBeInTheDocument();
+    expect(screen.getByText(/x=0.4400 y=0.0300 w=0.4300 h=0.1400/)).toBeInTheDocument();
     await waitFor(() => {
       expect(JSON.parse(window.localStorage.getItem(ROI_SETTINGS_STORAGE_KEY) ?? "{}")).toMatchObject({
         roi: { x: 0.1, y: 0.72, w: 0.5, h: 0.14 },
-        waitRoi: { x: 0.44, y: 0.18, w: 0.18, h: 0.16 },
+        opponentHudRoi: { x: 0.44, y: 0.03, w: 0.43, h: 0.14 },
+        playerHudRoi: { x: 0.02, y: 0.84, w: 0.46, h: 0.14 },
+        vsRoi: { x: 0.34, y: 0.32, w: 0.32, h: 0.32 },
         isRoiVisible: false,
-        isWaitRoiVisible: false,
+        isOpponentHudRoiVisible: false,
+        isPlayerHudRoiVisible: false,
+        isVsRoiVisible: false,
       });
     });
 
@@ -903,23 +930,23 @@ describe("App", () => {
       });
     });
 
-    fireEvent.click(screen.getByRole("checkbox", { name: "待機ROI表示" }));
-    expect(screen.getByLabelText("通信待機ROI adjustment layer")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: "相手HPバーHUD ROI表示" }));
+    expect(screen.getByLabelText("HPバーHUD ROI（相手） adjustment layer")).toBeInTheDocument();
     await waitFor(() => {
       expect(JSON.parse(window.localStorage.getItem(ROI_SETTINGS_STORAGE_KEY) ?? "{}")).toMatchObject({
-        isWaitRoiVisible: true,
+        isOpponentHudRoiVisible: true,
       });
     });
 
     fireEvent.click(screen.getByRole("checkbox", { name: "メッセージROI表示" }));
     expect(screen.queryByLabelText("メッセージROI adjustment layer")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("通信待機ROI adjustment layer")).toBeInTheDocument();
+    expect(screen.getByLabelText("HPバーHUD ROI（相手） adjustment layer")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "メッセージROIリセット" }));
     expect(screen.getByRole("spinbutton", { name: "ROI X" })).toHaveValue(0.15);
     expect(screen.getByRole("spinbutton", { name: "ROI W" })).toHaveValue(0.5);
-    fireEvent.click(screen.getByRole("button", { name: "待機ROIリセット" }));
-    expect(screen.getByRole("spinbutton", { name: "通信待機ROI X" })).toHaveValue(0.42);
+    fireEvent.click(screen.getByRole("button", { name: "相手HPバーHUD ROIリセット" }));
+    expect(screen.getByRole("spinbutton", { name: "相手HPバーHUD ROI X" })).toHaveValue(0.55);
     await user.click(screen.getByRole("tab", { name: "ログ" }));
     await user.click(screen.getByRole("tab", { name: /System/ }));
     expect(
@@ -935,28 +962,46 @@ describe("App", () => {
       ROI_SETTINGS_STORAGE_KEY,
       JSON.stringify({
         roi: { x: 0.24, y: 0.66, w: 0.42, h: 0.12 },
-        waitRoi: { x: 0.43, y: 0.2, w: 0.16, h: 0.13 },
+        opponentHudRoi: { x: 0.43, y: 0.2, w: 0.16, h: 0.13 },
+        playerHudRoi: { x: 0.03, y: 0.82, w: 0.44, h: 0.12 },
+        vsRoi: { x: 0.31, y: 0.28, w: 0.34, h: 0.35 },
         isRoiVisible: true,
-        isWaitRoiVisible: true,
+        isOpponentHudRoiVisible: true,
+        isPlayerHudRoiVisible: true,
+        isVsRoiVisible: true,
       }),
     );
 
     render(<App />);
 
     expect(await screen.findByLabelText("メッセージROI adjustment layer")).toBeInTheDocument();
-    expect(screen.getByLabelText("通信待機ROI adjustment layer")).toBeInTheDocument();
+    expect(screen.getByLabelText("HPバーHUD ROI（相手） adjustment layer")).toBeInTheDocument();
+    expect(screen.getByLabelText("HPバーHUD ROI（味方） adjustment layer")).toBeInTheDocument();
+    expect(screen.getByLabelText("VS ROI adjustment layer")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "ROI" }));
     expect(screen.getByRole("checkbox", { name: "メッセージROI表示" })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "待機ROI表示" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "相手HPバーHUD ROI表示" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "味方HPバーHUD ROI表示" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "VS ROI表示" })).toBeChecked();
     expect(screen.getByText(/x=0.2400 y=0.6600 w=0.4200 h=0.1200/)).toBeInTheDocument();
     expect(screen.getByText(/x=0.4300 y=0.2000 w=0.1600 h=0.1300/)).toBeInTheDocument();
+    expect(screen.getByText(/x=0.0300 y=0.8200 w=0.4400 h=0.1200/)).toBeInTheDocument();
+    expect(screen.getByText(/x=0.3100 y=0.2800 w=0.3400 h=0.3500/)).toBeInTheDocument();
     expect(screen.getByRole("spinbutton", { name: "ROI X" })).toHaveValue(0.24);
     expect(screen.getByRole("spinbutton", { name: "ROI Y" })).toHaveValue(0.66);
     expect(screen.getByRole("spinbutton", { name: "ROI W" })).toHaveValue(0.42);
     expect(screen.getByRole("spinbutton", { name: "ROI H" })).toHaveValue(0.12);
-    expect(screen.getByRole("spinbutton", { name: "通信待機ROI X" })).toHaveValue(0.43);
-    expect(screen.getByRole("spinbutton", { name: "通信待機ROI Y" })).toHaveValue(0.2);
-    expect(screen.getByRole("spinbutton", { name: "通信待機ROI W" })).toHaveValue(0.16);
-    expect(screen.getByRole("spinbutton", { name: "通信待機ROI H" })).toHaveValue(0.13);
+    expect(screen.getByRole("spinbutton", { name: "相手HPバーHUD ROI X" })).toHaveValue(0.43);
+    expect(screen.getByRole("spinbutton", { name: "相手HPバーHUD ROI Y" })).toHaveValue(0.2);
+    expect(screen.getByRole("spinbutton", { name: "相手HPバーHUD ROI W" })).toHaveValue(0.16);
+    expect(screen.getByRole("spinbutton", { name: "相手HPバーHUD ROI H" })).toHaveValue(0.13);
+    expect(screen.getByRole("spinbutton", { name: "味方HPバーHUD ROI X" })).toHaveValue(0.03);
+    expect(screen.getByRole("spinbutton", { name: "味方HPバーHUD ROI Y" })).toHaveValue(0.82);
+    expect(screen.getByRole("spinbutton", { name: "味方HPバーHUD ROI W" })).toHaveValue(0.44);
+    expect(screen.getByRole("spinbutton", { name: "味方HPバーHUD ROI H" })).toHaveValue(0.12);
+    expect(screen.getByRole("spinbutton", { name: "VS ROI X" })).toHaveValue(0.31);
+    expect(screen.getByRole("spinbutton", { name: "VS ROI Y" })).toHaveValue(0.28);
+    expect(screen.getByRole("spinbutton", { name: "VS ROI W" })).toHaveValue(0.34);
+    expect(screen.getByRole("spinbutton", { name: "VS ROI H" })).toHaveValue(0.35);
   });
 });

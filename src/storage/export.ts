@@ -21,8 +21,12 @@ export interface BattleLogBuildInput {
   media: BattleLogMediaMetadata;
   roi: NormalizedRoi;
   roiName: string;
-  waitRoi: NormalizedRoi;
-  waitRoiName: string;
+  opponentHudRoi: NormalizedRoi;
+  opponentHudRoiName: string;
+  playerHudRoi: NormalizedRoi;
+  playerHudRoiName: string;
+  vsRoi: NormalizedRoi;
+  vsRoiName: string;
   ocrMessages: readonly OCRMessage[];
   events: readonly BattleEvent[];
   unknowns: readonly UnknownEvent[];
@@ -77,10 +81,22 @@ export function createBattleLogDocument(
     roi: input.roi,
     updatedAt: exportedAtIso,
   };
-  const waitIndicatorRoiProfile: BattleLogRoiProfile = {
-    id: "roi_wait_indicator",
-    name: input.waitRoiName,
-    roi: input.waitRoi,
+  const phaseHudRoiProfile: BattleLogRoiProfile = {
+    id: "roi_phase_hud_opponent",
+    name: input.opponentHudRoiName,
+    roi: input.opponentHudRoi,
+    updatedAt: exportedAtIso,
+  };
+  const playerHudRoiProfile: BattleLogRoiProfile = {
+    id: "roi_phase_hud_player",
+    name: input.playerHudRoiName,
+    roi: input.playerHudRoi,
+    updatedAt: exportedAtIso,
+  };
+  const vsSplashRoiProfile: BattleLogRoiProfile = {
+    id: "roi_vs_splash",
+    name: input.vsRoiName,
+    roi: input.vsRoi,
     updatedAt: exportedAtIso,
   };
 
@@ -95,7 +111,9 @@ export function createBattleLogDocument(
     },
     media: input.media,
     roiProfile,
-    waitIndicatorRoiProfile,
+    phaseHudRoiProfile,
+    playerHudRoiProfile,
+    vsSplashRoiProfile,
     ocrMessages: [...input.ocrMessages].sort(byTimestampThenId),
     events: [...input.events].sort(byTimestampThenId),
     unknowns: [...input.unknowns].sort(byTimestampThenId),
@@ -176,12 +194,32 @@ export function parseBattleLogJson(text: string): BattleLogParseResult {
     };
   }
 
-  if (!isRecord(parsed.waitIndicatorRoiProfile)) {
-    warnings.push("wait indicator ROI profileがないため既定の通信待機ROIとして扱います。");
-    parsed.waitIndicatorRoiProfile = {
-      id: "roi_wait_indicator_imported_default",
-      name: "Imported wait indicator ROI",
-      roi: { x: 0.42, y: 0.18, w: 0.18, h: 0.16 },
+  if (!isRecord(parsed.phaseHudRoiProfile)) {
+    warnings.push("HPバーHUD ROI profileがないため既定の相手側HUD ROIとして扱います。");
+    parsed.phaseHudRoiProfile = {
+      id: "roi_phase_hud_imported_default",
+      name: "Imported opponent HP bar HUD ROI",
+      roi: { x: 0.55, y: 0.03, w: 0.43, h: 0.14 },
+      updatedAt: parsed.exportedAt,
+    };
+  }
+
+  if (!isRecord(parsed.playerHudRoiProfile)) {
+    warnings.push("味方HPバーHUD ROI profileがないため既定の味方側HUD ROIとして扱います。");
+    parsed.playerHudRoiProfile = {
+      id: "roi_player_hud_imported_default",
+      name: "Imported player HP bar HUD ROI",
+      roi: { x: 0.02, y: 0.84, w: 0.46, h: 0.14 },
+      updatedAt: parsed.exportedAt,
+    };
+  }
+
+  if (!isRecord(parsed.vsSplashRoiProfile)) {
+    warnings.push("VS ROI profileがないため既定のVS ROIとして扱います。");
+    parsed.vsSplashRoiProfile = {
+      id: "roi_vs_splash_imported_default",
+      name: "Imported VS splash ROI",
+      roi: { x: 0.34, y: 0.32, w: 0.32, h: 0.32 },
       updatedAt: parsed.exportedAt,
     };
   }

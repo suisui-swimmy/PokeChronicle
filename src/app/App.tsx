@@ -51,9 +51,11 @@ import {
   type MessageTextMask,
 } from "../core/preprocess/messagePreprocess";
 import {
-  analyzeWaitIndicatorImage,
-  type WaitIndicatorSignal,
-} from "../core/preprocess/waitIndicatorDetection";
+  analyzeHpHudImage,
+  analyzeVsSplashImage,
+  type HpHudSignal,
+  type VsSplashSignal,
+} from "../core/preprocess/hudPhaseDetection";
 import { mapDisplayRoiToSourceRect } from "../core/media/roiMapping";
 import { createTesseractWorkerConfig } from "../core/ocr/tesseractConfig";
 import type {
@@ -91,9 +93,13 @@ import {
 const LIVE_BATTLE_ID = "battle_live";
 const LIVE_BATTLE_TITLE = "Live OCR battle log";
 const DEFAULT_ROI: NormalizedRoi = { x: 0.15, y: 0.72, w: 0.5, h: 0.14 };
-const DEFAULT_WAIT_INDICATOR_ROI: NormalizedRoi = { x: 0.42, y: 0.18, w: 0.18, h: 0.16 };
+const DEFAULT_OPPONENT_HUD_ROI: NormalizedRoi = { x: 0.55, y: 0.03, w: 0.43, h: 0.14 };
+const DEFAULT_PLAYER_HUD_ROI: NormalizedRoi = { x: 0.02, y: 0.84, w: 0.46, h: 0.14 };
+const DEFAULT_VS_SPLASH_ROI: NormalizedRoi = { x: 0.34, y: 0.32, w: 0.32, h: 0.32 };
 const DEFAULT_IS_ROI_VISIBLE = false;
-const DEFAULT_IS_WAIT_ROI_VISIBLE = false;
+const DEFAULT_IS_OPPONENT_HUD_ROI_VISIBLE = false;
+const DEFAULT_IS_PLAYER_HUD_ROI_VISIBLE = false;
+const DEFAULT_IS_VS_ROI_VISIBLE = false;
 const MIN_ROI_SIZE = 0.08;
 const NO_AUDIO_DEVICE_ID = "none";
 const DEFAULT_SAMPLE_FPS = 3;
@@ -129,12 +135,14 @@ const MIN_TEXT_PIXEL_RATIO = 0.004;
 const MAX_TEXT_PIXEL_RATIO = 0.18;
 const SAMPLE_DIAGNOSTIC_STAGES: readonly FrameSampleDiagnosticStage[] = [
   "sampled",
-  "waitSampled",
-  "waitRose",
-  "waitFell",
-  "messageWatchArmed",
-  "messageWatchExpired",
-  "messageWatchEnded",
+  "hpHudSampled",
+  "hpHudRose",
+  "hpHudFell",
+  "vsSampled",
+  "vsFell",
+  "messagePhaseOpened",
+  "messagePhaseClosed",
+  "skippedPhase",
   "ocrQueued",
   "skippedBusy",
   "skippedPreprocess",
@@ -143,9 +151,10 @@ const SAMPLE_DIAGNOSTIC_STAGES: readonly FrameSampleDiagnosticStage[] = [
   "empty",
   "error",
 ];
-const WAIT_VISIBLE_STREAK_REQUIRED = 2;
-const WAIT_HIDDEN_STREAK_REQUIRED = 2;
-const MESSAGE_WATCH_WINDOW_MS = 4000;
+const HUD_VISIBLE_STREAK_REQUIRED = 2;
+const HUD_HIDDEN_STREAK_REQUIRED = 2;
+const VS_VISIBLE_STREAK_REQUIRED = 2;
+const VS_HIDDEN_STREAK_REQUIRED = 2;
 const DEFAULT_PREPROCESS_OPTIONS: MessagePreprocessOptions = {
   whiteThreshold: 180,
   background: "black",
@@ -205,9 +214,13 @@ type HeaderMediaSettings = {
 
 type RoiSettings = {
   roi: NormalizedRoi;
-  waitRoi: NormalizedRoi;
+  opponentHudRoi: NormalizedRoi;
+  playerHudRoi: NormalizedRoi;
+  vsRoi: NormalizedRoi;
   isRoiVisible: boolean;
-  isWaitRoiVisible: boolean;
+  isOpponentHudRoiVisible: boolean;
+  isPlayerHudRoiVisible: boolean;
+  isVsRoiVisible: boolean;
 };
 
 type DragMode =
@@ -267,16 +280,37 @@ type FrameSample = CapturedFrameImages & {
   upscaleFactor: number;
 };
 
-type WaitIndicatorObservation = {
+type HudRoiLabel = "opponent" | "player";
+
+type HpHudObservation = {
+  roiLabel: HudRoiLabel;
   roi: NormalizedRoi;
-  signal: WaitIndicatorSignal;
+  signal: HpHudSignal;
 };
 
-type WaitIndicatorRuntimeState = {
-  stableVisible: boolean | null;
-  visibleStreak: number;
-  hiddenStreak: number;
-  messageWatchArmedUntilMs: number | null;
+type HudPhaseObservation = {
+  opponent: HpHudObservation | null;
+  player: HpHudObservation | null;
+  selected: HpHudObservation | null;
+  isVisible: boolean;
+};
+
+type VsSplashObservation = {
+  roi: NormalizedRoi;
+  signal: VsSplashSignal;
+};
+
+type MessagePhase = "unknown" | "message_candidate" | "hud" | "ended";
+
+type PhaseGateRuntimeState = {
+  messagePhase: MessagePhase;
+  hpStableVisible: boolean | null;
+  hpVisibleStreak: number;
+  hpHiddenStreak: number;
+  vsStableVisible: boolean | null;
+  vsVisibleStreak: number;
+  vsHiddenStreak: number;
+  hasOpenedFromVs: boolean;
 };
 
 type OCRLogEntry = {
@@ -453,13 +487,23 @@ function normalizeRoiSettings(value: unknown): RoiSettings | null {
 
   return {
     roi: normalizeRoi(value.roi, DEFAULT_ROI),
-    waitRoi: normalizeRoi(value.waitRoi, DEFAULT_WAIT_INDICATOR_ROI),
+    opponentHudRoi: normalizeRoi(value.opponentHudRoi, DEFAULT_OPPONENT_HUD_ROI),
+    playerHudRoi: normalizeRoi(value.playerHudRoi, DEFAULT_PLAYER_HUD_ROI),
+    vsRoi: normalizeRoi(value.vsRoi, DEFAULT_VS_SPLASH_ROI),
     isRoiVisible:
       typeof value.isRoiVisible === "boolean" ? value.isRoiVisible : DEFAULT_IS_ROI_VISIBLE,
-    isWaitRoiVisible:
-      typeof value.isWaitRoiVisible === "boolean"
-        ? value.isWaitRoiVisible
-        : DEFAULT_IS_WAIT_ROI_VISIBLE,
+    isOpponentHudRoiVisible:
+      typeof value.isOpponentHudRoiVisible === "boolean"
+        ? value.isOpponentHudRoiVisible
+        : DEFAULT_IS_OPPONENT_HUD_ROI_VISIBLE,
+    isPlayerHudRoiVisible:
+      typeof value.isPlayerHudRoiVisible === "boolean"
+        ? value.isPlayerHudRoiVisible
+        : DEFAULT_IS_PLAYER_HUD_ROI_VISIBLE,
+    isVsRoiVisible:
+      typeof value.isVsRoiVisible === "boolean"
+        ? value.isVsRoiVisible
+        : DEFAULT_IS_VS_ROI_VISIBLE,
   };
 }
 
@@ -665,6 +709,14 @@ function formatTextDensity(ratio: number) {
 function formatDiagnosticStage(stage: FrameSampleDiagnosticStage) {
   const labels: Record<FrameSampleDiagnosticStage, string> = {
     sampled: "sampled",
+    hpHudSampled: "hpHudSampled",
+    hpHudRose: "hpHudRose",
+    hpHudFell: "hpHudFell",
+    vsSampled: "vsSampled",
+    vsFell: "vsFell",
+    messagePhaseOpened: "messagePhaseOpened",
+    messagePhaseClosed: "messagePhaseClosed",
+    skippedPhase: "skippedPhase",
     waitSampled: "waitSampled",
     waitRose: "waitRose",
     waitFell: "waitFell",
@@ -683,25 +735,46 @@ function formatDiagnosticStage(stage: FrameSampleDiagnosticStage) {
   return labels[stage];
 }
 
-function formatWaitSignalScore(signal: FrameImageSignalDiagnostic | WaitIndicatorSignal) {
+function formatSignalScore(signal: FrameImageSignalDiagnostic | HpHudSignal | VsSplashSignal) {
   return `${Math.round(signal.score * 100)}%`;
 }
 
-function createWaitImageSignalDiagnostic(
+function createHpHudImageSignalDiagnostic(
   roi: NormalizedRoi,
-  signal: WaitIndicatorSignal,
+  roiLabel: HudRoiLabel,
+  signal: HpHudSignal,
 ): FrameImageSignalDiagnostic {
   return {
-    kind: "wait_indicator",
+    kind: "hp_hud",
+    roi,
+    roiLabel,
+    score: signal.score,
+    isVisible: signal.isVisible,
+    greenBarScore: signal.greenBarScore,
+    frameScore: signal.frameScore,
+    nameplateScore: signal.nameplateScore,
+    darkBandScore: signal.darkBandScore,
+    greenPixelRatio: signal.greenPixelRatio,
+    whitePixelRatio: signal.whitePixelRatio,
+    nameplatePixelRatio: signal.nameplatePixelRatio,
+    darkPixelRatio: signal.darkPixelRatio,
+  };
+}
+
+function createVsSplashImageSignalDiagnostic(
+  roi: NormalizedRoi,
+  signal: VsSplashSignal,
+): FrameImageSignalDiagnostic {
+  return {
+    kind: "vs_splash",
     roi,
     score: signal.score,
     isVisible: signal.isVisible,
-    yellowIconScore: signal.yellowIconScore,
-    whiteTextScore: signal.whiteTextScore,
-    contrastScore: signal.contrastScore,
-    yellowPixelRatio: signal.yellowPixelRatio,
-    whitePixelRatio: signal.whitePixelRatio,
-    whiteRowBandScore: signal.whiteRowBandScore,
+    purpleScore: signal.purpleScore,
+    edgeScore: signal.edgeScore,
+    largeComponentScore: signal.largeComponentScore,
+    purplePixelRatio: signal.purplePixelRatio,
+    brightPixelRatio: signal.brightPixelRatio,
   };
 }
 
@@ -709,16 +782,38 @@ function formatSampleDiagnosticDetail(diagnostic: FrameSampleDiagnostic) {
   const details: string[] = [];
 
   if (diagnostic.imageSignal) {
-    details.push(
-      `wait ${diagnostic.imageSignal.isVisible ? "visible" : "hidden"} ${formatWaitSignalScore(
-        diagnostic.imageSignal,
-      )}`,
-    );
-    details.push(
-      `icon ${formatConfidence(diagnostic.imageSignal.yellowIconScore)} / text ${formatConfidence(
-        diagnostic.imageSignal.whiteTextScore,
-      )}`,
-    );
+    const { imageSignal } = diagnostic;
+
+    if (imageSignal.kind === "hp_hud") {
+      details.push(
+        `hp:${imageSignal.roiLabel} ${imageSignal.isVisible ? "visible" : "hidden"} ${formatSignalScore(
+          imageSignal,
+        )}`,
+      );
+      details.push(
+        `bar ${formatConfidence(imageSignal.greenBarScore)} / plate ${formatConfidence(
+          imageSignal.nameplateScore,
+        )}`,
+      );
+    } else if (imageSignal.kind === "vs_splash") {
+      details.push(
+        `vs ${imageSignal.isVisible ? "visible" : "hidden"} ${formatSignalScore(imageSignal)}`,
+      );
+      details.push(
+        `purple ${formatConfidence(imageSignal.purpleScore)} / area ${formatConfidence(
+          imageSignal.largeComponentScore,
+        )}`,
+      );
+    } else {
+      details.push(
+        `wait ${imageSignal.isVisible ? "visible" : "hidden"} ${formatSignalScore(imageSignal)}`,
+      );
+      details.push(
+        `icon ${formatConfidence(imageSignal.yellowIconScore)} / text ${formatConfidence(
+          imageSignal.whiteTextScore,
+        )}`,
+      );
+    }
   }
 
   if (diagnostic.detail) {
@@ -1318,10 +1413,53 @@ function captureRoiImageData(
   };
 }
 
-function captureWaitIndicatorObservation(
+function captureHpHudObservation(
   source: FrameSourceElement,
   roi: NormalizedRoi,
-): WaitIndicatorObservation | null {
+  roiLabel: HudRoiLabel,
+): HpHudObservation | null {
+  const captured = captureRoiImageData(source, roi);
+
+  if (!captured) {
+    return null;
+  }
+
+  return {
+    roiLabel,
+    roi,
+    signal: analyzeHpHudImage(captured.imageData),
+  };
+}
+
+function captureHudPhaseObservation(
+  source: FrameSourceElement,
+  opponentHudRoi: NormalizedRoi,
+  playerHudRoi: NormalizedRoi,
+): HudPhaseObservation {
+  const opponent = captureHpHudObservation(source, opponentHudRoi, "opponent");
+  const player = captureHpHudObservation(source, playerHudRoi, "player");
+  const visibleObservations = [opponent, player].filter(
+    (observation): observation is HpHudObservation => observation !== null && observation.signal.isVisible,
+  );
+  const selected =
+    visibleObservations.sort((left, right) => right.signal.score - left.signal.score)[0] ??
+    [opponent, player]
+      .filter((observation): observation is HpHudObservation => observation !== null)
+      .sort((left, right) => right.signal.score - left.signal.score)[0] ??
+    null;
+
+  return {
+    opponent,
+    player,
+    selected,
+    isVisible: visibleObservations.length > 0,
+  };
+}
+
+function captureVsSplashObservation(
+  source: FrameSourceElement,
+  roi: NormalizedRoi,
+): VsSplashObservation | null {
   const captured = captureRoiImageData(source, roi);
 
   if (!captured) {
@@ -1330,7 +1468,7 @@ function captureWaitIndicatorObservation(
 
   return {
     roi,
-    signal: analyzeWaitIndicatorImage(captured.imageData),
+    signal: analyzeVsSplashImage(captured.imageData),
   };
 }
 
@@ -1527,14 +1665,27 @@ export function App() {
   );
   const [isVolumePanelOpen, setIsVolumePanelOpen] = useState(false);
   const [roi, setRoi] = useState<NormalizedRoi>(() => initialRoiSettings?.roi ?? DEFAULT_ROI);
-  const [waitRoi, setWaitRoi] = useState<NormalizedRoi>(
-    () => initialRoiSettings?.waitRoi ?? DEFAULT_WAIT_INDICATOR_ROI,
+  const [opponentHudRoi, setOpponentHudRoi] = useState<NormalizedRoi>(
+    () => initialRoiSettings?.opponentHudRoi ?? DEFAULT_OPPONENT_HUD_ROI,
+  );
+  const [playerHudRoi, setPlayerHudRoi] = useState<NormalizedRoi>(
+    () => initialRoiSettings?.playerHudRoi ?? DEFAULT_PLAYER_HUD_ROI,
+  );
+  const [vsRoi, setVsRoi] = useState<NormalizedRoi>(
+    () => initialRoiSettings?.vsRoi ?? DEFAULT_VS_SPLASH_ROI,
   );
   const [isRoiVisible, setIsRoiVisible] = useState(
     () => initialRoiSettings?.isRoiVisible ?? DEFAULT_IS_ROI_VISIBLE,
   );
-  const [isWaitRoiVisible, setIsWaitRoiVisible] = useState(
-    () => initialRoiSettings?.isWaitRoiVisible ?? DEFAULT_IS_WAIT_ROI_VISIBLE,
+  const [isOpponentHudRoiVisible, setIsOpponentHudRoiVisible] = useState(
+    () =>
+      initialRoiSettings?.isOpponentHudRoiVisible ?? DEFAULT_IS_OPPONENT_HUD_ROI_VISIBLE,
+  );
+  const [isPlayerHudRoiVisible, setIsPlayerHudRoiVisible] = useState(
+    () => initialRoiSettings?.isPlayerHudRoiVisible ?? DEFAULT_IS_PLAYER_HUD_ROI_VISIBLE,
+  );
+  const [isVsRoiVisible, setIsVsRoiVisible] = useState(
+    () => initialRoiSettings?.isVsRoiVisible ?? DEFAULT_IS_VS_ROI_VISIBLE,
   );
   const [sampleFps, setSampleFps] = useState(DEFAULT_SAMPLE_FPS);
   const [isSampling, setIsSampling] = useState(false);
@@ -1568,12 +1719,18 @@ export function App() {
     createLog("M8 MVP workspace initialized."),
   ]);
   const roiRef = useRef(roi);
-  const waitRoiRef = useRef(waitRoi);
-  const waitIndicatorStateRef = useRef<WaitIndicatorRuntimeState>({
-    stableVisible: null,
-    visibleStreak: 0,
-    hiddenStreak: 0,
-    messageWatchArmedUntilMs: null,
+  const opponentHudRoiRef = useRef(opponentHudRoi);
+  const playerHudRoiRef = useRef(playerHudRoi);
+  const vsRoiRef = useRef(vsRoi);
+  const phaseGateStateRef = useRef<PhaseGateRuntimeState>({
+    messagePhase: "unknown",
+    hpStableVisible: null,
+    hpVisibleStreak: 0,
+    hpHiddenStreak: 0,
+    vsStableVisible: null,
+    vsVisibleStreak: 0,
+    vsHiddenStreak: 0,
+    hasOpenedFromVs: false,
   });
   const mediaModeRef = useRef(mediaMode);
   const preprocessOptionsRef = useRef(preprocessOptions);
@@ -1622,11 +1779,23 @@ export function App() {
     },
     [appendSampleDiagnostic],
   );
-  const appendWaitIndicatorDiagnostic = useCallback(
+  const resetPhaseGateState = useCallback(() => {
+    phaseGateStateRef.current = {
+      messagePhase: "unknown",
+      hpStableVisible: null,
+      hpVisibleStreak: 0,
+      hpHiddenStreak: 0,
+      vsStableVisible: null,
+      vsVisibleStreak: 0,
+      vsHiddenStreak: 0,
+      hasOpenedFromVs: false,
+    };
+  }, []);
+  const appendHpHudDiagnostic = useCallback(
     (
       sample: FrameSample,
       stage: FrameSampleDiagnosticStage,
-      observation: WaitIndicatorObservation,
+      observation: HpHudObservation,
       detail: string | null,
     ) => {
       appendSampleDiagnostic({
@@ -1642,99 +1811,213 @@ export function App() {
         ocrJobId: null,
         ocrConfidence: null,
         lineCount: null,
-        imageSignal: createWaitImageSignalDiagnostic(observation.roi, observation.signal),
+        imageSignal: createHpHudImageSignalDiagnostic(
+          observation.roi,
+          observation.roiLabel,
+          observation.signal,
+        ),
       });
     },
     [appendSampleDiagnostic],
   );
-  const handleWaitIndicatorObservation = useCallback(
-    (sample: FrameSample, observation: WaitIndicatorObservation | null) => {
-      if (!observation) {
+  const appendVsSplashDiagnostic = useCallback(
+    (
+      sample: FrameSample,
+      stage: FrameSampleDiagnosticStage,
+      observation: VsSplashObservation,
+      detail: string | null,
+    ) => {
+      appendSampleDiagnostic({
+        frameIndex: sample.frameIndex,
+        timestampMs: sample.timestampMs,
+        stage,
+        detail,
+        preprocessVariantId: sample.preprocessVariantId,
+        preprocessRejectReason: sample.preprocessVariantRejectReason,
+        ocrVariantId: sample.ocrVariantId,
+        ocrForegroundPixelRatio: sample.ocrForegroundPixelRatio,
+        pendingOcrJobs: pendingOcrJobsRef.current,
+        ocrJobId: null,
+        ocrConfidence: null,
+        lineCount: null,
+        imageSignal: createVsSplashImageSignalDiagnostic(observation.roi, observation.signal),
+      });
+    },
+    [appendSampleDiagnostic],
+  );
+  const appendPhaseDiagnostic = useCallback(
+    (
+      sample: FrameSample,
+      stage: "messagePhaseOpened" | "messagePhaseClosed" | "skippedPhase",
+      detail: string,
+    ) => {
+      appendSampleDiagnostic({
+        frameIndex: sample.frameIndex,
+        timestampMs: sample.timestampMs,
+        stage,
+        detail,
+        preprocessVariantId: sample.preprocessVariantId,
+        preprocessRejectReason: sample.preprocessVariantRejectReason,
+        ocrVariantId: sample.ocrVariantId,
+        ocrForegroundPixelRatio: sample.ocrForegroundPixelRatio,
+        pendingOcrJobs: pendingOcrJobsRef.current,
+        ocrJobId: null,
+        ocrConfidence: null,
+        lineCount: null,
+      });
+    },
+    [appendSampleDiagnostic],
+  );
+  const openMessagePhase = useCallback(
+    (sample: FrameSample, reason: string) => {
+      const phaseState = phaseGateStateRef.current;
+
+      if (phaseState.messagePhase === "ended") {
         return;
       }
 
-      const { signal } = observation;
-      const scoreDetail = `score ${formatWaitSignalScore(signal)} / icon ${formatConfidence(
-        signal.yellowIconScore,
-      )} / text ${formatConfidence(signal.whiteTextScore)}`;
-      const waitState = waitIndicatorStateRef.current;
-
-      appendWaitIndicatorDiagnostic(
-        sample,
-        "waitSampled",
-        observation,
-        `${signal.isVisible ? "visible" : "hidden"} / ${scoreDetail}`,
-      );
-
-      if (signal.isVisible) {
-        waitState.visibleStreak += 1;
-        waitState.hiddenStreak = 0;
-      } else {
-        waitState.hiddenStreak += 1;
-        waitState.visibleStreak = 0;
-      }
-
-      if (
-        signal.isVisible &&
-        waitState.visibleStreak >= WAIT_VISIBLE_STREAK_REQUIRED &&
-        waitState.stableVisible !== true
-      ) {
-        const hadArmedWatch = waitState.messageWatchArmedUntilMs !== null;
-        waitState.stableVisible = true;
-        waitState.messageWatchArmedUntilMs = null;
-        appendWaitIndicatorDiagnostic(sample, "waitRose", observation, scoreDetail);
-        addLog(`通信待機中を検出しました (${scoreDetail})`);
-
-        if (hadArmedWatch) {
-          appendWaitIndicatorDiagnostic(
-            sample,
-            "messageWatchEnded",
-            observation,
-            "通信待機中に戻ったためメッセージ監視を終了",
-          );
-          addLog("通信待機中に戻ったため、メッセージ監視を終了しました。");
-        }
-      }
-
-      if (
-        !signal.isVisible &&
-        waitState.hiddenStreak >= WAIT_HIDDEN_STREAK_REQUIRED &&
-        waitState.stableVisible !== false
-      ) {
-        const wasWaiting = waitState.stableVisible === true;
-        waitState.stableVisible = false;
-
-        if (wasWaiting) {
-          appendWaitIndicatorDiagnostic(sample, "waitFell", observation, scoreDetail);
-          addLog(`通信待機中が消えました (${scoreDetail})`);
-          waitState.messageWatchArmedUntilMs = sample.timestampMs + MESSAGE_WATCH_WINDOW_MS;
-          appendWaitIndicatorDiagnostic(
-            sample,
-            "messageWatchArmed",
-            observation,
-            `${MESSAGE_WATCH_WINDOW_MS}ms`,
-          );
-          addLog(
-            `通信待機中の消失を検出したため、${MESSAGE_WATCH_WINDOW_MS}msだけメッセージ監視をarmedにしました。`,
-          );
-        }
-      }
-
-      if (
-        waitState.messageWatchArmedUntilMs !== null &&
-        sample.timestampMs > waitState.messageWatchArmedUntilMs
-      ) {
-        waitState.messageWatchArmedUntilMs = null;
-        appendWaitIndicatorDiagnostic(
-          sample,
-          "messageWatchExpired",
-          observation,
-          "メッセージ監視armed window expired",
-        );
-        addLog("メッセージ監視armed windowが期限切れになりました。");
+      if (phaseState.messagePhase !== "message_candidate") {
+        phaseState.messagePhase = "message_candidate";
+        appendPhaseDiagnostic(sample, "messagePhaseOpened", reason);
+        addLog(`メッセージ候補フェーズを開始しました: ${reason}`);
       }
     },
-    [addLog, appendWaitIndicatorDiagnostic],
+    [addLog, appendPhaseDiagnostic],
+  );
+  const closeMessagePhase = useCallback(
+    (sample: FrameSample, reason: string) => {
+      const phaseState = phaseGateStateRef.current;
+
+      if (phaseState.messagePhase !== "hud") {
+        phaseState.messagePhase = "hud";
+        appendPhaseDiagnostic(sample, "messagePhaseClosed", reason);
+        addLog(`メッセージ候補フェーズを終了しました: ${reason}`);
+      }
+    },
+    [addLog, appendPhaseDiagnostic],
+  );
+  const handlePhaseGateObservation = useCallback(
+    (
+      sample: FrameSample,
+      hudObservation: HudPhaseObservation,
+      vsObservation: VsSplashObservation | null,
+    ) => {
+      const phaseState = phaseGateStateRef.current;
+
+      if (hudObservation.opponent) {
+        const detail = `${hudObservation.opponent.signal.isVisible ? "visible" : "hidden"} / score ${formatSignalScore(
+          hudObservation.opponent.signal,
+        )}`;
+        appendHpHudDiagnostic(sample, "hpHudSampled", hudObservation.opponent, detail);
+      }
+
+      if (hudObservation.player) {
+        const detail = `${hudObservation.player.signal.isVisible ? "visible" : "hidden"} / score ${formatSignalScore(
+          hudObservation.player.signal,
+        )}`;
+        appendHpHudDiagnostic(sample, "hpHudSampled", hudObservation.player, detail);
+      }
+
+      if (vsObservation) {
+        const detail = `${vsObservation.signal.isVisible ? "visible" : "hidden"} / score ${formatSignalScore(
+          vsObservation.signal,
+        )}`;
+        appendVsSplashDiagnostic(sample, "vsSampled", vsObservation, detail);
+      }
+
+      if (phaseState.messagePhase === "ended") {
+        return phaseState.messagePhase;
+      }
+
+      if (vsObservation?.signal.isVisible) {
+        phaseState.vsVisibleStreak += 1;
+        phaseState.vsHiddenStreak = 0;
+      } else if (vsObservation) {
+        phaseState.vsHiddenStreak += 1;
+        phaseState.vsVisibleStreak = 0;
+      }
+
+      if (
+        vsObservation?.signal.isVisible &&
+        phaseState.vsVisibleStreak >= VS_VISIBLE_STREAK_REQUIRED &&
+        phaseState.vsStableVisible !== true
+      ) {
+        phaseState.vsStableVisible = true;
+      }
+
+      if (
+        vsObservation &&
+        !vsObservation.signal.isVisible &&
+        phaseState.vsHiddenStreak >= VS_HIDDEN_STREAK_REQUIRED &&
+        phaseState.vsStableVisible === true &&
+        !phaseState.hasOpenedFromVs
+      ) {
+        phaseState.vsStableVisible = false;
+        phaseState.hasOpenedFromVs = true;
+        appendVsSplashDiagnostic(
+          sample,
+          "vsFell",
+          vsObservation,
+          `score ${formatSignalScore(vsObservation.signal)}`,
+        );
+        openMessagePhase(sample, "VS消失");
+      }
+
+      if (hudObservation.isVisible) {
+        phaseState.hpVisibleStreak += 1;
+        phaseState.hpHiddenStreak = 0;
+      } else {
+        phaseState.hpHiddenStreak += 1;
+        phaseState.hpVisibleStreak = 0;
+      }
+
+      if (
+        hudObservation.isVisible &&
+        phaseState.hpVisibleStreak >= HUD_VISIBLE_STREAK_REQUIRED &&
+        phaseState.hpStableVisible !== true
+      ) {
+        const selected = hudObservation.selected;
+        phaseState.hpStableVisible = true;
+
+        if (selected) {
+          appendHpHudDiagnostic(
+            sample,
+            "hpHudRose",
+            selected,
+            `score ${formatSignalScore(selected.signal)}`,
+          );
+        }
+
+        closeMessagePhase(sample, "HPバーHUD出現");
+      }
+
+      if (
+        !hudObservation.isVisible &&
+        phaseState.hpHiddenStreak >= HUD_HIDDEN_STREAK_REQUIRED &&
+        phaseState.hpStableVisible !== false
+      ) {
+        const wasHudVisible = phaseState.hpStableVisible === true;
+        phaseState.hpStableVisible = false;
+
+        if (wasHudVisible) {
+          const selected = hudObservation.selected;
+
+          if (selected) {
+            appendHpHudDiagnostic(
+              sample,
+              "hpHudFell",
+              selected,
+              `score ${formatSignalScore(selected.signal)}`,
+            );
+          }
+
+          openMessagePhase(sample, "HPバーHUD消失");
+        }
+      }
+
+      return phaseState.messagePhase;
+    },
+    [appendHpHudDiagnostic, appendVsSplashDiagnostic, closeMessagePhase, openMessagePhase],
   );
 
   useEffect(() => {
@@ -1988,6 +2271,11 @@ export function App() {
           setBattleEvents((currentEvents) =>
             [...acceptedEvents, ...currentEvents].slice(0, MAX_TIMELINE_ITEMS),
           );
+
+          if (acceptedEvents.some((acceptedEvent) => acceptedEvent.type === "battle_end")) {
+            phaseGateStateRef.current.messagePhase = "ended";
+            addLog("勝負終了イベントを検出したため、以降のOCR投入を抑制します。");
+          }
         }
 
         if (observation.unknown && !suppressUnknown) {
@@ -2216,12 +2504,38 @@ export function App() {
   }, [roi]);
 
   useEffect(() => {
-    waitRoiRef.current = waitRoi;
-  }, [waitRoi]);
+    opponentHudRoiRef.current = opponentHudRoi;
+  }, [opponentHudRoi]);
 
   useEffect(() => {
-    saveStoredRoiSettings({ roi, waitRoi, isRoiVisible, isWaitRoiVisible });
-  }, [isRoiVisible, isWaitRoiVisible, roi, waitRoi]);
+    playerHudRoiRef.current = playerHudRoi;
+  }, [playerHudRoi]);
+
+  useEffect(() => {
+    vsRoiRef.current = vsRoi;
+  }, [vsRoi]);
+
+  useEffect(() => {
+    saveStoredRoiSettings({
+      roi,
+      opponentHudRoi,
+      playerHudRoi,
+      vsRoi,
+      isRoiVisible,
+      isOpponentHudRoiVisible,
+      isPlayerHudRoiVisible,
+      isVsRoiVisible,
+    });
+  }, [
+    isOpponentHudRoiVisible,
+    isPlayerHudRoiVisible,
+    isRoiVisible,
+    isVsRoiVisible,
+    opponentHudRoi,
+    playerHudRoi,
+    roi,
+    vsRoi,
+  ]);
 
   useEffect(() => {
     mediaModeRef.current = mediaMode;
@@ -2849,7 +3163,12 @@ export function App() {
         return false;
       }
 
-      const waitObservation = captureWaitIndicatorObservation(source, waitRoiRef.current);
+      const hudObservation = captureHudPhaseObservation(
+        source,
+        opponentHudRoiRef.current,
+        playerHudRoiRef.current,
+      );
+      const vsObservation = captureVsSplashObservation(source, vsRoiRef.current);
       frameIndexRef.current += 1;
       const timestampMs = Math.max(0, Math.round(performance.now() - samplingStartMsRef.current));
       const nextSample: FrameSample = {
@@ -2867,12 +3186,17 @@ export function App() {
         [nextSample, ...currentSamples].slice(0, MAX_FRAME_BUFFER),
       );
       appendFrameSampleDiagnostic(nextSample, "sampled");
-      handleWaitIndicatorObservation(nextSample, waitObservation);
-      queueOcrRecognition(nextSample);
+      const messagePhase = handlePhaseGateObservation(nextSample, hudObservation, vsObservation);
+
+      if (messagePhase === "unknown" || messagePhase === "message_candidate") {
+        queueOcrRecognition(nextSample);
+      } else {
+        appendFrameSampleDiagnostic(nextSample, "skippedPhase", `phase ${messagePhase}`);
+      }
 
       return true;
     },
-    [addLog, appendFrameSampleDiagnostic, handleWaitIndicatorObservation, queueOcrRecognition],
+    [addLog, appendFrameSampleDiagnostic, handlePhaseGateObservation, queueOcrRecognition],
   );
 
   const handleStartSampling = useCallback(() => {
@@ -2886,12 +3210,7 @@ export function App() {
     }
 
     frameIndexRef.current = 0;
-    waitIndicatorStateRef.current = {
-      stableVisible: null,
-      visibleStreak: 0,
-      hiddenStreak: 0,
-      messageWatchArmedUntilMs: null,
-    };
+    resetPhaseGateState();
     samplingStartMsRef.current = performance.now();
     setFrameSamples([]);
     setIsSampling(true);
@@ -2901,7 +3220,7 @@ export function App() {
       Math.round(1000 / sampleFps),
     );
     addLog(`フレームサンプリングを開始しました (${sampleFps}fps)。`);
-  }, [addLog, captureCurrentFrame, sampleFps]);
+  }, [addLog, captureCurrentFrame, resetPhaseGateState, sampleFps]);
 
   const handleStopSampling = useCallback(() => {
     stopSampling("フレームサンプリングを停止しました。");
@@ -2925,12 +3244,7 @@ export function App() {
     setSuppressedTimelineCount(0);
     cropEvidenceBySourceRef.current.clear();
     sampleDiagnosticCounterRef.current = 0;
-    waitIndicatorStateRef.current = {
-      stableVisible: null,
-      visibleStreak: 0,
-      hiddenStreak: 0,
-      messageWatchArmedUntilMs: null,
-    };
+    resetPhaseGateState();
     recentTimelineDeduplicationRecordsRef.current = [];
     recentConstrainedCandidateRecordsRef.current = [];
     recentAcceptedEventRecordsRef.current = [];
@@ -2944,7 +3258,7 @@ export function App() {
     if (samplingTimerRef.current === null) {
       handleStartSampling();
     }
-  }, [addLog, ensureOcrWorker, handleStartSampling]);
+  }, [addLog, ensureOcrWorker, handleStartSampling, resetPhaseGateState]);
 
   const handleStopOcr = useCallback(() => {
     stopOcr("リアルタイムOCRログを停止しました。");
@@ -3020,17 +3334,35 @@ export function App() {
     addLog("ROIを初期位置へ戻しました。");
   }, [addLog]);
 
-  const handleResetWaitRoi = useCallback(() => {
-    setWaitRoi(DEFAULT_WAIT_INDICATOR_ROI);
-    addLog("通信待機ROIを初期位置へ戻しました。");
+  const handleResetOpponentHudRoi = useCallback(() => {
+    setOpponentHudRoi(DEFAULT_OPPONENT_HUD_ROI);
+    addLog("相手HPバーHUD ROIを初期位置へ戻しました。");
+  }, [addLog]);
+
+  const handleResetPlayerHudRoi = useCallback(() => {
+    setPlayerHudRoi(DEFAULT_PLAYER_HUD_ROI);
+    addLog("味方HPバーHUD ROIを初期位置へ戻しました。");
+  }, [addLog]);
+
+  const handleResetVsRoi = useCallback(() => {
+    setVsRoi(DEFAULT_VS_SPLASH_ROI);
+    addLog("VS ROIを初期位置へ戻しました。");
   }, [addLog]);
 
   const handleRoiNumberChange = useCallback((field: RoiField, value: string) => {
     setRoi((currentRoi) => updateRoiField(currentRoi, field, Number(value)));
   }, []);
 
-  const handleWaitRoiNumberChange = useCallback((field: RoiField, value: string) => {
-    setWaitRoi((currentRoi) => updateRoiField(currentRoi, field, Number(value)));
+  const handleOpponentHudRoiNumberChange = useCallback((field: RoiField, value: string) => {
+    setOpponentHudRoi((currentRoi) => updateRoiField(currentRoi, field, Number(value)));
+  }, []);
+
+  const handlePlayerHudRoiNumberChange = useCallback((field: RoiField, value: string) => {
+    setPlayerHudRoi((currentRoi) => updateRoiField(currentRoi, field, Number(value)));
+  }, []);
+
+  const handleVsRoiNumberChange = useCallback((field: RoiField, value: string) => {
+    setVsRoi((currentRoi) => updateRoiField(currentRoi, field, Number(value)));
   }, []);
 
   const inputBadge = useMemo(
@@ -3106,6 +3438,10 @@ export function App() {
     ) as Record<FrameSampleDiagnosticStage, number>;
 
     for (const diagnostic of sampleDiagnostics) {
+      if (!(diagnostic.stage in counts)) {
+        counts[diagnostic.stage] = 0;
+      }
+
       counts[diagnostic.stage] += 1;
     }
 
@@ -3455,8 +3791,12 @@ export function App() {
       },
       roi,
       roiName: "Battle message ROI",
-      waitRoi,
-      waitRoiName: "Communication wait indicator ROI",
+      opponentHudRoi,
+      opponentHudRoiName: "Opponent HP bar HUD ROI",
+      playerHudRoi,
+      playerHudRoiName: "Player HP bar HUD ROI",
+      vsRoi,
+      vsRoiName: "VS splash ROI",
       ocrMessages,
       events: battleEvents,
       unknowns: unknownEvents,
@@ -3473,11 +3813,13 @@ export function App() {
     metadata.height,
     metadata.width,
     ocrMessages,
+    opponentHudRoi,
+    playerHudRoi,
     reviewNotes,
     roi,
     sampleDiagnostics,
-    waitRoi,
     unknownEvents,
+    vsRoi,
   ]);
 
   const restoreBattleLogDocument = useCallback(
@@ -3509,7 +3851,9 @@ export function App() {
         ),
       );
       setRoi(document.roiProfile.roi);
-      setWaitRoi(document.waitIndicatorRoiProfile?.roi ?? DEFAULT_WAIT_INDICATOR_ROI);
+      setOpponentHudRoi(document.phaseHudRoiProfile.roi);
+      setPlayerHudRoi(document.playerHudRoiProfile.roi);
+      setVsRoi(document.vsSplashRoiProfile.roi);
       setSuppressedTimelineCount(0);
       recentTimelineDeduplicationRecordsRef.current = [];
       recentConstrainedCandidateRecordsRef.current = [];
@@ -3894,12 +4238,28 @@ export function App() {
               {isRoiVisible ? (
                 <RoiOverlay label="メッセージROI" roi={roi} onChange={setRoi} />
               ) : null}
-              {isWaitRoiVisible ? (
+              {isOpponentHudRoiVisible ? (
                 <RoiOverlay
-                  label="通信待機ROI"
-                  roi={waitRoi}
-                  tone="wait"
-                  onChange={setWaitRoi}
+                  label="HPバーHUD ROI（相手）"
+                  roi={opponentHudRoi}
+                  tone="hud"
+                  onChange={setOpponentHudRoi}
+                />
+              ) : null}
+              {isPlayerHudRoiVisible ? (
+                <RoiOverlay
+                  label="HPバーHUD ROI（味方）"
+                  roi={playerHudRoi}
+                  tone="hud"
+                  onChange={setPlayerHudRoi}
+                />
+              ) : null}
+              {isVsRoiVisible ? (
+                <RoiOverlay
+                  label="VS ROI"
+                  roi={vsRoi}
+                  tone="vs"
+                  onChange={setVsRoi}
                 />
               ) : null}
             </div>
@@ -3979,171 +4339,46 @@ export function App() {
             </div>
 
             <div className="roi-detail-panel">
-              <div className="roi-subsection">
-                <div className="roi-subsection-header">
-                  <div className="roi-subsection-title">
-                    <strong>メッセージROI</strong>
-                    <span>
-                      x={roi.x.toFixed(4)} y={roi.y.toFixed(4)} w={roi.w.toFixed(4)} h=
-                      {roi.h.toFixed(4)}
-                    </span>
-                  </div>
-                  <div className="roi-subsection-actions">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="icon-button icon-button--compact roi-action-button"
-                      aria-label="メッセージROIリセット"
-                      onClick={handleResetRoi}
-                    >
-                      <RotateCcw className="action-icon" aria-hidden="true" />
-                      <span>ROIリセット</span>
-                    </Button>
-                    <label className="toggle-control roi-visibility-toggle roi-action-button">
-                      <input
-                        type="checkbox"
-                        aria-label="メッセージROI表示"
-                        checked={isRoiVisible}
-                        onChange={(event) => setIsRoiVisible(event.target.checked)}
-                      />
-                      <span>ROI表示</span>
-                    </label>
-                  </div>
-                </div>
-              <div className="roi-number-grid" aria-label="ROI numeric settings">
-                <label className="roi-number-control">
-                  <span>X</span>
-                  <input
-                    aria-label="ROI X"
-                    type="number"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={roi.x.toFixed(4)}
-                    onChange={(event) => handleRoiNumberChange("x", event.target.value)}
-                  />
-                </label>
-                <label className="roi-number-control">
-                  <span>Y</span>
-                  <input
-                    aria-label="ROI Y"
-                    type="number"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={roi.y.toFixed(4)}
-                    onChange={(event) => handleRoiNumberChange("y", event.target.value)}
-                  />
-                </label>
-                <label className="roi-number-control">
-                  <span>W</span>
-                  <input
-                    aria-label="ROI W"
-                    type="number"
-                    min={MIN_ROI_SIZE}
-                    max={1}
-                    step={0.01}
-                    value={roi.w.toFixed(4)}
-                    onChange={(event) => handleRoiNumberChange("w", event.target.value)}
-                  />
-                </label>
-                <label className="roi-number-control">
-                  <span>H</span>
-                  <input
-                    aria-label="ROI H"
-                    type="number"
-                    min={MIN_ROI_SIZE}
-                    max={1}
-                    step={0.01}
-                    value={roi.h.toFixed(4)}
-                    onChange={(event) => handleRoiNumberChange("h", event.target.value)}
-                  />
-                </label>
-              </div>
-              </div>
-
-              <div className="roi-subsection">
-                <div className="roi-subsection-header">
-                  <div className="roi-subsection-title">
-                    <strong>通信待機ROI</strong>
-                    <span>
-                      x={waitRoi.x.toFixed(4)} y={waitRoi.y.toFixed(4)} w=
-                      {waitRoi.w.toFixed(4)} h={waitRoi.h.toFixed(4)}
-                    </span>
-                  </div>
-                  <div className="roi-subsection-actions">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="icon-button icon-button--compact roi-action-button"
-                      aria-label="待機ROIリセット"
-                      onClick={handleResetWaitRoi}
-                    >
-                      <RotateCcw className="action-icon" aria-hidden="true" />
-                      <span>ROIリセット</span>
-                    </Button>
-                    <label className="toggle-control roi-visibility-toggle roi-action-button">
-                      <input
-                        type="checkbox"
-                        aria-label="待機ROI表示"
-                        checked={isWaitRoiVisible}
-                        onChange={(event) => setIsWaitRoiVisible(event.target.checked)}
-                      />
-                      <span>ROI表示</span>
-                    </label>
-                  </div>
-                </div>
-                <div className="roi-number-grid" aria-label="wait indicator ROI numeric settings">
-                  <label className="roi-number-control">
-                    <span>X</span>
-                    <input
-                      aria-label="通信待機ROI X"
-                      type="number"
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      value={waitRoi.x.toFixed(4)}
-                      onChange={(event) => handleWaitRoiNumberChange("x", event.target.value)}
-                    />
-                  </label>
-                  <label className="roi-number-control">
-                    <span>Y</span>
-                    <input
-                      aria-label="通信待機ROI Y"
-                      type="number"
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      value={waitRoi.y.toFixed(4)}
-                      onChange={(event) => handleWaitRoiNumberChange("y", event.target.value)}
-                    />
-                  </label>
-                  <label className="roi-number-control">
-                    <span>W</span>
-                    <input
-                      aria-label="通信待機ROI W"
-                      type="number"
-                      min={MIN_ROI_SIZE}
-                      max={1}
-                      step={0.01}
-                      value={waitRoi.w.toFixed(4)}
-                      onChange={(event) => handleWaitRoiNumberChange("w", event.target.value)}
-                    />
-                  </label>
-                  <label className="roi-number-control">
-                    <span>H</span>
-                    <input
-                      aria-label="通信待機ROI H"
-                      type="number"
-                      min={MIN_ROI_SIZE}
-                      max={1}
-                      step={0.01}
-                      value={waitRoi.h.toFixed(4)}
-                      onChange={(event) => handleWaitRoiNumberChange("h", event.target.value)}
-                    />
-                  </label>
-                </div>
-              </div>
+              <RoiControlSection
+                title="メッセージROI"
+                actionLabelPrefix="メッセージROI"
+                numberLabelPrefix="ROI"
+                roi={roi}
+                isVisible={isRoiVisible}
+                onReset={handleResetRoi}
+                onToggleVisible={setIsRoiVisible}
+                onNumberChange={handleRoiNumberChange}
+              />
+              <RoiControlSection
+                title="HPバーHUD ROI（相手）"
+                actionLabelPrefix="相手HPバーHUD ROI"
+                numberLabelPrefix="相手HPバーHUD ROI"
+                roi={opponentHudRoi}
+                isVisible={isOpponentHudRoiVisible}
+                onReset={handleResetOpponentHudRoi}
+                onToggleVisible={setIsOpponentHudRoiVisible}
+                onNumberChange={handleOpponentHudRoiNumberChange}
+              />
+              <RoiControlSection
+                title="HPバーHUD ROI（味方）"
+                actionLabelPrefix="味方HPバーHUD ROI"
+                numberLabelPrefix="味方HPバーHUD ROI"
+                roi={playerHudRoi}
+                isVisible={isPlayerHudRoiVisible}
+                onReset={handleResetPlayerHudRoi}
+                onToggleVisible={setIsPlayerHudRoiVisible}
+                onNumberChange={handlePlayerHudRoiNumberChange}
+              />
+              <RoiControlSection
+                title="VS ROI"
+                actionLabelPrefix="VS ROI"
+                numberLabelPrefix="VS ROI"
+                roi={vsRoi}
+                isVisible={isVsRoiVisible}
+                onReset={handleResetVsRoi}
+                onToggleVisible={setIsVsRoiVisible}
+                onNumberChange={handleVsRoiNumberChange}
+              />
             </div>
           </section>
             </TabsContent>
@@ -4863,6 +5098,111 @@ export function App() {
   );
 }
 
+function RoiControlSection({
+  title,
+  actionLabelPrefix,
+  numberLabelPrefix,
+  roi,
+  isVisible,
+  onReset,
+  onToggleVisible,
+  onNumberChange,
+}: {
+  title: string;
+  actionLabelPrefix: string;
+  numberLabelPrefix: string;
+  roi: NormalizedRoi;
+  isVisible: boolean;
+  onReset: () => void;
+  onToggleVisible: (isVisible: boolean) => void;
+  onNumberChange: (field: RoiField, value: string) => void;
+}) {
+  return (
+    <div className="roi-subsection">
+      <div className="roi-subsection-header">
+        <div className="roi-subsection-title">
+          <strong>{title}</strong>
+          <span>
+            x={roi.x.toFixed(4)} y={roi.y.toFixed(4)} w={roi.w.toFixed(4)} h=
+            {roi.h.toFixed(4)}
+          </span>
+        </div>
+        <div className="roi-subsection-actions">
+          <Button
+            type="button"
+            variant="outline"
+            className="icon-button icon-button--compact roi-action-button"
+            aria-label={`${actionLabelPrefix}リセット`}
+            onClick={onReset}
+          >
+            <RotateCcw className="action-icon" aria-hidden="true" />
+            <span>ROIリセット</span>
+          </Button>
+          <label className="toggle-control roi-visibility-toggle roi-action-button">
+            <input
+              type="checkbox"
+              aria-label={`${actionLabelPrefix}表示`}
+              checked={isVisible}
+              onChange={(event) => onToggleVisible(event.target.checked)}
+            />
+            <span>ROI表示</span>
+          </label>
+        </div>
+      </div>
+      <div className="roi-number-grid" aria-label={`${numberLabelPrefix} numeric settings`}>
+        <label className="roi-number-control">
+          <span>X</span>
+          <input
+            aria-label={`${numberLabelPrefix} X`}
+            type="number"
+            min={0}
+            max={1}
+            step={0.01}
+            value={roi.x.toFixed(4)}
+            onChange={(event) => onNumberChange("x", event.target.value)}
+          />
+        </label>
+        <label className="roi-number-control">
+          <span>Y</span>
+          <input
+            aria-label={`${numberLabelPrefix} Y`}
+            type="number"
+            min={0}
+            max={1}
+            step={0.01}
+            value={roi.y.toFixed(4)}
+            onChange={(event) => onNumberChange("y", event.target.value)}
+          />
+        </label>
+        <label className="roi-number-control">
+          <span>W</span>
+          <input
+            aria-label={`${numberLabelPrefix} W`}
+            type="number"
+            min={MIN_ROI_SIZE}
+            max={1}
+            step={0.01}
+            value={roi.w.toFixed(4)}
+            onChange={(event) => onNumberChange("w", event.target.value)}
+          />
+        </label>
+        <label className="roi-number-control">
+          <span>H</span>
+          <input
+            aria-label={`${numberLabelPrefix} H`}
+            type="number"
+            min={MIN_ROI_SIZE}
+            max={1}
+            step={0.01}
+            value={roi.h.toFixed(4)}
+            onChange={(event) => onNumberChange("h", event.target.value)}
+          />
+        </label>
+      </div>
+    </div>
+  );
+}
+
 function RoiOverlay({
   label,
   roi,
@@ -4871,7 +5211,7 @@ function RoiOverlay({
 }: {
   label: string;
   roi: NormalizedRoi;
-  tone?: "message" | "wait";
+  tone?: "message" | "hud" | "vs";
   onChange: (nextRoi: NormalizedRoi) => void;
 }) {
   const overlayRef = useRef<HTMLDivElement | null>(null);

@@ -97,8 +97,12 @@ describe("battle log export", () => {
         },
         roi: { x: 0.1, y: 0.7, w: 0.8, h: 0.2 },
         roiName: "Battle message ROI",
-        waitRoi: { x: 0.42, y: 0.18, w: 0.18, h: 0.16 },
-        waitRoiName: "Communication wait indicator ROI",
+        opponentHudRoi: { x: 0.55, y: 0.03, w: 0.43, h: 0.14 },
+        opponentHudRoiName: "Opponent HP bar HUD ROI",
+        playerHudRoi: { x: 0.02, y: 0.84, w: 0.46, h: 0.14 },
+        playerHudRoiName: "Player HP bar HUD ROI",
+        vsRoi: { x: 0.34, y: 0.32, w: 0.32, h: 0.32 },
+        vsRoiName: "VS splash ROI",
         ocrMessages: [ocrMessage],
         events: [battleEvent],
         unknowns: [unknownEvent],
@@ -123,7 +127,10 @@ describe("battle log export", () => {
     expect(document.exportedAt).toBe("2026-06-30T00:00:00.000Z");
     expect(document.media.sourceKind).toBe("video-file");
     expect(document.frameEvidence).toHaveLength(1);
-    expect(document.waitIndicatorRoiProfile.roi).toEqual({ x: 0.42, y: 0.18, w: 0.18, h: 0.16 });
+    expect(document.phaseHudRoiProfile.roi).toEqual({ x: 0.55, y: 0.03, w: 0.43, h: 0.14 });
+    expect(document.playerHudRoiProfile.roi).toEqual({ x: 0.02, y: 0.84, w: 0.46, h: 0.14 });
+    expect(document.vsSplashRoiProfile.roi).toEqual({ x: 0.34, y: 0.32, w: 0.32, h: 0.32 });
+    expect(document.waitIndicatorRoiProfile).toBeUndefined();
     expect(document.sampleDiagnostics).toEqual([sampleDiagnostic]);
     expect(document.manualCorrections).toEqual([
       {
@@ -154,8 +161,12 @@ describe("battle log export", () => {
         },
         roi: { x: 0, y: 0, w: 1, h: 1 },
         roiName: "Battle message ROI",
-        waitRoi: { x: 0.42, y: 0.18, w: 0.18, h: 0.16 },
-        waitRoiName: "Communication wait indicator ROI",
+        opponentHudRoi: { x: 0.55, y: 0.03, w: 0.43, h: 0.14 },
+        opponentHudRoiName: "Opponent HP bar HUD ROI",
+        playerHudRoi: { x: 0.02, y: 0.84, w: 0.46, h: 0.14 },
+        playerHudRoiName: "Player HP bar HUD ROI",
+        vsRoi: { x: 0.34, y: 0.32, w: 0.32, h: 0.32 },
+        vsRoiName: "VS splash ROI",
         ocrMessages: [],
         events: [],
         unknowns: [],
@@ -196,8 +207,12 @@ describe("battle log export", () => {
         },
         roi: { x: 0, y: 0, w: 1, h: 1 },
         roiName: "Battle message ROI",
-        waitRoi: { x: 0.42, y: 0.18, w: 0.18, h: 0.16 },
-        waitRoiName: "Communication wait indicator ROI",
+        opponentHudRoi: { x: 0.55, y: 0.03, w: 0.43, h: 0.14 },
+        opponentHudRoiName: "Opponent HP bar HUD ROI",
+        playerHudRoi: { x: 0.02, y: 0.84, w: 0.46, h: 0.14 },
+        playerHudRoiName: "Player HP bar HUD ROI",
+        vsRoi: { x: 0.34, y: 0.32, w: 0.32, h: 0.32 },
+        vsRoiName: "VS splash ROI",
         ocrMessages: [],
         events: [],
         unknowns: [],
@@ -208,7 +223,6 @@ describe("battle log export", () => {
     );
     const olderDocument = { ...document } as Partial<typeof document>;
     delete olderDocument.sampleDiagnostics;
-    delete olderDocument.waitIndicatorRoiProfile;
 
     const result = parseBattleLogJson(JSON.stringify(olderDocument));
 
@@ -216,12 +230,83 @@ describe("battle log export", () => {
       ok: true,
       document: {
         sampleDiagnostics: [],
-        waitIndicatorRoiProfile: { roi: { x: 0.42, y: 0.18, w: 0.18, h: 0.16 } },
+        phaseHudRoiProfile: { roi: { x: 0.55, y: 0.03, w: 0.43, h: 0.14 } },
+        playerHudRoiProfile: { roi: { x: 0.02, y: 0.84, w: 0.46, h: 0.14 } },
+        vsSplashRoiProfile: { roi: { x: 0.34, y: 0.32, w: 0.32, h: 0.32 } },
       },
       warnings: [
-        "wait indicator ROI profileがないため既定の通信待機ROIとして扱います。",
         "sample diagnosticsがないためサンプラー診断なしで読み込みます。",
       ],
+    });
+  });
+
+  it("imports legacy JSON with or without wait ROI profiles", () => {
+    const legacyBase = {
+      schemaVersion: "0.1.0",
+      appVersion: "0.1.0",
+      exportedAt: "2026-06-30T00:00:00.000Z",
+      battle: { id: "battle_test", title: "Legacy battle", startedAt: null },
+      media: {
+        sourceKind: "none",
+        videoLabel: null,
+        audioLabel: null,
+        width: null,
+        height: null,
+        frameRate: null,
+      },
+      roiProfile: {
+        id: "roi_live_message",
+        name: "Battle message ROI",
+        roi: { x: 0, y: 0, w: 1, h: 1 },
+        updatedAt: "2026-06-30T00:00:00.000Z",
+      },
+      ocrMessages: [],
+      events: [],
+      unknowns: [],
+      frameEvidence: [],
+      sampleDiagnostics: [
+        {
+          ...sampleDiagnostic,
+          stage: "waitSampled",
+          imageSignal: {
+            kind: "wait_indicator",
+            roi: { x: 0.42, y: 0.18, w: 0.18, h: 0.16 },
+            score: 0.8,
+            isVisible: true,
+            yellowIconScore: 0.7,
+            whiteTextScore: 0.6,
+            contrastScore: 0.5,
+            yellowPixelRatio: 0.02,
+            whitePixelRatio: 0.03,
+            whiteRowBandScore: 0.6,
+          },
+        },
+      ],
+      manualCorrections: [],
+    };
+    const withWait = {
+      ...legacyBase,
+      waitIndicatorRoiProfile: {
+        id: "roi_wait_indicator",
+        name: "Legacy wait ROI",
+        roi: { x: 0.42, y: 0.18, w: 0.18, h: 0.16 },
+        updatedAt: "2026-06-30T00:00:00.000Z",
+      },
+    };
+
+    expect(parseBattleLogJson(JSON.stringify(legacyBase))).toMatchObject({
+      ok: true,
+      document: {
+        phaseHudRoiProfile: { roi: { x: 0.55, y: 0.03, w: 0.43, h: 0.14 } },
+        sampleDiagnostics: [{ stage: "waitSampled" }],
+      },
+    });
+    expect(parseBattleLogJson(JSON.stringify(withWait))).toMatchObject({
+      ok: true,
+      document: {
+        waitIndicatorRoiProfile: { roi: { x: 0.42, y: 0.18, w: 0.18, h: 0.16 } },
+        sampleDiagnostics: [{ stage: "waitSampled" }],
+      },
     });
   });
 

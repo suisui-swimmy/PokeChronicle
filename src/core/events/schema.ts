@@ -139,6 +139,14 @@ export interface BattleLogFrameEvidence {
 
 export type FrameSampleDiagnosticStage =
   | "sampled"
+  | "hpHudSampled"
+  | "hpHudRose"
+  | "hpHudFell"
+  | "vsSampled"
+  | "vsFell"
+  | "messagePhaseOpened"
+  | "messagePhaseClosed"
+  | "skippedPhase"
   | "waitSampled"
   | "waitRose"
   | "waitFell"
@@ -153,7 +161,7 @@ export type FrameSampleDiagnosticStage =
   | "empty"
   | "error";
 
-export interface FrameImageSignalDiagnostic {
+export interface LegacyWaitIndicatorImageSignalDiagnostic {
   kind: "wait_indicator";
   roi: NormalizedRoi;
   score: number;
@@ -165,6 +173,39 @@ export interface FrameImageSignalDiagnostic {
   whitePixelRatio: number;
   whiteRowBandScore: number;
 }
+
+export interface HpHudImageSignalDiagnostic {
+  kind: "hp_hud";
+  roi: NormalizedRoi;
+  roiLabel: "opponent" | "player";
+  score: number;
+  isVisible: boolean;
+  greenBarScore: number;
+  frameScore: number;
+  nameplateScore: number;
+  darkBandScore: number;
+  greenPixelRatio: number;
+  whitePixelRatio: number;
+  nameplatePixelRatio: number;
+  darkPixelRatio: number;
+}
+
+export interface VsSplashImageSignalDiagnostic {
+  kind: "vs_splash";
+  roi: NormalizedRoi;
+  score: number;
+  isVisible: boolean;
+  purpleScore: number;
+  edgeScore: number;
+  largeComponentScore: number;
+  purplePixelRatio: number;
+  brightPixelRatio: number;
+}
+
+export type FrameImageSignalDiagnostic =
+  | HpHudImageSignalDiagnostic
+  | VsSplashImageSignalDiagnostic
+  | LegacyWaitIndicatorImageSignalDiagnostic;
 
 export interface FrameSampleDiagnostic {
   id: string;
@@ -205,7 +246,10 @@ export interface BattleLogDocument {
   };
   media: BattleLogMediaMetadata;
   roiProfile: BattleLogRoiProfile;
-  waitIndicatorRoiProfile: BattleLogRoiProfile;
+  phaseHudRoiProfile: BattleLogRoiProfile;
+  playerHudRoiProfile: BattleLogRoiProfile;
+  vsSplashRoiProfile: BattleLogRoiProfile;
+  waitIndicatorRoiProfile?: BattleLogRoiProfile;
   ocrMessages: OCRMessage[];
   events: BattleEvent[];
   unknowns: UnknownEvent[];
@@ -238,10 +282,22 @@ export function createEmptyBattleLog(battleId: string): BattleLogDocument {
       roi: { x: 0, y: 0, w: 1, h: 1 },
       updatedAt: new Date(0).toISOString(),
     },
-    waitIndicatorRoiProfile: {
-      id: "roi_wait_indicator_default",
-      name: "Default wait indicator ROI",
-      roi: { x: 0.42, y: 0.18, w: 0.18, h: 0.16 },
+    phaseHudRoiProfile: {
+      id: "roi_phase_hud_default",
+      name: "Default opponent HP bar HUD ROI",
+      roi: { x: 0.55, y: 0.03, w: 0.43, h: 0.14 },
+      updatedAt: new Date(0).toISOString(),
+    },
+    playerHudRoiProfile: {
+      id: "roi_player_hud_default",
+      name: "Default player HP bar HUD ROI",
+      roi: { x: 0.02, y: 0.84, w: 0.46, h: 0.14 },
+      updatedAt: new Date(0).toISOString(),
+    },
+    vsSplashRoiProfile: {
+      id: "roi_vs_splash_default",
+      name: "Default VS splash ROI",
+      roi: { x: 0.34, y: 0.32, w: 0.32, h: 0.32 },
       updatedAt: new Date(0).toISOString(),
     },
     ocrMessages: [],

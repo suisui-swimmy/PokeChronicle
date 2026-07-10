@@ -824,9 +824,14 @@ button:disabled {
   pointer-events: auto;
 }
 
-.roi-box--wait {
-  border-color: #ffd166;
-  background: rgb(255 209 102 / 0.18);
+.roi-box--hud {
+  border-color: #49d8ff;
+  background: rgb(73 216 255 / 0.16);
+}
+
+.roi-box--vs {
+  border-color: #d66cff;
+  background: rgb(214 108 255 / 0.16);
 }
 
 .roi-move {
@@ -856,9 +861,14 @@ button:disabled {
   white-space: nowrap;
 }
 
-.roi-box--wait .roi-move span,
-.roi-box--wait .roi-handle {
-  background: #ffd166;
+.roi-box--hud .roi-move span,
+.roi-box--hud .roi-handle {
+  background: #49d8ff;
+}
+
+.roi-box--vs .roi-move span,
+.roi-box--vs .roi-handle {
+  background: #d66cff;
 }
 
 .roi-handle {
