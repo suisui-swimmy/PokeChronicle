@@ -109,6 +109,11 @@ const MIN_RESOLVED_LOG_PANEL_WIDTH = 180;
 const MAX_RESOLVED_LOG_PANEL_WIDTH = 520;
 const MIN_PREVIEW_PANEL_WIDTH = 360;
 const WORKSPACE_RESIZER_WIDTH = 12;
+const DEFAULT_MANAGEMENT_PANEL_HEIGHT = 320;
+const DEFAULT_MANAGEMENT_TABBAR_HEIGHT = 58;
+const MIN_MANAGEMENT_PANEL_HEIGHT = 0;
+const MAX_MANAGEMENT_PANEL_HEIGHT = 2000;
+const MANAGEMENT_RESIZER_HEIGHT = 12;
 const DEFAULT_AUDIO_VOLUME = 1;
 const HEADER_MEDIA_SETTINGS_STORAGE_KEY = "pokechronicle:header-media-settings:v1";
 const ROI_SETTINGS_STORAGE_KEY = "pokechronicle:roi-settings:v1";
@@ -315,6 +320,11 @@ type ResolvedLogResizeSession = {
   startX: number;
   startWidth: number;
   containerWidth: number | null;
+};
+type ManagementPanelResizeSession = {
+  startY: number;
+  startHeight: number;
+  containerHeight: number | null;
 };
 type InputBadgeState = {
   label: string;
@@ -765,8 +775,32 @@ function clampResolvedLogPanelWidth(width: number, containerWidth: number | null
   return Math.round(clamp(width, minWidth, maxWidth));
 }
 
-function getPositiveWidthOrNull(width: number | undefined) {
-  return width && width > 0 ? width : null;
+function getManagementPanelHeightBounds(containerHeight: number | null) {
+  if (!containerHeight) {
+    return {
+      minHeight: MIN_MANAGEMENT_PANEL_HEIGHT,
+      maxHeight: MAX_MANAGEMENT_PANEL_HEIGHT,
+    };
+  }
+
+  const maxHeightFromContainer = containerHeight - MANAGEMENT_RESIZER_HEIGHT;
+
+  return {
+    minHeight: MIN_MANAGEMENT_PANEL_HEIGHT,
+    maxHeight: Math.max(
+      MIN_MANAGEMENT_PANEL_HEIGHT,
+      Math.min(MAX_MANAGEMENT_PANEL_HEIGHT, maxHeightFromContainer),
+    ),
+  };
+}
+
+function clampManagementPanelHeight(height: number, containerHeight: number | null) {
+  const { minHeight, maxHeight } = getManagementPanelHeightBounds(containerHeight);
+  return Math.round(clamp(height, minHeight, maxHeight));
+}
+
+function getPositiveSizeOrNull(size: number | undefined) {
+  return size && size > 0 ? size : null;
 }
 
 function formatEventType(type: string) {
@@ -1429,6 +1463,8 @@ export function App() {
   const previewColumnRef = useRef<HTMLDivElement | null>(null);
   const resolvedLogPanelRef = useRef<HTMLElement | null>(null);
   const resolvedLogResizeSessionRef = useRef<ResolvedLogResizeSession | null>(null);
+  const managementPanelRef = useRef<HTMLElement | null>(null);
+  const managementPanelResizeSessionRef = useRef<ManagementPanelResizeSession | null>(null);
   const objectUrlRef = useRef<string | null>(null);
   const audioInputStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -1510,6 +1546,9 @@ export function App() {
   const [suppressedTimelineCount, setSuppressedTimelineCount] = useState(0);
   const [resolvedLogPanelWidth, setResolvedLogPanelWidth] = useState<number | null>(null);
   const [isResizingResolvedLogPanel, setIsResizingResolvedLogPanel] = useState(false);
+  const [managementPanelHeight, setManagementPanelHeight] = useState<number | null>(null);
+  const [isResizingManagementPanel, setIsResizingManagementPanel] = useState(false);
+  const [isManagementPanelMaximized, setIsManagementPanelMaximized] = useState(false);
   const [isWorkspaceFullscreen, setIsWorkspaceFullscreen] = useState(false);
   const [activeManagementTab, setActiveManagementTab] = useState<ManagementTab | null>(null);
   const [activeReviewTab, setActiveReviewTab] = useState<ReviewTab>("timeline");
@@ -3070,18 +3109,36 @@ export function App() {
   );
   const captureMainStyle = useMemo(
     () =>
-      resolvedLogPanelWidth === null
+      resolvedLogPanelWidth === null && managementPanelHeight === null
         ? undefined
         : ({
-            "--resolved-log-width": `${resolvedLogPanelWidth}px`,
+            ...(resolvedLogPanelWidth === null
+              ? {}
+              : { "--resolved-log-width": `${resolvedLogPanelWidth}px` }),
+            ...(managementPanelHeight === null
+              ? {}
+              : { "--management-panel-height": `${managementPanelHeight}px` }),
           } as CSSProperties),
-    [resolvedLogPanelWidth],
+    [managementPanelHeight, resolvedLogPanelWidth],
   );
-  const captureMainClassName = `capture-main${
-    isResizingResolvedLogPanel ? " capture-main--resizing" : ""
-  }`;
+  const captureMainClassName = [
+    "capture-main",
+    activeManagementTab || managementPanelHeight !== null
+      ? "capture-main--management-sized"
+      : "",
+    isResizingResolvedLogPanel ? "capture-main--resizing" : "",
+    isResizingManagementPanel ? "capture-main--resizing-management" : "",
+    activeManagementTab && isManagementPanelMaximized
+      ? "capture-main--management-maximized"
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   const resolvedLogPanelWidthValue =
     resolvedLogPanelWidth ?? DEFAULT_RESOLVED_LOG_PANEL_WIDTH;
+  const managementPanelHeightValue =
+    managementPanelHeight ??
+    (activeManagementTab ? DEFAULT_MANAGEMENT_PANEL_HEIGHT : DEFAULT_MANAGEMENT_TABBAR_HEIGHT);
   const updateResolvedLogPanelWidth = useCallback((width: number, containerWidth?: number | null) => {
     const nextContainerWidth =
       containerWidth === undefined
@@ -3089,6 +3146,19 @@ export function App() {
         : containerWidth;
     setResolvedLogPanelWidth(clampResolvedLogPanelWidth(width, nextContainerWidth));
   }, []);
+  const updateManagementPanelHeight = useCallback(
+    (height: number, containerHeight?: number | null) => {
+      const nextContainerHeight =
+        containerHeight === undefined
+          ? (captureMainRef.current?.getBoundingClientRect().height ?? null)
+          : containerHeight;
+      const bounds = getManagementPanelHeightBounds(nextContainerHeight);
+      const nextHeight = Math.round(clamp(height, bounds.minHeight, bounds.maxHeight));
+      setManagementPanelHeight(nextHeight);
+      setIsManagementPanelMaximized(nextHeight >= bounds.maxHeight);
+    },
+    [],
+  );
   const beginResolvedLogResize = useCallback(
     (clientX: number) => {
       const containerRect = captureMainRef.current?.getBoundingClientRect();
@@ -3097,13 +3167,29 @@ export function App() {
         startX: clientX,
         startWidth:
           resolvedLogPanelWidth ??
-          getPositiveWidthOrNull(logPanelRect?.width) ??
+          getPositiveSizeOrNull(logPanelRect?.width) ??
           DEFAULT_RESOLVED_LOG_PANEL_WIDTH,
-        containerWidth: getPositiveWidthOrNull(containerRect?.width),
+        containerWidth: getPositiveSizeOrNull(containerRect?.width),
       };
       setIsResizingResolvedLogPanel(true);
     },
     [resolvedLogPanelWidth],
+  );
+  const beginManagementPanelResize = useCallback(
+    (clientY: number) => {
+      const containerRect = captureMainRef.current?.getBoundingClientRect();
+      const panelRect = managementPanelRef.current?.getBoundingClientRect();
+      managementPanelResizeSessionRef.current = {
+        startY: clientY,
+        startHeight:
+          managementPanelHeight ??
+          getPositiveSizeOrNull(panelRect?.height) ??
+          DEFAULT_MANAGEMENT_PANEL_HEIGHT,
+        containerHeight: getPositiveSizeOrNull(containerRect?.height),
+      };
+      setIsResizingManagementPanel(true);
+    },
+    [managementPanelHeight],
   );
   const handleResolvedLogResizePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -3128,6 +3214,29 @@ export function App() {
     },
     [beginResolvedLogResize],
   );
+  const handleManagementPanelResizePointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0) {
+        return;
+      }
+
+      beginManagementPanelResize(event.clientY);
+      event.currentTarget.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    },
+    [beginManagementPanelResize],
+  );
+  const handleManagementPanelResizeMouseDown = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (event.button !== 0 || managementPanelResizeSessionRef.current) {
+        return;
+      }
+
+      beginManagementPanelResize(event.clientY);
+      event.preventDefault();
+    },
+    [beginManagementPanelResize],
+  );
   const handleResolvedLogResizePointerMove = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
       const resizeSession = resolvedLogResizeSessionRef.current;
@@ -3142,6 +3251,20 @@ export function App() {
     },
     [updateResolvedLogPanelWidth],
   );
+  const handleManagementPanelResizePointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const resizeSession = managementPanelResizeSessionRef.current;
+
+      if (!resizeSession) {
+        return;
+      }
+
+      const nextHeight = resizeSession.startHeight - (event.clientY - resizeSession.startY);
+      updateManagementPanelHeight(nextHeight, resizeSession.containerHeight);
+      event.preventDefault();
+    },
+    [updateManagementPanelHeight],
+  );
   const finishResolvedLogResize = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
@@ -3149,6 +3272,14 @@ export function App() {
 
     resolvedLogResizeSessionRef.current = null;
     setIsResizingResolvedLogPanel(false);
+  }, []);
+  const finishManagementPanelResize = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    managementPanelResizeSessionRef.current = null;
+    setIsResizingManagementPanel(false);
   }, []);
   useEffect(() => {
     if (!isResizingResolvedLogPanel) {
@@ -3178,14 +3309,42 @@ export function App() {
       window.removeEventListener("mouseup", handleWindowMouseUp);
     };
   }, [isResizingResolvedLogPanel, updateResolvedLogPanelWidth]);
+  useEffect(() => {
+    if (!isResizingManagementPanel) {
+      return;
+    }
+
+    const handleWindowMouseMove = (event: MouseEvent) => {
+      const resizeSession = managementPanelResizeSessionRef.current;
+
+      if (!resizeSession) {
+        return;
+      }
+
+      const nextHeight = resizeSession.startHeight - (event.clientY - resizeSession.startY);
+      updateManagementPanelHeight(nextHeight, resizeSession.containerHeight);
+    };
+    const handleWindowMouseUp = () => {
+      managementPanelResizeSessionRef.current = null;
+      setIsResizingManagementPanel(false);
+    };
+
+    window.addEventListener("mousemove", handleWindowMouseMove);
+    window.addEventListener("mouseup", handleWindowMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handleWindowMouseMove);
+      window.removeEventListener("mouseup", handleWindowMouseUp);
+    };
+  }, [isResizingManagementPanel, updateManagementPanelHeight]);
   const handleResolvedLogResizeKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLDivElement>) => {
-      const containerWidth = getPositiveWidthOrNull(
+      const containerWidth = getPositiveSizeOrNull(
         captureMainRef.current?.getBoundingClientRect().width,
       );
       const currentWidth =
         resolvedLogPanelWidth ??
-        getPositiveWidthOrNull(resolvedLogPanelRef.current?.getBoundingClientRect().width) ??
+        getPositiveSizeOrNull(resolvedLogPanelRef.current?.getBoundingClientRect().width) ??
         DEFAULT_RESOLVED_LOG_PANEL_WIDTH;
       const step = event.shiftKey ? RESOLVED_LOG_RESIZE_STEP * 2 : RESOLVED_LOG_RESIZE_STEP;
       const bounds = getResolvedLogPanelWidthBounds(containerWidth);
@@ -3210,12 +3369,51 @@ export function App() {
     },
     [resolvedLogPanelWidth, updateResolvedLogPanelWidth],
   );
+  const handleManagementPanelResizeKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLDivElement>) => {
+      const containerHeight = getPositiveSizeOrNull(
+        captureMainRef.current?.getBoundingClientRect().height,
+      );
+      const currentHeight =
+        managementPanelHeight ??
+        getPositiveSizeOrNull(managementPanelRef.current?.getBoundingClientRect().height) ??
+        DEFAULT_MANAGEMENT_PANEL_HEIGHT;
+      const step = event.shiftKey ? RESOLVED_LOG_RESIZE_STEP * 2 : RESOLVED_LOG_RESIZE_STEP;
+      const bounds = getManagementPanelHeightBounds(containerHeight);
+      let nextHeight: number | null = null;
+
+      if (event.key === "ArrowUp") {
+        nextHeight = currentHeight + step;
+      } else if (event.key === "ArrowDown") {
+        nextHeight = currentHeight - step;
+      } else if (event.key === "Home") {
+        nextHeight = bounds.minHeight;
+      } else if (event.key === "End") {
+        nextHeight = bounds.maxHeight;
+      }
+
+      if (nextHeight === null) {
+        return;
+      }
+
+      updateManagementPanelHeight(nextHeight, containerHeight);
+      event.preventDefault();
+    },
+    [managementPanelHeight, updateManagementPanelHeight],
+  );
   const handleManagementTabClick = useCallback(
     (event: ReactMouseEvent<HTMLButtonElement>, tab: ManagementTab) => {
       event.preventDefault();
-      setActiveManagementTab((currentTab) => (currentTab === tab ? null : tab));
+      if (activeManagementTab === tab) {
+        setActiveManagementTab(null);
+        setManagementPanelHeight(null);
+        setIsManagementPanelMaximized(false);
+        return;
+      }
+
+      setActiveManagementTab(tab);
     },
-    [],
+    [activeManagementTab],
   );
 
   const buildCurrentBattleLogDocument = useCallback(() => {
@@ -3707,7 +3905,29 @@ export function App() {
           onPointerUp={finishResolvedLogResize}
         />
 
-          <section className="management-panel" aria-label="analysis and data management">
+        <div
+          className="management-panel-resizer"
+          role="separator"
+          aria-label="プレビューと下部タブの高さを変更"
+          aria-orientation="horizontal"
+          aria-valuemin={MIN_MANAGEMENT_PANEL_HEIGHT}
+          aria-valuemax={MAX_MANAGEMENT_PANEL_HEIGHT}
+          aria-valuenow={Math.round(managementPanelHeightValue)}
+          tabIndex={0}
+          title="ドラッグでプレビューと下部タブの高さを変更"
+          onKeyDown={handleManagementPanelResizeKeyDown}
+          onMouseDown={handleManagementPanelResizeMouseDown}
+          onPointerCancel={finishManagementPanelResize}
+          onPointerDown={handleManagementPanelResizePointerDown}
+          onPointerMove={handleManagementPanelResizePointerMove}
+          onPointerUp={finishManagementPanelResize}
+        />
+
+          <section
+            ref={managementPanelRef}
+            className="management-panel"
+            aria-label="analysis and data management"
+          >
             <Tabs value={activeManagementTab ?? "closed"} className="management-tabs">
               <div className="management-tabbar">
                 <TabsList className="management-tab-list" variant="line" aria-label="analysis tabs">

@@ -227,6 +227,9 @@ describe("App", () => {
     const workspaceResizer = screen.getByRole("separator", {
       name: "プレビューとログの幅を変更",
     });
+    const managementResizer = screen.getByRole("separator", {
+      name: "プレビューと下部タブの高さを変更",
+    });
     expect(workspaceResizer).toHaveAttribute("aria-orientation", "vertical");
     expect(workspaceResizer).toHaveAttribute("aria-valuenow", "260");
     workspaceResizer.focus();
@@ -246,6 +249,76 @@ describe("App", () => {
       expect.stringContaining("--resolved-log-width: 360px"),
     );
     fireEvent.mouseUp(window);
+    expect(managementResizer).toHaveAttribute("aria-orientation", "horizontal");
+    expect(managementResizer).toHaveAttribute("aria-valuemin", "0");
+    expect(managementResizer).toHaveAttribute("aria-valuenow", "58");
+    await user.click(screen.getByRole("tab", { name: "ログ" }));
+    expect(managementResizer).toHaveAttribute("aria-valuenow", "320");
+    managementResizer.focus();
+    await user.keyboard("{ArrowUp}");
+    expect(managementResizer).toHaveAttribute("aria-valuenow", "344");
+    expect(captureWorkspace).toHaveAttribute(
+      "style",
+      expect.stringContaining("--management-panel-height: 344px"),
+    );
+    await user.keyboard("{ArrowDown}");
+    expect(managementResizer).toHaveAttribute("aria-valuenow", "320");
+    fireEvent.mouseDown(managementResizer, { button: 0, clientY: 720 });
+    fireEvent.mouseMove(window, { clientY: 620 });
+    expect(managementResizer).toHaveAttribute("aria-valuenow", "420");
+    expect(captureWorkspace).toHaveAttribute(
+      "style",
+      expect.stringContaining("--management-panel-height: 420px"),
+    );
+    fireEvent.mouseUp(window);
+    await user.keyboard("{Home}");
+    expect(managementResizer).toHaveAttribute("aria-valuenow", "0");
+    expect(captureWorkspace).toHaveAttribute(
+      "style",
+      expect.stringContaining("--management-panel-height: 0px"),
+    );
+    await user.keyboard("{ArrowUp}");
+    expect(managementResizer).toHaveAttribute("aria-valuenow", "24");
+    expect(captureWorkspace).toHaveAttribute(
+      "style",
+      expect.stringContaining("--management-panel-height: 24px"),
+    );
+    vi.spyOn(captureWorkspace, "getBoundingClientRect").mockReturnValue({
+      bottom: 1080,
+      height: 1022,
+      left: 0,
+      right: 1920,
+      top: 58,
+      width: 1920,
+      x: 0,
+      y: 58,
+      toJSON: () => ({}),
+    } as DOMRect);
+    await user.keyboard("{End}");
+    expect(managementResizer).toHaveAttribute("aria-valuenow", "1010");
+    expect(captureWorkspace).toHaveAttribute(
+      "style",
+      expect.stringContaining("--management-panel-height: 1010px"),
+    );
+    await user.click(screen.getByRole("tab", { name: "ログ" }));
+    expect(screen.getByRole("tab", { name: "ログ" })).toHaveAttribute("aria-selected", "false");
+    expect(managementResizer).toHaveAttribute("aria-valuenow", "58");
+    expect(captureWorkspace.getAttribute("style") ?? "").not.toContain(
+      "--management-panel-height",
+    );
+    managementResizer.focus();
+    await user.keyboard("{Home}");
+    expect(managementResizer).toHaveAttribute("aria-valuenow", "0");
+    expect(captureWorkspace).toHaveAttribute(
+      "style",
+      expect.stringContaining("--management-panel-height: 0px"),
+    );
+    await user.keyboard("{ArrowUp}");
+    expect(managementResizer).toHaveAttribute("aria-valuenow", "24");
+    expect(captureWorkspace).toHaveAttribute(
+      "style",
+      expect.stringContaining("--management-panel-height: 24px"),
+    );
     expect(screen.getByLabelText("解決済みログ")).toBeInTheDocument();
     expect(within(screen.getByLabelText("resolved text log")).getByText("解決ログ空")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "レビュー" })).not.toBeInTheDocument();

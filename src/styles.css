@@ -394,11 +394,14 @@ button:disabled {
 .capture-main {
   --resolved-log-width: clamp(220px, 22vw, 320px);
   --workspace-resizer-width: 12px;
+  --management-panel-height: 320px;
+  --management-resizer-height: 12px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--workspace-resizer-width) var(--resolved-log-width);
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) var(--management-resizer-height) auto;
   grid-template-areas:
     "preview resizer log"
+    "management-resizer management-resizer management-resizer"
     "management management management";
   gap: 0;
   height: 100%;
@@ -406,9 +409,28 @@ button:disabled {
   overflow: hidden;
 }
 
+.capture-main--management-sized {
+  grid-template-rows:
+    minmax(0, 1fr)
+    var(--management-resizer-height)
+    minmax(0, var(--management-panel-height));
+}
+
 .capture-main--resizing {
   cursor: ew-resize;
   user-select: none;
+}
+
+.capture-main--resizing-management {
+  cursor: ns-resize;
+  user-select: none;
+}
+
+.capture-main--management-maximized .preview-column,
+.capture-main--management-maximized .workspace-resizer,
+.capture-main--management-maximized .log-panel {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .preview-column {
@@ -524,17 +546,73 @@ button:disabled {
   outline-offset: -2px;
 }
 
+.management-panel-resizer {
+  grid-area: management-resizer;
+  position: relative;
+  z-index: 3;
+  display: block;
+  min-width: 0;
+  min-height: var(--management-resizer-height);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: rgb(15 14 23 / 0.98);
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.management-panel-resizer::before,
+.management-panel-resizer::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.management-panel-resizer::before {
+  top: 5px;
+  height: 1px;
+  background: var(--border-soft);
+}
+
+.management-panel-resizer::after {
+  top: 5px;
+  height: 1px;
+  opacity: 0;
+  background: rgb(255 137 6 / 0.74);
+  transition: opacity 120ms ease;
+}
+
+.management-panel-resizer:hover::before,
+.management-panel-resizer:focus-visible::before,
+.capture-main--resizing-management .management-panel-resizer::before {
+  background: rgb(255 137 6 / 0.64);
+}
+
+.management-panel-resizer:hover::after,
+.management-panel-resizer:focus-visible::after,
+.capture-main--resizing-management .management-panel-resizer::after {
+  opacity: 1;
+}
+
+.management-panel-resizer:focus-visible {
+  outline: 2px solid rgb(255 137 6 / 0.7);
+  outline-offset: -2px;
+}
+
 .management-panel {
   grid-area: management;
   display: grid;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border-top: 1px solid var(--border-soft);
+  border-top: 0;
 }
 
 .management-tabs {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 0;
   min-width: 0;
   min-height: 0;
@@ -2098,7 +2176,12 @@ button:disabled {
     overflow: visible;
   }
 
-  .workspace-resizer {
+  .capture-main--management-sized {
+    grid-template-rows: auto minmax(260px, 42dvh) auto;
+  }
+
+  .workspace-resizer,
+  .management-panel-resizer {
     display: none;
   }
 
