@@ -97,12 +97,14 @@ The review workspace can export and import a schema-versioned Battle Log JSON do
 - media metadata
 - ROI profile
 - raw OCR messages
+- 最大3件のOCR認識候補、PSM、parse結果、最終選択理由
 - parsed events
 - unknown messages
+- バトルHUD/VSのphase検出集計と最大64件のphase遷移
 - bounded frame/crop evidence
 - manual corrections derived from unknown review notes and reviewed status
 
-The app validates `schemaVersion` on import and restores the review state on the current page. The streamlined MVP UI treats Battle Log JSON as the explicit durable handoff; it does not automatically save imported logs into IndexedDB. This import path is only for PokeChronicle Battle Logs.
+The app validates `schemaVersion` on import and restores the review state on the current page. `recognitionCandidates` やphase集計を持たない旧JSON、旧 `hp_hud` / wait系diagnosticsも読み込み可能だが、新しいruntime判定には復元しない。The streamlined MVP UI treats Battle Log JSON as the explicit durable handoff; it does not automatically save imported logs into IndexedDB. This import path is only for PokeChronicle Battle Logs.
 
 Events and unknown messages can also be exported as CSV. Unknown CSV includes manual review notes when present.
 

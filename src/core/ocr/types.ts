@@ -13,7 +13,17 @@ export interface OCRResult {
   confidence: number | null;
 }
 
+export type OCRPageSegMode = "single_block" | "single_line" | "sparse_text";
+
+export interface OCRRecognizeOptions {
+  pageSegMode?: OCRPageSegMode;
+}
+
 export interface OCRProvider {
-  recognize(image: OCRImageInput): Promise<OCRResult>;
+  recognize(
+    image: OCRImageInput,
+    options?: OCRRecognizeOptions,
+    jobId?: string,
+  ): Promise<OCRResult>;
   terminate?(): Promise<void>;
 }

@@ -1,14 +1,16 @@
-export interface HpHudSignal {
+export type BattleHudSide = "opponent" | "player";
+
+export interface BattleHudSignal {
   score: number;
   isVisible: boolean;
-  greenBarScore: number;
+  plateScore: number;
   frameScore: number;
-  nameplateScore: number;
   darkBandScore: number;
-  greenPixelRatio: number;
+  hpBandScore: number;
+  platePixelRatio: number;
   whitePixelRatio: number;
-  nameplatePixelRatio: number;
   darkPixelRatio: number;
+  hpBandPixelRatio: number;
 }
 
 export interface VsSplashSignal {
@@ -21,9 +23,10 @@ export interface VsSplashSignal {
   brightPixelRatio: number;
 }
 
-const HP_HUD_VISIBLE_SCORE = 0.56;
-const HP_HUD_MIN_GREEN_SCORE = 0.40;
-const HP_HUD_MIN_STRUCTURE_SCORE = 0.20;
+const BATTLE_HUD_VISIBLE_SCORE = 0.52;
+const BATTLE_HUD_MIN_PLATE_SCORE = 0.38;
+const BATTLE_HUD_MIN_FRAME_SCORE = 0.12;
+const BATTLE_HUD_MIN_DARK_SCORE = 0.12;
 const VS_SPLASH_VISIBLE_SCORE = 0.58;
 const VS_SPLASH_MIN_PURPLE_SCORE = 0.34;
 const VS_SPLASH_MIN_COMPONENT_SCORE = 0.34;
@@ -55,40 +58,58 @@ function getSaturation(red: number, green: number, blue: number) {
   return (max - min) / max;
 }
 
-function isHpGreenPixel(red: number, green: number, blue: number) {
+function isOpponentPlatePixel(red: number, green: number, blue: number) {
   const luminance = getLuminance(red, green, blue);
   const saturation = getSaturation(red, green, blue);
 
   return (
-    luminance >= 88 &&
-    saturation >= 0.52 &&
-    green >= 138 &&
-    red <= 175 &&
-    blue <= 145 &&
-    green >= red + 34 &&
-    green >= blue + 42
+    luminance >= 48 &&
+    saturation >= 0.42 &&
+    red >= 128 &&
+    red >= green + 42 &&
+    blue >= 42
   );
+}
+
+function isPlayerPlatePixel(red: number, green: number, blue: number) {
+  const luminance = getLuminance(red, green, blue);
+  const saturation = getSaturation(red, green, blue);
+
+  return (
+    luminance >= 38 &&
+    saturation >= 0.38 &&
+    blue >= 102 &&
+    blue >= green + 30 &&
+    blue >= red + 28 &&
+    red >= 42
+  );
+}
+
+function isPlatePixel(side: BattleHudSide, red: number, green: number, blue: number) {
+  return side === "opponent"
+    ? isOpponentPlatePixel(red, green, blue)
+    : isPlayerPlatePixel(red, green, blue);
 }
 
 function isWhiteFramePixel(red: number, green: number, blue: number) {
   const luminance = getLuminance(red, green, blue);
   const saturation = getSaturation(red, green, blue);
 
-  return luminance >= 182 && saturation <= 0.26 && Math.abs(red - green) <= 42;
-}
-
-function isNameplatePixel(red: number, green: number, blue: number) {
-  const saturation = getSaturation(red, green, blue);
-  const luminance = getLuminance(red, green, blue);
-  const isGreen = isHpGreenPixel(red, green, blue);
-  const isPinkOrRed = red >= 128 && red >= green + 32 && blue >= 52;
-  const isPurpleOrBlue = blue >= 112 && red >= 74 && blue >= green + 28;
-
-  return !isGreen && luminance >= 44 && saturation >= 0.38 && (isPinkOrRed || isPurpleOrBlue);
+  return luminance >= 180 && saturation <= 0.3 && Math.abs(red - green) <= 46;
 }
 
 function isDarkHudPixel(red: number, green: number, blue: number) {
-  return getLuminance(red, green, blue) <= 72;
+  return getLuminance(red, green, blue) <= 76;
+}
+
+function isHpBandPixel(red: number, green: number, blue: number) {
+  const luminance = getLuminance(red, green, blue);
+  const saturation = getSaturation(red, green, blue);
+  const vividGreen = green >= 128 && green >= red + 12 && green >= blue + 28;
+  const vividYellowOrOrange = red >= 145 && green >= 78 && red >= blue + 54;
+  const vividRed = red >= 150 && red >= green + 48 && red >= blue + 48;
+
+  return luminance >= 70 && saturation >= 0.46 && (vividGreen || vividYellowOrOrange || vividRed);
 }
 
 function isVsPurplePixel(red: number, green: number, blue: number) {
@@ -109,11 +130,15 @@ function isVsBrightPixel(red: number, green: number, blue: number) {
   const luminance = getLuminance(red, green, blue);
   const saturation = getSaturation(red, green, blue);
 
-  return luminance >= 138 && saturation >= 0.30 && red >= 125 && blue >= 135;
+  return luminance >= 138 && saturation >= 0.3 && red >= 125 && blue >= 135;
 }
 
-function createHorizontalBandScore(rowCounts: readonly number[], width: number) {
-  const threshold = Math.max(2, Math.ceil(width * 0.16));
+function createHorizontalBandScore(
+  rowCounts: readonly number[],
+  width: number,
+  minRowCoverage = 0.16,
+) {
+  const threshold = Math.max(2, Math.ceil(width * minRowCoverage));
   let strongestRows = 0;
 
   for (const count of rowCounts) {
@@ -125,7 +150,11 @@ function createHorizontalBandScore(rowCounts: readonly number[], width: number) 
   return scoreRange(strongestRows / Math.max(1, rowCounts.length), 0.06, 0.24);
 }
 
-function createLargeAreaScore(rowCounts: readonly number[], columnCounts: readonly number[], area: number) {
+function createLargeAreaScore(
+  rowCounts: readonly number[],
+  columnCounts: readonly number[],
+  area: number,
+) {
   const rowThreshold = Math.max(2, Math.ceil(columnCounts.length * 0.08));
   const columnThreshold = Math.max(2, Math.ceil(rowCounts.length * 0.08));
   const activeRows = rowCounts.filter((count) => count >= rowThreshold).length;
@@ -137,17 +166,22 @@ function createLargeAreaScore(rowCounts: readonly number[], columnCounts: readon
   return clamp01(scoreRange(coverageScore, 0.18, 0.58) * 0.72 + scoreRange(area, 0.08, 0.34) * 0.28);
 }
 
-export function analyzeHpHudImage(imageData: ImageData): HpHudSignal {
+export function analyzeBattleHudImage(
+  imageData: ImageData,
+  side: BattleHudSide,
+): BattleHudSignal {
   const { data, width, height } = imageData;
   const totalPixels = Math.max(1, width * height);
-  const topLimit = Math.max(1, Math.floor(height * 0.54));
+  const plateLimit = Math.max(1, Math.floor(height * 0.62));
   const lowerStart = Math.min(height - 1, Math.floor(height * 0.32));
-  const greenRows = new Array(height).fill(0) as number[];
-  let greenPixels = 0;
+  const hpStart = Math.min(height - 1, Math.floor(height * 0.46));
+  const plateRows = new Array(plateLimit).fill(0) as number[];
+  const hpRows = new Array(Math.max(1, height - hpStart)).fill(0) as number[];
+  let platePixels = 0;
   let whitePixels = 0;
-  let nameplatePixels = 0;
   let darkPixels = 0;
   let lowerPixels = 0;
+  let hpBandPixels = 0;
 
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
@@ -156,17 +190,13 @@ export function analyzeHpHudImage(imageData: ImageData): HpHudSignal {
       const green = data[index + 1] ?? 0;
       const blue = data[index + 2] ?? 0;
 
-      if (isHpGreenPixel(red, green, blue)) {
-        greenPixels += 1;
-        greenRows[y] += 1;
+      if (y < plateLimit && isPlatePixel(side, red, green, blue)) {
+        platePixels += 1;
+        plateRows[y] += 1;
       }
 
       if (isWhiteFramePixel(red, green, blue)) {
         whitePixels += 1;
-      }
-
-      if (y < topLimit && isNameplatePixel(red, green, blue)) {
-        nameplatePixels += 1;
       }
 
       if (y >= lowerStart) {
@@ -176,39 +206,47 @@ export function analyzeHpHudImage(imageData: ImageData): HpHudSignal {
           darkPixels += 1;
         }
       }
+
+      if (y >= hpStart && isHpBandPixel(red, green, blue)) {
+        hpBandPixels += 1;
+        hpRows[y - hpStart] += 1;
+      }
     }
   }
 
-  const greenPixelRatio = greenPixels / totalPixels;
+  const platePixelRatio = platePixels / Math.max(1, width * plateLimit);
   const whitePixelRatio = whitePixels / totalPixels;
-  const nameplatePixelRatio = nameplatePixels / Math.max(1, width * topLimit);
   const darkPixelRatio = darkPixels / Math.max(1, lowerPixels);
-  const greenBandScore = createHorizontalBandScore(greenRows, width);
-  const greenRatioScore = scoreRange(greenPixelRatio, 0.012, 0.105);
-  const greenBarScore = clamp01(greenBandScore * 0.62 + greenRatioScore * 0.38);
-  const frameScore = scoreRange(whitePixelRatio, 0.010, 0.095);
-  const nameplateScore = scoreRange(nameplatePixelRatio, 0.040, 0.255);
-  const darkBandScore = scoreRange(darkPixelRatio, 0.22, 0.72);
-  const score = clamp01(
-    greenBarScore * 0.46 + frameScore * 0.20 + nameplateScore * 0.22 + darkBandScore * 0.12,
+  const hpBandPixelRatio = hpBandPixels / Math.max(1, width * (height - hpStart));
+  const plateBandScore = createHorizontalBandScore(plateRows, width, 0.2);
+  const plateRatioScore = scoreRange(platePixelRatio, 0.035, 0.28);
+  const plateScore = clamp01(plateBandScore * 0.68 + plateRatioScore * 0.32);
+  const frameScore = scoreRange(whitePixelRatio, 0.008, 0.075);
+  const darkBandScore = scoreRange(darkPixelRatio, 0.16, 0.68);
+  const hpBandScore = clamp01(
+    createHorizontalBandScore(hpRows, width, 0.13) * 0.7 +
+      scoreRange(hpBandPixelRatio, 0.008, 0.12) * 0.3,
   );
-  const structureScore = Math.max(frameScore, nameplateScore);
+  const score = clamp01(
+    plateScore * 0.5 + frameScore * 0.24 + darkBandScore * 0.2 + hpBandScore * 0.06,
+  );
   const isVisible =
-    score >= HP_HUD_VISIBLE_SCORE &&
-    greenBarScore >= HP_HUD_MIN_GREEN_SCORE &&
-    structureScore >= HP_HUD_MIN_STRUCTURE_SCORE;
+    score >= BATTLE_HUD_VISIBLE_SCORE &&
+    plateScore >= BATTLE_HUD_MIN_PLATE_SCORE &&
+    frameScore >= BATTLE_HUD_MIN_FRAME_SCORE &&
+    darkBandScore >= BATTLE_HUD_MIN_DARK_SCORE;
 
   return {
     score,
     isVisible,
-    greenBarScore,
+    plateScore,
     frameScore,
-    nameplateScore,
     darkBandScore,
-    greenPixelRatio,
+    hpBandScore,
+    platePixelRatio,
     whitePixelRatio,
-    nameplatePixelRatio,
     darkPixelRatio,
+    hpBandPixelRatio,
   };
 }
 
@@ -251,10 +289,10 @@ export function analyzeVsSplashImage(imageData: ImageData): VsSplashSignal {
 
   const purplePixelRatio = purplePixels / totalPixels;
   const brightPixelRatio = brightPixels / totalPixels;
-  const purpleScore = scoreRange(purplePixelRatio, 0.050, 0.270);
-  const edgeScore = scoreRange(contrastEdges / totalPixels, 0.030, 0.180);
+  const purpleScore = scoreRange(purplePixelRatio, 0.05, 0.27);
+  const edgeScore = scoreRange(contrastEdges / totalPixels, 0.03, 0.18);
   const largeComponentScore = createLargeAreaScore(rowCounts, columnCounts, purplePixelRatio);
-  const brightScore = scoreRange(brightPixelRatio, 0.020, 0.160);
+  const brightScore = scoreRange(brightPixelRatio, 0.02, 0.16);
   const score = clamp01(
     purpleScore * 0.42 + largeComponentScore * 0.34 + edgeScore * 0.16 + brightScore * 0.08,
   );

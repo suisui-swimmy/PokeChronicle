@@ -3,6 +3,7 @@ import type {
   NormalizedRoi,
   OCRLine,
   OCRMessage,
+  OCRRecognitionCandidateTrace,
   UnknownEvent,
 } from "./schema";
 import { getParsedBattleEvents, type BattleMessageParseResult } from "../parser/seedParser";
@@ -23,6 +24,7 @@ export interface TimelineObservationInput {
   recentConstrainedCandidates?: readonly TimelineConstrainedCandidateRecord[];
   recentAcceptedEvents?: readonly TimelineAcceptedEventRecord[];
   candidatePromotionWindowMs?: number;
+  recognitionCandidates?: readonly OCRRecognitionCandidateTrace[];
 }
 
 export interface TimelineDeduplicationRecord {
@@ -540,6 +542,9 @@ export function createTimelineObservation(input: TimelineObservationInput): Time
     frameIndex: input.frameIndex,
     roi: input.roi,
     lines: [...input.lines],
+    recognitionCandidates: input.recognitionCandidates
+      ? [...input.recognitionCandidates]
+      : undefined,
   };
   const promotedCandidate = getPromotedConstrainedCandidate(input);
   const events = createBattleEvents(input, promotedCandidate);

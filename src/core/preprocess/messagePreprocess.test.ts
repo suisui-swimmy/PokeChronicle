@@ -320,10 +320,61 @@ describe("message line band detection", () => {
       "full",
       "top-1-lines",
       "top-2-lines",
+      "line-1",
+      "line-2",
     ]);
     expect(variants[1]).toMatchObject({ y: 1, lineCount: 1 });
     expect(variants[2].height).toBeLessThan(processed.height);
     expect(variants[2].metrics.foregroundPixelRatio).toBeGreaterThan(0);
+  });
+
+  it("merges a small ruby band into the following main line and creates suppressed fallbacks", () => {
+    const processed = createSolidProcessedImage(48, 32, 0);
+
+    drawProcessedTextRow(processed, 2, 255, 16, 26);
+    drawProcessedTextRow(processed, 3, 255, 16, 26);
+    for (let y = 8; y <= 13; y += 1) {
+      drawProcessedTextRow(processed, y, 255, 3, 31);
+    }
+    for (let y = 21; y <= 26; y += 1) {
+      drawProcessedTextRow(processed, y, 255, 3, 31);
+    }
+
+    const bands = detectMessageLineBands(processed, defaultOptions);
+    const variants = createMessageLineCropVariants(processed, defaultOptions);
+    const primaryLine = variants.find((variant) => variant.id === "line-1");
+    const suppressedLine = variants.find(
+      (variant) => variant.id === "annotation-suppressed-line-1",
+    );
+
+    expect(bands).toHaveLength(2);
+    expect(primaryLine?.metrics.foregroundPixelCount).toBeGreaterThan(
+      suppressedLine?.metrics.foregroundPixelCount ?? Number.POSITIVE_INFINITY,
+    );
+    expect(variants.map((variant) => variant.id)).toContain(
+      "annotation-suppressed-top-2-lines",
+    );
+    expect(suppressedLine?.metrics.foregroundPixelCount).toBeGreaterThan(80);
+  });
+
+  it("keeps nearby dakuten-like pixels in the main line instead of suppressing them", () => {
+    const processed = createSolidProcessedImage(48, 24, 0);
+
+    setProcessedPixel(processed, 12, 5, 255);
+    setProcessedPixel(processed, 14, 5, 255);
+    setProcessedPixel(processed, 12, 6, 255);
+    setProcessedPixel(processed, 14, 6, 255);
+    for (let y = 8; y <= 14; y += 1) {
+      drawProcessedTextRow(processed, y, 255, 3, 31);
+    }
+
+    const variants = createMessageLineCropVariants(processed, defaultOptions);
+
+    expect(variants.map((variant) => variant.id)).not.toContain(
+      "annotation-suppressed-line-1",
+    );
+    expect(variants.find((variant) => variant.id === "line-1")?.metrics.foregroundPixelCount)
+      .toBeGreaterThan(120);
   });
 
   it("filters tiny isolated foreground noise out of line bands", () => {
@@ -365,7 +416,7 @@ describe("message line band detection", () => {
       drawProcessedTextRow(processed, 5, variant.foreground);
 
       expect(detectMessageLineBands(processed, variant.options)).toHaveLength(1);
-      expect(createMessageLineCropVariants(processed, variant.options)).toHaveLength(2);
+      expect(createMessageLineCropVariants(processed, variant.options)).toHaveLength(3);
     }
   });
 });

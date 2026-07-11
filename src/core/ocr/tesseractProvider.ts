@@ -1,5 +1,11 @@
 import Tesseract from "tesseract.js";
-import type { OCRImageInput, OCRProvider, OCRResult } from "./types";
+import type {
+  OCRImageInput,
+  OCRPageSegMode,
+  OCRProvider,
+  OCRRecognizeOptions,
+  OCRResult,
+} from "./types";
 import type { TesseractWorkerConfig } from "./tesseractConfig";
 
 type TesseractLine = Tesseract.Line;
@@ -8,6 +14,12 @@ type TesseractLogger = Tesseract.WorkerOptions["logger"];
 export interface TesseractOCRProviderOptions extends TesseractWorkerConfig {
   logger?: TesseractLogger;
 }
+
+const PAGE_SEG_MODE_BY_ID: Record<OCRPageSegMode, Tesseract.PSM> = {
+  single_block: Tesseract.PSM.SINGLE_BLOCK,
+  single_line: Tesseract.PSM.SINGLE_LINE,
+  sparse_text: Tesseract.PSM.SPARSE_TEXT,
+};
 
 function toUnitConfidence(confidence: number | null | undefined) {
   if (typeof confidence !== "number" || !Number.isFinite(confidence)) {
@@ -45,8 +57,16 @@ export class TesseractOCRProvider implements OCRProvider {
 
   constructor(private readonly options: TesseractOCRProviderOptions) {}
 
-  async recognize(image: OCRImageInput, jobId?: string): Promise<OCRResult> {
+  async recognize(
+    image: OCRImageInput,
+    options: OCRRecognizeOptions = {},
+    jobId?: string,
+  ): Promise<OCRResult> {
     const worker = await this.getWorker();
+    await worker.setParameters({
+      preserve_interword_spaces: "1",
+      tessedit_pageseg_mode: PAGE_SEG_MODE_BY_ID[options.pageSegMode ?? "single_block"],
+    });
     const result = await worker.recognize(
       image as Tesseract.ImageLike,
       undefined,
@@ -103,11 +123,6 @@ export class TesseractOCRProvider implements OCRProvider {
       Tesseract.OEM.LSTM_ONLY,
       workerOptions,
     );
-
-    await worker.setParameters({
-      preserve_interword_spaces: "1",
-      tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
-    });
 
     return worker;
   }

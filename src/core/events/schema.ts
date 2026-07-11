@@ -62,6 +62,22 @@ export interface OCRLine {
   bbox: { x: number; y: number; width: number; height: number } | null;
 }
 
+export interface OCRRecognitionCandidateTrace {
+  id: string;
+  variantId: string;
+  strategy: "block" | "linewise" | "sparse";
+  pageSegModes: Array<"single_block" | "single_line" | "sparse_text">;
+  rawText: string;
+  confidence: number | null;
+  lineCount: number;
+  parseStatus: "event" | "unknown";
+  eventSignatures: string[];
+  score: number;
+  selected: boolean;
+  selectionReason: string | null;
+  durationMs: number;
+}
+
 export interface OCRMessage {
   id: string;
   battleId: string;
@@ -73,6 +89,7 @@ export interface OCRMessage {
   frameIndex: number | null;
   roi: NormalizedRoi;
   lines: OCRLine[];
+  recognitionCandidates?: OCRRecognitionCandidateTrace[];
 }
 
 export interface BattleEvent {
@@ -139,6 +156,9 @@ export interface BattleLogFrameEvidence {
 
 export type FrameSampleDiagnosticStage =
   | "sampled"
+  | "battleHudSampled"
+  | "battleHudRose"
+  | "battleHudFell"
   | "hpHudSampled"
   | "hpHudRose"
   | "hpHudFell"
@@ -154,6 +174,10 @@ export type FrameSampleDiagnosticStage =
   | "messageWatchExpired"
   | "messageWatchEnded"
   | "ocrQueued"
+  | "ocrRetryQueued"
+  | "ocrDeferred"
+  | "ocrCandidateSelected"
+  | "ocrCandidateConflict"
   | "skippedBusy"
   | "skippedPreprocess"
   | "skippedDensity"
@@ -190,6 +214,22 @@ export interface HpHudImageSignalDiagnostic {
   darkPixelRatio: number;
 }
 
+export interface BattleHudImageSignalDiagnostic {
+  kind: "battle_hud";
+  roi: NormalizedRoi;
+  roiLabel: "opponent" | "player";
+  score: number;
+  isVisible: boolean;
+  plateScore: number;
+  frameScore: number;
+  darkBandScore: number;
+  hpBandScore: number;
+  platePixelRatio: number;
+  whitePixelRatio: number;
+  darkPixelRatio: number;
+  hpBandPixelRatio: number;
+}
+
 export interface VsSplashImageSignalDiagnostic {
   kind: "vs_splash";
   roi: NormalizedRoi;
@@ -203,6 +243,7 @@ export interface VsSplashImageSignalDiagnostic {
 }
 
 export type FrameImageSignalDiagnostic =
+  | BattleHudImageSignalDiagnostic
   | HpHudImageSignalDiagnostic
   | VsSplashImageSignalDiagnostic
   | LegacyWaitIndicatorImageSignalDiagnostic;
@@ -222,7 +263,68 @@ export interface FrameSampleDiagnostic {
   ocrJobId: string | null;
   ocrConfidence: number | null;
   lineCount: number | null;
+  ocrCandidateId?: string | null;
+  ocrCandidateCount?: number | null;
+  ocrDurationMs?: number | null;
+  selectionReason?: string | null;
   imageSignal?: FrameImageSignalDiagnostic | null;
+}
+
+export interface PhaseImageSignalSummary {
+  sampleCount: number;
+  visibleCount: number;
+  scoreTotal: number;
+  maxScore: number;
+}
+
+export interface PhaseDetectionSummary {
+  opponentHud: PhaseImageSignalSummary;
+  playerHud: PhaseImageSignalSummary;
+  vsSplash: PhaseImageSignalSummary;
+  transitionCounts: {
+    battleHudRose: number;
+    battleHudFell: number;
+    vsFell: number;
+    messagePhaseOpened: number;
+    messagePhaseClosed: number;
+  };
+}
+
+export type PhaseTransitionStage =
+  | "battleHudRose"
+  | "battleHudFell"
+  | "vsFell"
+  | "messagePhaseOpened"
+  | "messagePhaseClosed";
+
+export interface PhaseTransitionDiagnostic {
+  id: string;
+  frameIndex: number;
+  timestampMs: number;
+  stage: PhaseTransitionStage;
+  detail: string;
+}
+
+export function createEmptyPhaseDetectionSummary(): PhaseDetectionSummary {
+  const createSignalSummary = (): PhaseImageSignalSummary => ({
+    sampleCount: 0,
+    visibleCount: 0,
+    scoreTotal: 0,
+    maxScore: 0,
+  });
+
+  return {
+    opponentHud: createSignalSummary(),
+    playerHud: createSignalSummary(),
+    vsSplash: createSignalSummary(),
+    transitionCounts: {
+      battleHudRose: 0,
+      battleHudFell: 0,
+      vsFell: 0,
+      messagePhaseOpened: 0,
+      messagePhaseClosed: 0,
+    },
+  };
 }
 
 export interface ManualCorrection {
@@ -255,6 +357,8 @@ export interface BattleLogDocument {
   unknowns: UnknownEvent[];
   frameEvidence: BattleLogFrameEvidence[];
   sampleDiagnostics: FrameSampleDiagnostic[];
+  phaseDetectionSummary: PhaseDetectionSummary;
+  phaseTransitions: PhaseTransitionDiagnostic[];
   manualCorrections: ManualCorrection[];
 }
 
@@ -284,13 +388,13 @@ export function createEmptyBattleLog(battleId: string): BattleLogDocument {
     },
     phaseHudRoiProfile: {
       id: "roi_phase_hud_default",
-      name: "Default opponent HP bar HUD ROI",
+      name: "Default opponent battle HUD ROI",
       roi: { x: 0.55, y: 0.03, w: 0.43, h: 0.14 },
       updatedAt: new Date(0).toISOString(),
     },
     playerHudRoiProfile: {
       id: "roi_player_hud_default",
-      name: "Default player HP bar HUD ROI",
+      name: "Default player battle HUD ROI",
       roi: { x: 0.02, y: 0.84, w: 0.46, h: 0.14 },
       updatedAt: new Date(0).toISOString(),
     },
@@ -305,6 +409,8 @@ export function createEmptyBattleLog(battleId: string): BattleLogDocument {
     unknowns: [],
     frameEvidence: [],
     sampleDiagnostics: [],
+    phaseDetectionSummary: createEmptyPhaseDetectionSummary(),
+    phaseTransitions: [],
     manualCorrections: [],
   };
 }

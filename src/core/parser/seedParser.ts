@@ -1329,6 +1329,42 @@ function splitMoveMessage(matchText: string) {
   return candidates;
 }
 
+function hasUnsafeFuzzyMoveSuffix(moveText: string, moveMatch: DictionaryMatch) {
+  if (moveMatch.method === "exact") {
+    return false;
+  }
+
+  return /(?:から|まで|より|って|と|で|を|に|が|は|へ)$/u.test(moveText);
+}
+
+function guardUnsafeMoveSuffix(result: EventParseResult): BattleMessageParseResult {
+  const hasUnsafeMove = getParsedBattleEvents(result).some((event) => {
+    if (event.type !== "move" || !event.move) {
+      return false;
+    }
+
+    const resolvedMoveText = createOcrMatchText(event.move);
+    const sourceEndsWithResolvedMove =
+      resolvedMoveText.length > 0 && result.matchText.endsWith(resolvedMoveText);
+
+    return (
+      !sourceEndsWithResolvedMove &&
+      /(?:から|まで|より|って|と|で|を|に|が|は|へ)$/u.test(result.matchText)
+    );
+  });
+
+  if (!hasUnsafeMove) {
+    return result;
+  }
+
+  return createUnknownResult(
+    result.rawText,
+    result.normalizedText,
+    result.matchText,
+    [...result.candidateMatches, "guard:unsafe-move-suffix"],
+  );
+}
+
 function formatSpanHint(
   kind: "pokemon" | "move",
   surface: MatchSurface,
@@ -1570,7 +1606,11 @@ function parseMoveEvent(
 
     candidateMatches.push(...partCandidates);
 
-    if (pokemonMatch.status !== "accepted" || moveMatch.status !== "accepted") {
+    if (
+      pokemonMatch.status !== "accepted" ||
+      moveMatch.status !== "accepted" ||
+      hasUnsafeFuzzyMoveSuffix(part.moveText, moveMatch)
+    ) {
       continue;
     }
 
@@ -2443,7 +2483,7 @@ export function parseBattleMessage(
   );
 
   if (constrainedTemplateEvent.result) {
-    return constrainedTemplateEvent.result;
+    return guardUnsafeMoveSuffix(constrainedTemplateEvent.result);
   }
 
   const templateEvent = parseTemplateEvent(
@@ -2457,7 +2497,7 @@ export function parseBattleMessage(
   );
 
   if (templateEvent) {
-    return templateEvent;
+    return guardUnsafeMoveSuffix(templateEvent);
   }
 
   const hpLossEvent = parseHpLossLifeCostEvent(
@@ -2483,7 +2523,7 @@ export function parseBattleMessage(
   );
 
   if (moveEvent?.result) {
-    return moveEvent.result;
+    return guardUnsafeMoveSuffix(moveEvent.result);
   }
 
   const switchInCallFallback = parseSwitchInCallFallback(

@@ -41,7 +41,12 @@ export interface MessageLineBand {
 }
 
 export interface MessageLineCropVariant {
-  id: "full" | `top-${number}-lines`;
+  id:
+    | "full"
+    | `top-${number}-lines`
+    | `line-${number}`
+    | `annotation-suppressed-top-${number}-lines`
+    | `annotation-suppressed-line-${number}`;
   imageData: ImageData;
   y: number;
   height: number;
@@ -529,6 +534,14 @@ export function detectMessageLineBands(
   preprocessOptions: MessagePreprocessOptions,
   detectionOptions: MessageLineBandDetectionOptions = {},
 ): MessageLineBand[] {
+  return analyzeMessageLineBands(processed, preprocessOptions, detectionOptions).bands;
+}
+
+function detectRawMessageLineBands(
+  processed: ImageData,
+  preprocessOptions: MessagePreprocessOptions,
+  detectionOptions: MessageLineBandDetectionOptions = {},
+) {
   const options = getLineBandDetectionOptions(processed.width, detectionOptions);
   const rowForegroundCounts = collectRowForegroundCounts(processed, preprocessOptions);
   const activeRows = rowForegroundCounts.map((count) => {
@@ -564,26 +577,156 @@ export function detectMessageLineBands(
     bands.push({ start: activeStart, end: lastActive + 1 });
   }
 
-  return bands
+  const detectedBands = bands
     .map((band) => {
       const paddedStart = Math.max(0, band.start - options.verticalPaddingPx);
       const paddedEnd = Math.min(processed.height, band.end + options.verticalPaddingPx);
 
-      return analyzeProcessedBand(
-        processed,
-        preprocessOptions,
-        paddedStart,
-        paddedEnd - paddedStart,
-        rowForegroundCounts,
-      );
+      return {
+        band: analyzeProcessedBand(
+          processed,
+          preprocessOptions,
+          paddedStart,
+          paddedEnd - paddedStart,
+          rowForegroundCounts,
+        ),
+        rawY: band.start,
+        rawHeight: band.end - band.start,
+      };
     })
     .filter(
-      (band) =>
-        band.height >= options.minBandHeightPx &&
-        band.foregroundPixelCount >= options.minBandForegroundPixelCount &&
-        band.foregroundPixelRatio <= options.maxBandForegroundPixelRatio,
+      (entry) =>
+        entry.band.height >= options.minBandHeightPx &&
+        entry.band.foregroundPixelCount >= options.minBandForegroundPixelCount &&
+        entry.band.foregroundPixelRatio <= options.maxBandForegroundPixelRatio,
     )
-    .sort((left, right) => left.y - right.y);
+    .sort((left, right) => left.band.y - right.band.y);
+
+  return {
+    bands: detectedBands.map((entry) => entry.band),
+    rawRanges: detectedBands.map((entry) => ({ y: entry.rawY, height: entry.rawHeight })),
+    rowForegroundCounts,
+  };
+}
+
+function findAnnotationBandIndexes(bands: readonly MessageLineBand[], width: number) {
+  const indexes = new Set<number>();
+
+  for (let index = 0; index < bands.length - 1; index += 1) {
+    const band = bands[index];
+    const next = bands[index + 1];
+    const gap = next.y - (band.y + band.height);
+    const isSmallHeight = band.height <= Math.max(3, next.height * 0.62);
+    const isSparse = band.foregroundPixelCount <= next.foregroundPixelCount * 0.45;
+    const isWideEnough = band.peakRowForegroundPixelCount >= Math.max(3, Math.ceil(width * 0.006));
+    const isNearby = gap <= Math.max(4, Math.ceil(next.height * 0.45));
+
+    if (
+      next.height >= 6 &&
+      band.foregroundPixelCount >= 8 &&
+      isSmallHeight &&
+      isSparse &&
+      isWideEnough &&
+      isNearby
+    ) {
+      indexes.add(index);
+    }
+  }
+
+  return indexes;
+}
+
+function mergeAnnotationBands(
+  processed: ImageData,
+  preprocessOptions: MessagePreprocessOptions,
+  bands: readonly MessageLineBand[],
+  annotationIndexes: ReadonlySet<number>,
+  rowForegroundCounts: readonly number[],
+) {
+  const merged: MessageLineBand[] = [];
+
+  for (let index = 0; index < bands.length; index += 1) {
+    const band = bands[index];
+
+    if (annotationIndexes.has(index) && bands[index + 1]) {
+      const next = bands[index + 1];
+      const y = band.y;
+      const endY = Math.max(band.y + band.height, next.y + next.height);
+
+      merged.push(
+        analyzeProcessedBand(
+          processed,
+          preprocessOptions,
+          y,
+          endY - y,
+          rowForegroundCounts,
+        ),
+      );
+      index += 1;
+      continue;
+    }
+
+    merged.push(band);
+  }
+
+  return merged;
+}
+
+function analyzeMessageLineBands(
+  processed: ImageData,
+  preprocessOptions: MessagePreprocessOptions,
+  detectionOptions: MessageLineBandDetectionOptions = {},
+) {
+  const raw = detectRawMessageLineBands(processed, preprocessOptions, detectionOptions);
+  const annotationIndexes = findAnnotationBandIndexes(raw.bands, processed.width);
+
+  return {
+    rawBands: raw.bands,
+    rawRanges: raw.rawRanges,
+    annotationIndexes,
+    bands: mergeAnnotationBands(
+      processed,
+      preprocessOptions,
+      raw.bands,
+      annotationIndexes,
+      raw.rowForegroundCounts,
+    ),
+  };
+}
+
+function suppressAnnotationBands(
+  processed: ImageData,
+  preprocessOptions: MessagePreprocessOptions,
+  rawRanges: readonly { y: number; height: number }[],
+  annotationIndexes: ReadonlySet<number>,
+) {
+  const output = cloneImageData(processed);
+  const { backgroundValue, foregroundValue } = getOutputValues(
+    preprocessOptions.background,
+    preprocessOptions.invert,
+  );
+
+  for (const index of annotationIndexes) {
+    const band = rawRanges[index];
+    const endY = Math.min(output.height, band.y + band.height);
+
+    for (let y = Math.max(0, band.y); y < endY; y += 1) {
+      for (let x = 0; x < output.width; x += 1) {
+        const dataIndex = (y * output.width + x) * 4;
+
+        if (!isProcessedForegroundPixel(output.data, dataIndex, foregroundValue)) {
+          continue;
+        }
+
+        output.data[dataIndex] = backgroundValue;
+        output.data[dataIndex + 1] = backgroundValue;
+        output.data[dataIndex + 2] = backgroundValue;
+        output.data[dataIndex + 3] = 255;
+      }
+    }
+  }
+
+  return output;
 }
 
 function createLineCropVariant(
@@ -619,12 +762,33 @@ function createLineCropVariant(
   };
 }
 
+function createSingleLineCropVariant(
+  processed: ImageData,
+  preprocessOptions: MessagePreprocessOptions,
+  band: MessageLineBand,
+  index: number,
+  prefix = "",
+): MessageLineCropVariant {
+  const imageData = cropImageData(processed, band.y, band.height);
+
+  return {
+    id: `${prefix}line-${index + 1}` as MessageLineCropVariant["id"],
+    imageData,
+    y: band.y,
+    height: band.height,
+    lineCount: 1,
+    bands: [band],
+    metrics: analyzeProcessedMessageImageData(imageData, preprocessOptions),
+  };
+}
+
 export function createMessageLineCropVariants(
   processed: ImageData,
   preprocessOptions: MessagePreprocessOptions,
   detectionOptions: MessageLineBandDetectionOptions = {},
 ): MessageLineCropVariant[] {
-  const bands = detectMessageLineBands(processed, preprocessOptions, detectionOptions);
+  const analysis = analyzeMessageLineBands(processed, preprocessOptions, detectionOptions);
+  const bands = analysis.bands;
   const fullVariant: MessageLineCropVariant = {
     id: "full",
     imageData: cloneImageData(processed),
@@ -658,6 +822,44 @@ export function createMessageLineCropVariants(
 
     seen.add(key);
     variants.push(variant);
+  }
+
+  bands.slice(0, maxLineVariants).forEach((band, index) => {
+    variants.push(createSingleLineCropVariant(processed, preprocessOptions, band, index));
+  });
+
+  if (analysis.annotationIndexes.size > 0) {
+    const suppressed = suppressAnnotationBands(
+      processed,
+      preprocessOptions,
+      analysis.rawRanges,
+      analysis.annotationIndexes,
+    );
+    const topVariant = createLineCropVariant(
+      suppressed,
+      preprocessOptions,
+      bands,
+      maxLineVariants,
+    );
+
+    if (topVariant) {
+      variants.push({
+        ...topVariant,
+        id: `annotation-suppressed-top-${maxLineVariants}-lines`,
+      });
+    }
+
+    bands.slice(0, maxLineVariants).forEach((band, index) => {
+      variants.push(
+        createSingleLineCropVariant(
+          suppressed,
+          preprocessOptions,
+          band,
+          index,
+          "annotation-suppressed-",
+        ),
+      );
+    });
   }
 
   return variants;

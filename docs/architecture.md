@@ -36,6 +36,8 @@ M2 keeps processing in the browser UI thread until OCR work begins:
 - ROI coordinates stay normalized, then convert to source pixels only when drawing the crop.
 - The raw ROI crop is generated with Canvas and kept as a debug preview.
 - The preprocessing pass extracts bright low-chroma text candidates, writes them onto a solid black or white background, optionally inverts the output, and upscales without smoothing.
+- バトルHUDはHPゲージの緑色を必須にせず、相手側の赤/マゼンタ系または味方側の青/紫系ネームプレート、白枠、暗い情報帯の組み合わせで検出する。HUD消失でメッセージ候補フェーズを開き、再出現で閉じる。
+- 小さいルビ帯は本文行へ関連付ける。元の前処理画像を保持したまま、ルビ候補だけを抑制した画像をfallback候補として生成し、濁点・半濁点は除去しない。
 - Recent frame samples are kept in a small in-memory ring buffer. They are not persisted and do not grow without bounds.
 
 ## M3 OCR Boundary
@@ -45,7 +47,9 @@ M3 moves recognition behind an OCR provider interface and keeps OCR work off the
 - `src/core/ocr/types.ts` defines the browser-side `OCRProvider` contract.
 - `src/workers/ocr.worker.ts` owns the Tesseract.js provider and receives preprocessed ROI images from the app.
 - The app keeps raw OCR text and derives normalized display text without overwriting the raw value.
-- OCR jobs are bounded to one pending recognition at a time so slow recognition does not build an unbounded queue.
+- OCR jobs are bounded to one pending recognition at a time so slow recognition does not build an unbounded queue. 処理中に到着したフレームは最新1件だけを遅延枠へ保持する。
+- 通常は主要行cropを `SINGLE_BLOCK` で1回だけ認識する。空文字、unknown、必須slot欠落などの場合だけ、行別 `SINGLE_LINE` と代替maskまたはfull画像の `SPARSE_TEXT` を最大3候補まで順次試す。
+- 候補はparserで安全にevent化できるかを最優先して選び、Tesseract confidenceだけではfallbackを止めない。強い候補同士が異なるeventを示す場合はunknownへ保留する。
 - Tesseract language data defaults to `https://tessdata.projectnaptha.com/4.0.0` so Japanese OCR does not depend on the jsDelivr package fallback path; worker/core/language asset paths can still be supplied with `VITE_TESSERACT_WORKER_PATH`, `VITE_TESSERACT_CORE_PATH`, and `VITE_TESSERACT_LANG_PATH`.
 - Relative `VITE_TESSERACT_*` values are resolved against the Vite base path.
 
@@ -87,7 +91,7 @@ M5 turns OCR/parser output into reviewable in-memory evidence:
 
 M6 makes the review data durable without adding a runtime server:
 
-- `src/storage/export.ts` builds schema-versioned Battle Log JSON documents from OCR messages, parsed events, unknowns, ROI metadata, media metadata, bounded crop evidence, and manual corrections.
+- `src/storage/export.ts` builds schema-versioned Battle Log JSON documents from OCR messages, parsed events, unknowns, ROI metadata, media metadata, bounded crop evidence, and manual corrections. OCR messageには最大3件の候補履歴を保持し、HUD/VSの永続集計と最大64件のphase遷移もexportする。
 - `src/storage/indexedDb.ts` is the only browser storage adapter for Battle Logs. It stores the current document in IndexedDB and can restore the latest saved log after a reload.
 - JSON import is for user-controlled Battle Log restore, not champout/template import. Imported logs are validated by `schemaVersion` before they replace the review state.
 - Events CSV and Unknown messages CSV exports are derived from the same Battle Log document. Unknown CSV includes review notes from durable manual corrections.

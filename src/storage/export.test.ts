@@ -24,6 +24,23 @@ const ocrMessage: OCRMessage = {
   frameIndex: 4,
   roi: { x: 0.1, y: 0.7, w: 0.8, h: 0.2 },
   lines: [],
+  recognitionCandidates: [
+    {
+      id: "primary",
+      variantId: "white/top-2-lines",
+      strategy: "block",
+      pageSegModes: ["single_block"],
+      rawText: "ミミッキュの\nじゃれつく！",
+      confidence: 0.92,
+      lineCount: 2,
+      parseStatus: "event",
+      eventSignatures: ["move|player|ミミッキュ|じゃれつく|unknown|"],
+      score: 150,
+      selected: true,
+      selectionReason: "strong-event-selected",
+      durationMs: 240,
+    },
+  ],
 };
 
 const battleEvent: BattleEvent = {
@@ -98,9 +115,9 @@ describe("battle log export", () => {
         roi: { x: 0.1, y: 0.7, w: 0.8, h: 0.2 },
         roiName: "Battle message ROI",
         opponentHudRoi: { x: 0.55, y: 0.03, w: 0.43, h: 0.14 },
-        opponentHudRoiName: "Opponent HP bar HUD ROI",
+        opponentHudRoiName: "Opponent battle HUD ROI",
         playerHudRoi: { x: 0.02, y: 0.84, w: 0.46, h: 0.14 },
-        playerHudRoiName: "Player HP bar HUD ROI",
+        playerHudRoiName: "Player battle HUD ROI",
         vsRoi: { x: 0.34, y: 0.32, w: 0.32, h: 0.32 },
         vsRoiName: "VS splash ROI",
         ocrMessages: [ocrMessage],
@@ -119,6 +136,25 @@ describe("battle log export", () => {
           },
         ],
         sampleDiagnostics: [sampleDiagnostic],
+        phaseDetectionSummary: {
+          opponentHud: { sampleCount: 10, visibleCount: 6, scoreTotal: 5.4, maxScore: 0.8 },
+          playerHud: { sampleCount: 10, visibleCount: 5, scoreTotal: 4.9, maxScore: 0.76 },
+          vsSplash: { sampleCount: 3, visibleCount: 2, scoreTotal: 1.8, maxScore: 0.72 },
+          transitionCounts: {
+            battleHudRose: 1,
+            battleHudFell: 1,
+            vsFell: 1,
+            messagePhaseOpened: 2,
+            messagePhaseClosed: 1,
+          },
+        },
+        phaseTransitions: Array.from({ length: 70 }, (_, index) => ({
+          id: `phase_transition_${index + 1}`,
+          frameIndex: index + 1,
+          timestampMs: index,
+          stage: "battleHudFell" as const,
+          detail: `score ${index}%`,
+        })),
         reviewNotes: { unk_1: "あとでrule化" },
       },
       new Date("2026-06-30T00:00:00.000Z"),
@@ -132,6 +168,20 @@ describe("battle log export", () => {
     expect(document.vsSplashRoiProfile.roi).toEqual({ x: 0.34, y: 0.32, w: 0.32, h: 0.32 });
     expect(document.waitIndicatorRoiProfile).toBeUndefined();
     expect(document.sampleDiagnostics).toEqual([sampleDiagnostic]);
+    expect(document.ocrMessages[0].recognitionCandidates?.[0]).toMatchObject({
+      id: "primary",
+      selected: true,
+    });
+    expect(document.phaseDetectionSummary.opponentHud.sampleCount).toBe(10);
+    expect(document.phaseTransitions).toHaveLength(64);
+    expect(document.phaseTransitions[0]).toMatchObject({
+      id: "phase_transition_7",
+      timestampMs: 6,
+    });
+    expect(document.phaseTransitions.at(-1)).toMatchObject({
+      id: "phase_transition_70",
+      timestampMs: 69,
+    });
     expect(document.manualCorrections).toEqual([
       {
         id: "cor_unk_1",
@@ -162,9 +212,9 @@ describe("battle log export", () => {
         roi: { x: 0, y: 0, w: 1, h: 1 },
         roiName: "Battle message ROI",
         opponentHudRoi: { x: 0.55, y: 0.03, w: 0.43, h: 0.14 },
-        opponentHudRoiName: "Opponent HP bar HUD ROI",
+        opponentHudRoiName: "Opponent battle HUD ROI",
         playerHudRoi: { x: 0.02, y: 0.84, w: 0.46, h: 0.14 },
-        playerHudRoiName: "Player HP bar HUD ROI",
+        playerHudRoiName: "Player battle HUD ROI",
         vsRoi: { x: 0.34, y: 0.32, w: 0.32, h: 0.32 },
         vsRoiName: "VS splash ROI",
         ocrMessages: [],
@@ -208,12 +258,12 @@ describe("battle log export", () => {
         roi: { x: 0, y: 0, w: 1, h: 1 },
         roiName: "Battle message ROI",
         opponentHudRoi: { x: 0.55, y: 0.03, w: 0.43, h: 0.14 },
-        opponentHudRoiName: "Opponent HP bar HUD ROI",
+        opponentHudRoiName: "Opponent battle HUD ROI",
         playerHudRoi: { x: 0.02, y: 0.84, w: 0.46, h: 0.14 },
-        playerHudRoiName: "Player HP bar HUD ROI",
+        playerHudRoiName: "Player battle HUD ROI",
         vsRoi: { x: 0.34, y: 0.32, w: 0.32, h: 0.32 },
         vsRoiName: "VS splash ROI",
-        ocrMessages: [],
+        ocrMessages: [ocrMessage],
         events: [],
         unknowns: [],
         frameEvidence: [],
@@ -221,8 +271,11 @@ describe("battle log export", () => {
       },
       new Date("2026-06-30T00:00:00.000Z"),
     );
-    const olderDocument = { ...document } as Partial<typeof document>;
+    const olderDocument = structuredClone(document) as Partial<typeof document>;
+    delete olderDocument.ocrMessages?.[0]?.recognitionCandidates;
     delete olderDocument.sampleDiagnostics;
+    delete olderDocument.phaseDetectionSummary;
+    delete olderDocument.phaseTransitions;
 
     const result = parseBattleLogJson(JSON.stringify(olderDocument));
 
@@ -230,14 +283,21 @@ describe("battle log export", () => {
       ok: true,
       document: {
         sampleDiagnostics: [],
+        phaseDetectionSummary: { opponentHud: { sampleCount: 0 } },
+        phaseTransitions: [],
         phaseHudRoiProfile: { roi: { x: 0.55, y: 0.03, w: 0.43, h: 0.14 } },
         playerHudRoiProfile: { roi: { x: 0.02, y: 0.84, w: 0.46, h: 0.14 } },
         vsSplashRoiProfile: { roi: { x: 0.34, y: 0.32, w: 0.32, h: 0.32 } },
       },
       warnings: [
         "sample diagnosticsがないためサンプラー診断なしで読み込みます。",
+        "phase detection summaryがないため空集計として扱います。",
+        "phase transitionsがないため遷移履歴なしで読み込みます。",
       ],
     });
+    if (result.ok) {
+      expect(result.document.ocrMessages[0].recognitionCandidates).toBeUndefined();
+    }
   });
 
   it("imports legacy JSON with or without wait ROI profiles", () => {

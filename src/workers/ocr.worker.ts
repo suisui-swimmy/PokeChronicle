@@ -39,13 +39,43 @@ async function getProvider(config: TesseractWorkerConfig) {
 async function handleRecognize(request: Extract<OCRWorkerRequest, { type: "recognize" }>) {
   try {
     const ocrProvider = await getProvider(request.config);
-    const result = await ocrProvider.recognize(request.imageDataUrl, request.jobId);
+    const startedAt = performance.now();
+    const segmentResults = [];
+
+    for (let index = 0; index < request.candidate.segments.length; index += 1) {
+      const segment = request.candidate.segments[index];
+      segmentResults.push(
+        await ocrProvider.recognize(
+          segment.imageDataUrl,
+          { pageSegMode: segment.pageSegMode },
+          `${request.jobId}-${index + 1}`,
+        ),
+      );
+    }
+
+    const nonNullConfidences = segmentResults
+      .map((result) => result.confidence)
+      .filter((confidence): confidence is number => confidence !== null);
+    const result = {
+      rawText: segmentResults
+        .map((segmentResult) => segmentResult.rawText.trim())
+        .filter(Boolean)
+        .join("\n"),
+      confidence: nonNullConfidences.length > 0
+        ? nonNullConfidences.reduce((sum, confidence) => sum + confidence, 0) /
+          nonNullConfidences.length
+        : null,
+      lines: segmentResults.flatMap((segmentResult) => segmentResult.lines),
+    };
 
     postWorkerMessage({
       type: "result",
       jobId: request.jobId,
       meta: request.meta,
+      candidate: request.candidate,
       result,
+      segmentResults,
+      durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
     });
   } catch (error) {
     postWorkerMessage({

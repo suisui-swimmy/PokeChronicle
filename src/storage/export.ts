@@ -9,10 +9,14 @@ import {
   type ManualCorrection,
   type NormalizedRoi,
   type OCRMessage,
+  type PhaseDetectionSummary,
+  type PhaseTransitionDiagnostic,
   type UnknownEvent,
+  createEmptyPhaseDetectionSummary,
 } from "../core/events/schema";
 
 export const BATTLE_LOG_APP_VERSION = "0.1.0";
+const MAX_PHASE_TRANSITIONS = 64;
 
 export interface BattleLogBuildInput {
   battleId: string;
@@ -32,6 +36,8 @@ export interface BattleLogBuildInput {
   unknowns: readonly UnknownEvent[];
   frameEvidence: readonly BattleLogFrameEvidence[];
   sampleDiagnostics?: readonly FrameSampleDiagnostic[];
+  phaseDetectionSummary?: PhaseDetectionSummary;
+  phaseTransitions?: readonly PhaseTransitionDiagnostic[];
   reviewNotes: Readonly<Record<string, string>>;
 }
 
@@ -119,6 +125,12 @@ export function createBattleLogDocument(
     unknowns: [...input.unknowns].sort(byTimestampThenId),
     frameEvidence: [...input.frameEvidence],
     sampleDiagnostics: [...(input.sampleDiagnostics ?? [])].sort(byTimestampThenId),
+    phaseDetectionSummary: input.phaseDetectionSummary ?? createEmptyPhaseDetectionSummary(),
+    phaseTransitions: [...(input.phaseTransitions ?? [])]
+      .sort(
+        (left, right) => left.timestampMs - right.timestampMs || left.id.localeCompare(right.id),
+      )
+      .slice(-MAX_PHASE_TRANSITIONS),
     manualCorrections: createManualCorrections(
       input.battleId,
       input.unknowns,
@@ -195,20 +207,20 @@ export function parseBattleLogJson(text: string): BattleLogParseResult {
   }
 
   if (!isRecord(parsed.phaseHudRoiProfile)) {
-    warnings.push("HPバーHUD ROI profileがないため既定の相手側HUD ROIとして扱います。");
+    warnings.push("バトルHUD ROI profileがないため既定の相手側HUD ROIとして扱います。");
     parsed.phaseHudRoiProfile = {
       id: "roi_phase_hud_imported_default",
-      name: "Imported opponent HP bar HUD ROI",
+      name: "Imported opponent battle HUD ROI",
       roi: { x: 0.55, y: 0.03, w: 0.43, h: 0.14 },
       updatedAt: parsed.exportedAt,
     };
   }
 
   if (!isRecord(parsed.playerHudRoiProfile)) {
-    warnings.push("味方HPバーHUD ROI profileがないため既定の味方側HUD ROIとして扱います。");
+    warnings.push("味方バトルHUD ROI profileがないため既定の味方側HUD ROIとして扱います。");
     parsed.playerHudRoiProfile = {
       id: "roi_player_hud_imported_default",
-      name: "Imported player HP bar HUD ROI",
+      name: "Imported player battle HUD ROI",
       roi: { x: 0.02, y: 0.84, w: 0.46, h: 0.14 },
       updatedAt: parsed.exportedAt,
     };
@@ -232,6 +244,16 @@ export function parseBattleLogJson(text: string): BattleLogParseResult {
   if (!Array.isArray(parsed.sampleDiagnostics)) {
     warnings.push("sample diagnosticsがないためサンプラー診断なしで読み込みます。");
     parsed.sampleDiagnostics = [];
+  }
+
+  if (!isRecord(parsed.phaseDetectionSummary)) {
+    warnings.push("phase detection summaryがないため空集計として扱います。");
+    parsed.phaseDetectionSummary = createEmptyPhaseDetectionSummary();
+  }
+
+  if (!Array.isArray(parsed.phaseTransitions)) {
+    warnings.push("phase transitionsがないため遷移履歴なしで読み込みます。");
+    parsed.phaseTransitions = [];
   }
 
   return { ok: true, document: parsed, warnings };

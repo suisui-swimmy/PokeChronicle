@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { analyzeHpHudImage, analyzeVsSplashImage } from "./hudPhaseDetection";
+import {
+  analyzeBattleHudImage,
+  analyzeVsSplashImage,
+  type BattleHudSide,
+} from "./hudPhaseDetection";
 
 function createImage(width: number, height: number, red = 22, green = 24, blue = 36) {
   const data = new Uint8ClampedArray(width * height * 4);
@@ -40,31 +44,60 @@ function fillRect(
   }
 }
 
-function drawSyntheticHpHud(image: ImageData) {
-  fillRect(image, 6, 6, 136, 28, 220, 24, 122);
-  fillRect(image, 8, 34, 118, 18, 8, 10, 26);
-  fillRect(image, 24, 39, 112, 10, 70, 236, 34);
+function drawSyntheticBattleHud(
+  image: ImageData,
+  side: BattleHudSide,
+  hpColor: readonly [number, number, number] | null,
+) {
+  const plateColor = side === "opponent"
+    ? ([220, 24, 122] as const)
+    : ([96, 50, 210] as const);
+  const [plateRed, plateGreen, plateBlue] = plateColor;
+
+  fillRect(image, 6, 6, 136, 28, plateRed, plateGreen, plateBlue);
+  fillRect(image, 8, 34, 132, 20, 8, 10, 26);
+  fillRect(image, 5, 4, 140, 2, 240, 244, 246);
+  fillRect(image, 5, 32, 140, 2, 240, 244, 246);
+  fillRect(image, 5, 4, 2, 30, 240, 244, 246);
+  fillRect(image, 143, 4, 2, 30, 240, 244, 246);
   fillRect(image, 21, 36, 118, 2, 240, 244, 246);
-  fillRect(image, 21, 50, 118, 2, 240, 244, 246);
-  fillRect(image, 31, 36, 2, 14, 240, 244, 246);
-  fillRect(image, 138, 36, 2, 16, 240, 244, 246);
+  fillRect(image, 21, 52, 118, 2, 240, 244, 246);
+
+  if (hpColor) {
+    const [red, green, blue] = hpColor;
+    fillRect(image, 24, 40, 112, 9, red, green, blue);
+  }
 }
 
-describe("analyzeHpHudImage", () => {
-  it("detects a synthetic HP bar HUD", () => {
-    const image = createImage(160, 72);
+describe("analyzeBattleHudImage", () => {
+  const hpColors = [
+    [70, 236, 34],
+    [236, 220, 34],
+    [238, 132, 24],
+    [224, 42, 36],
+    null,
+  ] as const;
 
-    drawSyntheticHpHud(image);
+  for (const side of ["opponent", "player"] as const) {
+    for (const hpColor of hpColors) {
+      const label = hpColor ? hpColor.join("-") : "empty";
 
-    const signal = analyzeHpHudImage(image);
+      it(`detects ${side} HUD with ${label} HP`, () => {
+        const image = createImage(160, 72);
 
-    expect(signal.isVisible).toBe(true);
-    expect(signal.score).toBeGreaterThan(0.56);
-    expect(signal.greenBarScore).toBeGreaterThan(0.4);
-    expect(Math.max(signal.frameScore, signal.nameplateScore)).toBeGreaterThan(0.2);
-  });
+        drawSyntheticBattleHud(image, side, hpColor);
 
-  it("does not treat green floor dots as an HP bar HUD", () => {
+        const signal = analyzeBattleHudImage(image, side);
+
+        expect(signal.isVisible).toBe(true);
+        expect(signal.score).toBeGreaterThan(0.52);
+        expect(signal.plateScore).toBeGreaterThan(0.38);
+        expect(signal.frameScore).toBeGreaterThan(0.12);
+      });
+    }
+  }
+
+  it("does not treat green floor dots as a battle HUD", () => {
     const image = createImage(160, 72);
 
     for (let y = 12; y < 68; y += 10) {
@@ -73,10 +106,32 @@ describe("analyzeHpHudImage", () => {
       }
     }
 
-    const signal = analyzeHpHudImage(image);
+    const signal = analyzeBattleHudImage(image, "opponent");
 
     expect(signal.isVisible).toBe(false);
-    expect(signal.nameplateScore).toBeLessThan(0.2);
+    expect(signal.plateScore).toBeLessThan(0.38);
+  });
+
+  it("does not treat a flat side color or the opposite side plate as a HUD", () => {
+    const flat = createImage(160, 72, 220, 24, 122);
+    const opponentHud = createImage(160, 72);
+
+    drawSyntheticBattleHud(opponentHud, "opponent", [70, 236, 34]);
+
+    expect(analyzeBattleHudImage(flat, "opponent").isVisible).toBe(false);
+    expect(analyzeBattleHudImage(opponentHud, "player").isVisible).toBe(false);
+  });
+
+  it("does not treat red and blue effect fragments as a HUD", () => {
+    const image = createImage(160, 72);
+
+    for (let y = 8; y < 68; y += 12) {
+      fillRect(image, 8 + y, y, 14, 5, 226, 38, 42);
+      fillRect(image, 132 - y, y + 3, 12, 4, 50, 70, 226);
+    }
+
+    expect(analyzeBattleHudImage(image, "opponent").isVisible).toBe(false);
+    expect(analyzeBattleHudImage(image, "player").isVisible).toBe(false);
   });
 });
 

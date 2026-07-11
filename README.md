@@ -20,8 +20,10 @@ The M8 MVP is closed on top of the static app foundation:
 - 3fps / 5fps ROI frame sampling
 - Raw ROI crop and Canvas-preprocessed preview
 - White-text candidate extraction, solid background, inversion, and upscale controls
+- 赤/マゼンタ系または青/紫系のネームプレート構造を使う、HP残量色に依存しないバトルHUDフェーズ検出
 - Bounded in-memory frame sample buffer
 - Browser OCR provider interface and Tesseract.js worker integration
+- 必要なフレームだけを最大3候補（block、行別、代替maskまたはsparse）で再認識する適応型OCR
 - Real-time OCR log entries with raw text, normalized text, confidence, timestamp, and frame index
 - Generated Pokemon and move name dictionaries from local `others/` reference lists
 - Safe fuzzy dictionary matching that keeps low-confidence corrections reviewable
@@ -37,6 +39,7 @@ The M8 MVP is closed on top of the static app foundation:
 - Minimal unknown review UI with reviewed status and correction notes
 - IndexedDB storage adapters remain available internally; the MVP UI focuses on explicit Battle Log JSON restore/export
 - Schema-versioned Battle Log JSON export/import
+- OCR候補の選択根拠、バトルHUD/VSの永続集計、最大64件のphase遷移を含む診断export
 - Events CSV and Unknown messages CSV export
 - Bounded representative crop evidence in saved/exported logs
 - MVP statistics for observed moves, Pokemon action count, switches, faints, unknown rate, effectiveness, and critical hits

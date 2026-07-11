@@ -1154,6 +1154,33 @@ describe("parseBattleMessage", () => {
     expect(result.status).toBe("unknown");
   });
 
+  it("does not turn an item-like fuzzy suffix into a move event", () => {
+    expect(
+      parseBattleMessage({
+        rawText: "相手の リザードンの リザードナイトYと",
+        ocrConfidence: 0.9,
+      }),
+    ).toMatchObject({ status: "unknown" });
+    expect(
+      parseBattleMessage({
+        rawText: "相手の リザードンの ねっぷう!",
+        ocrConfidence: 0.9,
+      }),
+    ).toMatchObject({
+      status: "event",
+      event: { type: "move", actor: { name: "リザードン" }, move: "ねっぷう" },
+    });
+    expect(
+      parseBattleMessage({
+        rawText: "相手の カビゴンの ねごと!",
+        ocrConfidence: 0.9,
+      }),
+    ).toMatchObject({
+      status: "event",
+      event: { type: "move", actor: { name: "カビゴン" }, move: "ねごと" },
+    });
+  });
+
   it("uses session roster dictionary before the global pokemon dictionary", () => {
     const result = parseBattleMessage(
       {

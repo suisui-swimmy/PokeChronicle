@@ -20,6 +20,7 @@ import uploadIconUrl from "../assets/icons/upload.svg";
 import volumeMutedIconUrl from "../assets/icons/volume-muted.svg";
 import volumeIconUrl from "../assets/icons/volume.svg";
 import {
+  createEmptyPhaseDetectionSummary,
   type BattleLogDocument,
   type BattleLogFrameEvidence,
   type BattleLogMediaMetadata,
@@ -29,6 +30,10 @@ import {
   type FrameSampleDiagnosticStage,
   type NormalizedRoi,
   type OCRMessage,
+  type OCRRecognitionCandidateTrace,
+  type PhaseDetectionSummary,
+  type PhaseTransitionDiagnostic,
+  type PhaseTransitionStage,
   type UnknownEvent,
 } from "../core/events/schema";
 import {
@@ -51,18 +56,25 @@ import {
   type MessageTextMask,
 } from "../core/preprocess/messagePreprocess";
 import {
-  analyzeHpHudImage,
+  analyzeBattleHudImage,
   analyzeVsSplashImage,
-  type HpHudSignal,
+  type BattleHudSignal,
   type VsSplashSignal,
 } from "../core/preprocess/hudPhaseDetection";
 import { mapDisplayRoiToSourceRect } from "../core/media/roiMapping";
 import { createTesseractWorkerConfig } from "../core/ocr/tesseractConfig";
 import type {
   OCRWorkerJobMeta,
+  OCRWorkerRecognitionCandidate,
   OCRWorkerRequest,
   OCRWorkerResponse,
 } from "../core/ocr/workerMessages";
+import {
+  createRecognitionCandidate,
+  selectOcrCandidate,
+  shouldRetryOcrCandidate,
+  type EvaluatedOcrCandidate,
+} from "../core/ocr/ocrCandidateSelection";
 import {
   getParsedBattleEvents,
   parseBattleMessage,
@@ -110,6 +122,7 @@ const MAX_TIMELINE_ITEMS = 48;
 const MAX_UNKNOWN_EVENTS = 48;
 const MAX_CROP_EVIDENCE = 80;
 const MAX_SAMPLE_DIAGNOSTICS = 600;
+const MAX_PHASE_TRANSITIONS = 64;
 const OCR_RAW_GROUP_LIMIT = 30;
 const DEFAULT_RESOLVED_LOG_PANEL_WIDTH = 260;
 const MIN_RESOLVED_LOG_PANEL_WIDTH = 180;
@@ -135,15 +148,19 @@ const MIN_TEXT_PIXEL_RATIO = 0.004;
 const MAX_TEXT_PIXEL_RATIO = 0.18;
 const SAMPLE_DIAGNOSTIC_STAGES: readonly FrameSampleDiagnosticStage[] = [
   "sampled",
-  "hpHudSampled",
-  "hpHudRose",
-  "hpHudFell",
+  "battleHudSampled",
+  "battleHudRose",
+  "battleHudFell",
   "vsSampled",
   "vsFell",
   "messagePhaseOpened",
   "messagePhaseClosed",
   "skippedPhase",
   "ocrQueued",
+  "ocrRetryQueued",
+  "ocrDeferred",
+  "ocrCandidateSelected",
+  "ocrCandidateConflict",
   "skippedBusy",
   "skippedPreprocess",
   "skippedDensity",
@@ -261,6 +278,7 @@ type CapturedFrameImages = {
   ocrForegroundPixelRatio: number;
   lineBandCount: number;
   lineCropVariants: ProcessedLineCropPreview[];
+  ocrCandidates: OCRWorkerRecognitionCandidate[];
   sourceWidth: number;
   sourceHeight: number;
   cropWidth: number;
@@ -282,16 +300,16 @@ type FrameSample = CapturedFrameImages & {
 
 type HudRoiLabel = "opponent" | "player";
 
-type HpHudObservation = {
+type BattleHudObservation = {
   roiLabel: HudRoiLabel;
   roi: NormalizedRoi;
-  signal: HpHudSignal;
+  signal: BattleHudSignal;
 };
 
 type HudPhaseObservation = {
-  opponent: HpHudObservation | null;
-  player: HpHudObservation | null;
-  selected: HpHudObservation | null;
+  opponent: BattleHudObservation | null;
+  player: BattleHudObservation | null;
+  selected: BattleHudObservation | null;
   isVisible: boolean;
 };
 
@@ -330,6 +348,10 @@ type OCRLogEntry = {
 type ActiveOcrJob = {
   jobId: string;
   meta: OCRWorkerJobMeta;
+  sample: FrameSample;
+  candidates: OCRWorkerRecognitionCandidate[];
+  candidateIndex: number;
+  evaluatedCandidates: EvaluatedOcrCandidate[];
   timeoutId: number;
 };
 
@@ -366,6 +388,19 @@ type InputBadgeState = {
   label: string;
   tone: InputBadgeTone;
 };
+
+function recordPhaseSignalSummary(
+  summary: PhaseDetectionSummary,
+  key: "opponentHud" | "playerHud" | "vsSplash",
+  signal: { score: number; isVisible: boolean },
+) {
+  const target = summary[key];
+
+  target.sampleCount += 1;
+  target.visibleCount += signal.isVisible ? 1 : 0;
+  target.scoreTotal += signal.score;
+  target.maxScore = Math.max(target.maxScore, signal.score);
+}
 
 const REVIEW_TABS: Array<{ id: ReviewTab; label: string }> = [
   { id: "timeline", label: "Timeline" },
@@ -709,6 +744,9 @@ function formatTextDensity(ratio: number) {
 function formatDiagnosticStage(stage: FrameSampleDiagnosticStage) {
   const labels: Record<FrameSampleDiagnosticStage, string> = {
     sampled: "sampled",
+    battleHudSampled: "battleHudSampled",
+    battleHudRose: "battleHudRose",
+    battleHudFell: "battleHudFell",
     hpHudSampled: "hpHudSampled",
     hpHudRose: "hpHudRose",
     hpHudFell: "hpHudFell",
@@ -724,6 +762,10 @@ function formatDiagnosticStage(stage: FrameSampleDiagnosticStage) {
     messageWatchExpired: "messageWatchExpired",
     messageWatchEnded: "messageWatchEnded",
     ocrQueued: "ocrQueued",
+    ocrRetryQueued: "ocrRetryQueued",
+    ocrDeferred: "ocrDeferred",
+    ocrCandidateSelected: "ocrCandidateSelected",
+    ocrCandidateConflict: "ocrCandidateConflict",
     skippedBusy: "skippedBusy",
     skippedPreprocess: "skippedPreprocess",
     skippedDensity: "skippedDensity",
@@ -735,29 +777,29 @@ function formatDiagnosticStage(stage: FrameSampleDiagnosticStage) {
   return labels[stage];
 }
 
-function formatSignalScore(signal: FrameImageSignalDiagnostic | HpHudSignal | VsSplashSignal) {
+function formatSignalScore(signal: FrameImageSignalDiagnostic | BattleHudSignal | VsSplashSignal) {
   return `${Math.round(signal.score * 100)}%`;
 }
 
-function createHpHudImageSignalDiagnostic(
+function createBattleHudImageSignalDiagnostic(
   roi: NormalizedRoi,
   roiLabel: HudRoiLabel,
-  signal: HpHudSignal,
+  signal: BattleHudSignal,
 ): FrameImageSignalDiagnostic {
   return {
-    kind: "hp_hud",
+    kind: "battle_hud",
     roi,
     roiLabel,
     score: signal.score,
     isVisible: signal.isVisible,
-    greenBarScore: signal.greenBarScore,
+    plateScore: signal.plateScore,
     frameScore: signal.frameScore,
-    nameplateScore: signal.nameplateScore,
     darkBandScore: signal.darkBandScore,
-    greenPixelRatio: signal.greenPixelRatio,
+    hpBandScore: signal.hpBandScore,
+    platePixelRatio: signal.platePixelRatio,
     whitePixelRatio: signal.whitePixelRatio,
-    nameplatePixelRatio: signal.nameplatePixelRatio,
     darkPixelRatio: signal.darkPixelRatio,
+    hpBandPixelRatio: signal.hpBandPixelRatio,
   };
 }
 
@@ -784,7 +826,18 @@ function formatSampleDiagnosticDetail(diagnostic: FrameSampleDiagnostic) {
   if (diagnostic.imageSignal) {
     const { imageSignal } = diagnostic;
 
-    if (imageSignal.kind === "hp_hud") {
+    if (imageSignal.kind === "battle_hud") {
+      details.push(
+        `hud:${imageSignal.roiLabel} ${imageSignal.isVisible ? "visible" : "hidden"} ${formatSignalScore(
+          imageSignal,
+        )}`,
+      );
+      details.push(
+        `plate ${formatConfidence(imageSignal.plateScore)} / frame ${formatConfidence(
+          imageSignal.frameScore,
+        )} / hp ${formatConfidence(imageSignal.hpBandScore)}`,
+      );
+    } else if (imageSignal.kind === "hp_hud") {
       details.push(
         `hp:${imageSignal.roiLabel} ${imageSignal.isVisible ? "visible" : "hidden"} ${formatSignalScore(
           imageSignal,
@@ -828,6 +881,14 @@ function formatSampleDiagnosticDetail(diagnostic: FrameSampleDiagnostic) {
     details.push(`OCR ${diagnostic.ocrVariantId}`);
   }
 
+  if (diagnostic.ocrCandidateId) {
+    details.push(
+      `candidate ${diagnostic.ocrCandidateId}${
+        diagnostic.ocrCandidateCount ? `/${diagnostic.ocrCandidateCount}` : ""
+      }`,
+    );
+  }
+
   if (diagnostic.ocrForegroundPixelRatio !== null) {
     details.push(`density ${formatTextDensity(diagnostic.ocrForegroundPixelRatio)}`);
   }
@@ -842,6 +903,14 @@ function formatSampleDiagnosticDetail(diagnostic: FrameSampleDiagnostic) {
 
   if (diagnostic.lineCount !== null) {
     details.push(`${diagnostic.lineCount} lines`);
+  }
+
+  if (diagnostic.ocrDurationMs !== null && diagnostic.ocrDurationMs !== undefined) {
+    details.push(`${diagnostic.ocrDurationMs}ms`);
+  }
+
+  if (diagnostic.selectionReason) {
+    details.push(diagnostic.selectionReason);
   }
 
   return details.length > 0 ? details.join(" / ") : "no detail";
@@ -1413,11 +1482,11 @@ function captureRoiImageData(
   };
 }
 
-function captureHpHudObservation(
+function captureBattleHudObservation(
   source: FrameSourceElement,
   roi: NormalizedRoi,
   roiLabel: HudRoiLabel,
-): HpHudObservation | null {
+): BattleHudObservation | null {
   const captured = captureRoiImageData(source, roi);
 
   if (!captured) {
@@ -1427,7 +1496,7 @@ function captureHpHudObservation(
   return {
     roiLabel,
     roi,
-    signal: analyzeHpHudImage(captured.imageData),
+    signal: analyzeBattleHudImage(captured.imageData, roiLabel),
   };
 }
 
@@ -1436,15 +1505,16 @@ function captureHudPhaseObservation(
   opponentHudRoi: NormalizedRoi,
   playerHudRoi: NormalizedRoi,
 ): HudPhaseObservation {
-  const opponent = captureHpHudObservation(source, opponentHudRoi, "opponent");
-  const player = captureHpHudObservation(source, playerHudRoi, "player");
+  const opponent = captureBattleHudObservation(source, opponentHudRoi, "opponent");
+  const player = captureBattleHudObservation(source, playerHudRoi, "player");
   const visibleObservations = [opponent, player].filter(
-    (observation): observation is HpHudObservation => observation !== null && observation.signal.isVisible,
+    (observation): observation is BattleHudObservation =>
+      observation !== null && observation.signal.isVisible,
   );
   const selected =
     visibleObservations.sort((left, right) => right.signal.score - left.signal.score)[0] ??
     [opponent, player]
-      .filter((observation): observation is HpHudObservation => observation !== null)
+      .filter((observation): observation is BattleHudObservation => observation !== null)
       .sort((left, right) => right.signal.score - left.signal.score)[0] ??
     null;
 
@@ -1502,9 +1572,9 @@ function captureRoiFrame(
   const selectedTextMask = selectedPreprocessVariant.id;
   const selectedRejectReason = selectedPreprocessVariant.rejectReason;
   const selectedLineCropVariants = selectedPreprocessVariant.lineCropVariants;
-  const fallbackVariants = preprocessVariants.filter(
-    (variant) => variant.id !== selectedTextMask && variant.isOcrCandidate,
-  );
+  const fallbackVariants = preprocessVariants
+    .filter((variant) => variant.id !== selectedTextMask && variant.isOcrCandidate)
+    .sort((left, right) => right.score - left.score);
   const scale = Math.max(1, Math.round(upscaleFactor));
   const processedDataUrl = imageDataToScaledDataUrl(processedImageData, scale);
 
@@ -1552,25 +1622,93 @@ function captureRoiFrame(
       foregroundPixelRatio: metrics.foregroundPixelRatio,
     };
   const fallbackPreviewVariants: ProcessedLineCropPreview[] = [];
+  const fallbackVariant = fallbackVariants[0];
 
-  for (const fallbackVariant of fallbackVariants) {
-    const fallbackDataUrl = imageDataToScaledDataUrl(fallbackVariant.imageData, scale);
+  if (fallbackVariant) {
+    const fallbackLineCount = Math.min(3, fallbackVariant.lineCropVariants[0]?.lineCount ?? 0);
+    const fallbackCrop =
+      fallbackVariant.lineCropVariants.find(
+        (variant) => variant.id === `top-${fallbackLineCount}-lines`,
+      ) ?? fallbackVariant.lineCropVariants[0];
+    const fallbackDataUrl = fallbackCrop
+      ? imageDataToScaledDataUrl(fallbackCrop.imageData, scale)
+      : null;
 
-    if (!fallbackDataUrl) {
-      continue;
+    if (fallbackCrop && fallbackDataUrl) {
+      fallbackPreviewVariants.push({
+        id: `${fallbackVariant.id}/${fallbackCrop.id}`,
+        textMask: fallbackVariant.id,
+        processedDataUrl: fallbackDataUrl,
+        cropWidth: fallbackCrop.imageData.width,
+        cropHeight: fallbackCrop.imageData.height,
+        sourceY: fallbackCrop.y,
+        lineCount: fallbackCrop.lineCount,
+        foregroundPixelRatio: fallbackCrop.metrics.foregroundPixelRatio,
+      });
     }
-
-    fallbackPreviewVariants.push({
-      id: `${fallbackVariant.id}/full`,
-      textMask: fallbackVariant.id,
-      processedDataUrl: fallbackDataUrl,
-      cropWidth: fallbackVariant.imageData.width,
-      cropHeight: fallbackVariant.imageData.height,
-      sourceY: 0,
-      lineCount: fallbackVariant.lineCropVariants[0]?.lineCount ?? 0,
-      foregroundPixelRatio: fallbackVariant.metrics.foregroundPixelRatio,
-    });
   }
+
+  const suppressedLinePreviews = lineCropPreviews
+    .filter((variant) => variant.id.startsWith(`${selectedTextMask}/annotation-suppressed-line-`))
+    .sort((left, right) => left.sourceY - right.sourceY)
+    .slice(0, 3);
+  const regularLinePreviews = lineCropPreviews
+    .filter((variant) => /^.+\/line-\d+$/u.test(variant.id))
+    .sort((left, right) => left.sourceY - right.sourceY)
+    .slice(0, 3);
+  const linewisePreviews = suppressedLinePreviews.length > 0
+    ? suppressedLinePreviews
+    : regularLinePreviews;
+  const fullPreview = lineCropPreviews.find(
+    (variant) => variant.id === `${selectedTextMask}/full`,
+  );
+  const ocrCandidates = [
+    createRecognitionCandidate({
+      id: "primary",
+      variantId: preferredVariant.id,
+      strategy: "block",
+      segments: [{
+        id: preferredVariant.id,
+        imageDataUrl: preferredVariant.processedDataUrl,
+        pageSegMode: "single_block",
+      }],
+    }),
+    ...(linewisePreviews.length > 0
+      ? [createRecognitionCandidate({
+          id: "linewise",
+          variantId: `${selectedTextMask}/linewise`,
+          strategy: "linewise",
+          segments: linewisePreviews.map((variant) => ({
+            id: variant.id,
+            imageDataUrl: variant.processedDataUrl,
+            pageSegMode: "single_line" as const,
+          })),
+        })]
+      : []),
+    ...(fallbackPreviewVariants[0]
+      ? [createRecognitionCandidate({
+          id: "fallback-mask",
+          variantId: fallbackPreviewVariants[0].id,
+          strategy: "block",
+          segments: [{
+            id: fallbackPreviewVariants[0].id,
+            imageDataUrl: fallbackPreviewVariants[0].processedDataUrl,
+            pageSegMode: "single_block",
+          }],
+        })]
+      : fullPreview
+        ? [createRecognitionCandidate({
+            id: "sparse-full",
+            variantId: fullPreview.id,
+            strategy: "sparse",
+            segments: [{
+              id: fullPreview.id,
+              imageDataUrl: fullPreview.processedDataUrl,
+              pageSegMode: "sparse_text",
+            }],
+          })]
+        : []),
+  ].slice(0, 3);
 
   return {
     rawDataUrl: captured.dataUrl,
@@ -1582,6 +1720,7 @@ function captureRoiFrame(
     ocrForegroundPixelRatio: preferredVariant.foregroundPixelRatio,
     lineBandCount: detectedLineCount,
     lineCropVariants: [...lineCropPreviews, ...fallbackPreviewVariants],
+    ocrCandidates,
     sourceWidth: captured.sourceWidth,
     sourceHeight: captured.sourceHeight,
     cropWidth: captured.cropWidth,
@@ -1633,11 +1772,19 @@ export function App() {
   const frameIndexRef = useRef(0);
   const ocrJobCounterRef = useRef(0);
   const sampleDiagnosticCounterRef = useRef(0);
+  const phaseTransitionCounterRef = useRef(0);
   const pendingOcrJobsRef = useRef(0);
   const activeOcrJobRef = useRef<ActiveOcrJob | null>(null);
+  const deferredOcrSampleRef = useRef<FrameSample | null>(null);
+  const queueOcrRecognitionRef = useRef<(sample: FrameSample) => void>(() => undefined);
+  const phaseDetectionSummaryRef = useRef<PhaseDetectionSummary>(
+    createEmptyPhaseDetectionSummary(),
+  );
+  const phaseTransitionsRef = useRef<PhaseTransitionDiagnostic[]>([]);
   const templateRulesRef = useRef<readonly BattleTemplateRule[]>(STANDARD_TEMPLATE_RULES);
   const samplingStartMsRef = useRef(0);
   const isOcrEnabledRef = useRef(false);
+  const streamRef = useRef<MediaStream | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [mediaMode, setMediaMode] = useState<MediaMode>("idle");
   const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
@@ -1791,13 +1938,42 @@ export function App() {
       hasOpenedFromVs: false,
     };
   }, []);
-  const appendHpHudDiagnostic = useCallback(
+  const appendPhaseTransition = useCallback(
+    (sample: FrameSample, stage: PhaseTransitionStage, detail: string) => {
+      phaseTransitionCounterRef.current += 1;
+      const transition: PhaseTransitionDiagnostic = {
+        id: `phase_transition_${phaseTransitionCounterRef.current}`,
+        frameIndex: sample.frameIndex,
+        timestampMs: sample.timestampMs,
+        stage,
+        detail,
+      };
+
+      phaseTransitionsRef.current = [
+        transition,
+        ...phaseTransitionsRef.current,
+      ].slice(0, MAX_PHASE_TRANSITIONS);
+      phaseDetectionSummaryRef.current.transitionCounts[stage] += 1;
+    },
+    [],
+  );
+  const appendBattleHudDiagnostic = useCallback(
     (
       sample: FrameSample,
       stage: FrameSampleDiagnosticStage,
-      observation: HpHudObservation,
+      observation: BattleHudObservation,
       detail: string | null,
     ) => {
+      if (stage === "battleHudSampled") {
+        recordPhaseSignalSummary(
+          phaseDetectionSummaryRef.current,
+          observation.roiLabel === "opponent" ? "opponentHud" : "playerHud",
+          observation.signal,
+        );
+      } else if (stage === "battleHudRose" || stage === "battleHudFell") {
+        appendPhaseTransition(sample, stage, detail ?? "");
+      }
+
       appendSampleDiagnostic({
         frameIndex: sample.frameIndex,
         timestampMs: sample.timestampMs,
@@ -1811,14 +1987,14 @@ export function App() {
         ocrJobId: null,
         ocrConfidence: null,
         lineCount: null,
-        imageSignal: createHpHudImageSignalDiagnostic(
+        imageSignal: createBattleHudImageSignalDiagnostic(
           observation.roi,
           observation.roiLabel,
           observation.signal,
         ),
       });
     },
-    [appendSampleDiagnostic],
+    [appendPhaseTransition, appendSampleDiagnostic],
   );
   const appendVsSplashDiagnostic = useCallback(
     (
@@ -1827,6 +2003,16 @@ export function App() {
       observation: VsSplashObservation,
       detail: string | null,
     ) => {
+      if (stage === "vsSampled") {
+        recordPhaseSignalSummary(
+          phaseDetectionSummaryRef.current,
+          "vsSplash",
+          observation.signal,
+        );
+      } else if (stage === "vsFell") {
+        appendPhaseTransition(sample, stage, detail ?? "");
+      }
+
       appendSampleDiagnostic({
         frameIndex: sample.frameIndex,
         timestampMs: sample.timestampMs,
@@ -1843,7 +2029,7 @@ export function App() {
         imageSignal: createVsSplashImageSignalDiagnostic(observation.roi, observation.signal),
       });
     },
-    [appendSampleDiagnostic],
+    [appendPhaseTransition, appendSampleDiagnostic],
   );
   const appendPhaseDiagnostic = useCallback(
     (
@@ -1851,6 +2037,10 @@ export function App() {
       stage: "messagePhaseOpened" | "messagePhaseClosed" | "skippedPhase",
       detail: string,
     ) => {
+      if (stage === "messagePhaseOpened" || stage === "messagePhaseClosed") {
+        appendPhaseTransition(sample, stage, detail);
+      }
+
       appendSampleDiagnostic({
         frameIndex: sample.frameIndex,
         timestampMs: sample.timestampMs,
@@ -1866,7 +2056,7 @@ export function App() {
         lineCount: null,
       });
     },
-    [appendSampleDiagnostic],
+    [appendPhaseTransition, appendSampleDiagnostic],
   );
   const openMessagePhase = useCallback(
     (sample: FrameSample, reason: string) => {
@@ -1908,14 +2098,24 @@ export function App() {
         const detail = `${hudObservation.opponent.signal.isVisible ? "visible" : "hidden"} / score ${formatSignalScore(
           hudObservation.opponent.signal,
         )}`;
-        appendHpHudDiagnostic(sample, "hpHudSampled", hudObservation.opponent, detail);
+        appendBattleHudDiagnostic(
+          sample,
+          "battleHudSampled",
+          hudObservation.opponent,
+          detail,
+        );
       }
 
       if (hudObservation.player) {
         const detail = `${hudObservation.player.signal.isVisible ? "visible" : "hidden"} / score ${formatSignalScore(
           hudObservation.player.signal,
         )}`;
-        appendHpHudDiagnostic(sample, "hpHudSampled", hudObservation.player, detail);
+        appendBattleHudDiagnostic(
+          sample,
+          "battleHudSampled",
+          hudObservation.player,
+          detail,
+        );
       }
 
       if (vsObservation) {
@@ -1980,15 +2180,15 @@ export function App() {
         phaseState.hpStableVisible = true;
 
         if (selected) {
-          appendHpHudDiagnostic(
+          appendBattleHudDiagnostic(
             sample,
-            "hpHudRose",
+            "battleHudRose",
             selected,
             `score ${formatSignalScore(selected.signal)}`,
           );
         }
 
-        closeMessagePhase(sample, "HPバーHUD出現");
+        closeMessagePhase(sample, "バトルHUD出現");
       }
 
       if (
@@ -2003,21 +2203,21 @@ export function App() {
           const selected = hudObservation.selected;
 
           if (selected) {
-            appendHpHudDiagnostic(
+            appendBattleHudDiagnostic(
               sample,
-              "hpHudFell",
+              "battleHudFell",
               selected,
               `score ${formatSignalScore(selected.signal)}`,
             );
           }
 
-          openMessagePhase(sample, "HPバーHUD消失");
+          openMessagePhase(sample, "バトルHUD消失");
         }
       }
 
       return phaseState.messagePhase;
     },
-    [appendHpHudDiagnostic, appendVsSplashDiagnostic, closeMessagePhase, openMessagePhase],
+    [appendBattleHudDiagnostic, appendVsSplashDiagnostic, closeMessagePhase, openMessagePhase],
   );
 
   useEffect(() => {
@@ -2151,6 +2351,93 @@ export function App() {
     [addLog, clearActiveOcrJob, setPendingOcrJobCount],
   );
 
+  const queueDeferredOcrSample = useCallback(() => {
+    const deferredSample = deferredOcrSampleRef.current;
+
+    deferredOcrSampleRef.current = null;
+
+    if (
+      !deferredSample ||
+      !isOcrEnabledRef.current ||
+      phaseGateStateRef.current.messagePhase === "ended"
+    ) {
+      return;
+    }
+
+    window.setTimeout(() => queueOcrRecognitionRef.current(deferredSample), 0);
+  }, []);
+
+  const postOcrCandidateAttempt = useCallback(
+    (
+      activeJob: ActiveOcrJob,
+      candidateIndex: number,
+      stage: "ocrQueued" | "ocrRetryQueued",
+    ) => {
+      const worker = ocrWorkerRef.current;
+      const candidate = activeJob.candidates[candidateIndex];
+
+      if (!worker || !candidate) {
+        return false;
+      }
+
+      window.clearTimeout(activeJob.timeoutId);
+      const timeoutId = window.setTimeout(() => {
+        const currentJob = activeOcrJobRef.current;
+
+        if (!currentJob || currentJob.jobId !== activeJob.jobId) {
+          return;
+        }
+
+        appendOcrErrorLog(
+          currentJob.jobId,
+          currentJob.meta,
+          `OCR candidate timed out after ${Math.round(OCR_JOB_TIMEOUT_MS / 1000)}s.`,
+        );
+        resetOcrWorkerAfterFailure(
+          "OCR候補の応答が一定時間返らなかったため、workerを再起動できる状態に戻しました。",
+          currentJob,
+        );
+        queueDeferredOcrSample();
+      }, OCR_JOB_TIMEOUT_MS);
+
+      activeJob.candidateIndex = candidateIndex;
+      activeJob.timeoutId = timeoutId;
+      activeOcrJobRef.current = activeJob;
+      appendSampleDiagnostic({
+        frameIndex: activeJob.sample.frameIndex,
+        timestampMs: activeJob.sample.timestampMs,
+        stage,
+        detail: `${candidate.strategy} / ${candidate.variantId}`,
+        preprocessVariantId: activeJob.sample.preprocessVariantId,
+        preprocessRejectReason: activeJob.sample.preprocessVariantRejectReason,
+        ocrVariantId: candidate.variantId,
+        ocrForegroundPixelRatio: activeJob.sample.ocrForegroundPixelRatio,
+        pendingOcrJobs: pendingOcrJobsRef.current,
+        ocrJobId: activeJob.jobId,
+        ocrConfidence: null,
+        lineCount: null,
+        ocrCandidateId: candidate.id,
+        ocrCandidateCount: activeJob.candidates.length,
+      });
+      setOcrStatusLabel(stage === "ocrQueued" ? "認識リクエスト送信" : "OCR fallback実行中");
+      worker.postMessage({
+        type: "recognize",
+        jobId: activeJob.jobId,
+        candidate,
+        meta: activeJob.meta,
+        config: OCR_WORKER_CONFIG,
+      } satisfies OCRWorkerRequest);
+
+      return true;
+    },
+    [
+      appendOcrErrorLog,
+      appendSampleDiagnostic,
+      queueDeferredOcrSample,
+      resetOcrWorkerAfterFailure,
+    ],
+  );
+
   const handleOcrWorkerMessage = useCallback(
     (event: MessageEvent<OCRWorkerResponse>) => {
       const response = event.data;
@@ -2162,9 +2449,14 @@ export function App() {
       }
 
       if (response.type === "result") {
-        clearActiveOcrJob(response.jobId);
-        setPendingOcrJobCount(pendingOcrJobsRef.current - 1);
-        const parseResult = parseBattleMessage({
+        const activeJob = activeOcrJobRef.current;
+
+        if (!activeJob || activeJob.jobId !== response.jobId) {
+          return;
+        }
+
+        window.clearTimeout(activeJob.timeoutId);
+        const candidateParseResult = parseBattleMessage({
           rawText: response.result.rawText,
           ocrConfidence: response.result.confidence,
           lines: response.result.lines.map((line) => line.text),
@@ -2173,20 +2465,94 @@ export function App() {
           sessionRosterDictionary: sessionRosterDictionaryRef.current,
           observedMoveDictionary: observedMoveDictionaryRef.current,
         });
+        const evaluatedCandidate: EvaluatedOcrCandidate = {
+          candidate: response.candidate,
+          result: response.result,
+          parseResult: candidateParseResult,
+          durationMs: response.durationMs,
+        };
+
+        activeJob.evaluatedCandidates.push(evaluatedCandidate);
+        const nextCandidateIndex = activeJob.candidateIndex + 1;
+
+        if (
+          shouldRetryOcrCandidate(evaluatedCandidate) &&
+          nextCandidateIndex < activeJob.candidates.length
+        ) {
+          addLog(
+            `OCR fallbackを実行します: ${response.candidate.id} -> ${activeJob.candidates[nextCandidateIndex].id}`,
+          );
+          postOcrCandidateAttempt(activeJob, nextCandidateIndex, "ocrRetryQueued");
+          return;
+        }
+
+        const selection = selectOcrCandidate(activeJob.evaluatedCandidates);
+        const selectedResult = selection.selected.result;
+        const parseResult = selection.parseResult;
+        const recognitionCandidates: OCRRecognitionCandidateTrace[] = activeJob.evaluatedCandidates
+          .slice(0, 3)
+          .map((candidate) => {
+            const assessment = selection.assessments.get(candidate.candidate.id);
+
+            return {
+              id: candidate.candidate.id,
+              variantId: candidate.candidate.variantId,
+              strategy: candidate.candidate.strategy,
+              pageSegModes: [
+                ...new Set(candidate.candidate.segments.map((segment) => segment.pageSegMode)),
+              ],
+              rawText: candidate.result.rawText,
+              confidence: candidate.result.confidence,
+              lineCount: candidate.result.lines.length,
+              parseStatus: candidate.parseResult.status,
+              eventSignatures: assessment?.eventSignatures ?? [],
+              score: assessment?.score ?? 0,
+              selected: candidate.candidate.id === selection.selected.candidate.id,
+              selectionReason:
+                candidate.candidate.id === selection.selected.candidate.id
+                  ? selection.reason
+                  : null,
+              durationMs: candidate.durationMs,
+            };
+          });
+
+        clearActiveOcrJob(response.jobId);
+        setPendingOcrJobCount(pendingOcrJobsRef.current - 1);
         const normalizedText = parseResult.normalizedText;
         const hasText = normalizedText.length > 0;
         const nextEntry: OCRLogEntry = {
           id: response.jobId,
           frameIndex: response.meta.frameIndex,
           timestampMs: response.meta.timestampMs,
-          rawText: response.result.rawText,
+          rawText: selectedResult.rawText,
           normalizedText,
           matchText: parseResult.matchText,
           parseResult,
-          confidence: response.result.confidence,
-          lineCount: response.result.lines.length,
+          confidence: selectedResult.confidence,
+          lineCount: selectedResult.lines.length,
           status: hasText ? "recognized" : "empty",
         };
+        appendSampleDiagnostic({
+          frameIndex: response.meta.frameIndex,
+          timestampMs: response.meta.timestampMs,
+          stage: selection.conflict ? "ocrCandidateConflict" : "ocrCandidateSelected",
+          detail: selection.reason,
+          preprocessVariantId: activeJob.sample.preprocessVariantId,
+          preprocessRejectReason: activeJob.sample.preprocessVariantRejectReason,
+          ocrVariantId: selection.selected.candidate.variantId,
+          ocrForegroundPixelRatio: activeJob.sample.ocrForegroundPixelRatio,
+          pendingOcrJobs: pendingOcrJobsRef.current,
+          ocrJobId: response.jobId,
+          ocrConfidence: selectedResult.confidence,
+          lineCount: selectedResult.lines.length,
+          ocrCandidateId: selection.selected.candidate.id,
+          ocrCandidateCount: activeJob.evaluatedCandidates.length,
+          ocrDurationMs: activeJob.evaluatedCandidates.reduce(
+            (total, candidate) => total + candidate.durationMs,
+            0,
+          ),
+          selectionReason: selection.reason,
+        });
         appendSampleDiagnostic({
           frameIndex: response.meta.frameIndex,
           timestampMs: response.meta.timestampMs,
@@ -2194,20 +2560,23 @@ export function App() {
           detail: hasText ? null : "OCR result was empty after normalization",
           preprocessVariantId: null,
           preprocessRejectReason: null,
-          ocrVariantId: null,
+          ocrVariantId: selection.selected.candidate.variantId,
           ocrForegroundPixelRatio: null,
           pendingOcrJobs: pendingOcrJobsRef.current,
           ocrJobId: response.jobId,
-          ocrConfidence: response.result.confidence,
-          lineCount: response.result.lines.length,
+          ocrConfidence: selectedResult.confidence,
+          lineCount: selectedResult.lines.length,
+          ocrCandidateId: selection.selected.candidate.id,
+          ocrCandidateCount: activeJob.evaluatedCandidates.length,
+          selectionReason: selection.reason,
         });
         const observation = createTimelineObservation({
           id: response.jobId,
           battleId: LIVE_BATTLE_ID,
-          rawText: response.result.rawText,
+          rawText: selectedResult.rawText,
           parseResult,
-          ocrConfidence: response.result.confidence,
-          lines: response.result.lines,
+          ocrConfidence: selectedResult.confidence,
+          lines: selectedResult.lines,
           frameIndex: response.meta.frameIndex,
           timestampMs: response.meta.timestampMs,
           roi: response.meta.roi,
@@ -2215,6 +2584,7 @@ export function App() {
           recentConstrainedCandidates: recentConstrainedCandidateRecordsRef.current,
           recentAcceptedEvents: recentAcceptedEventRecordsRef.current,
           candidatePromotionWindowMs: TIMELINE_DUPLICATE_WINDOW_MS,
+          recognitionCandidates,
         });
         const constrainedCandidateRecord = createConstrainedCandidateRecord(
           parseResult,
@@ -2274,6 +2644,7 @@ export function App() {
 
           if (acceptedEvents.some((acceptedEvent) => acceptedEvent.type === "battle_end")) {
             phaseGateStateRef.current.messagePhase = "ended";
+            deferredOcrSampleRef.current = null;
             addLog("勝負終了イベントを検出したため、以降のOCR投入を抑制します。");
           }
         }
@@ -2297,6 +2668,10 @@ export function App() {
 
         setOcrProgress(0);
         setOcrStatusLabel(hasText ? "認識済み" : "空候補");
+        if (selection.conflict) {
+          addLog("OCR候補が異なるeventを示したため、unknownへ保留しました。", "warn");
+        }
+        queueDeferredOcrSample();
         return;
       }
 
@@ -2312,6 +2687,7 @@ export function App() {
         }
 
         addLog(`OCRに失敗しました: ${response.message}`, "error");
+        queueDeferredOcrSample();
         return;
       }
 
@@ -2329,6 +2705,8 @@ export function App() {
       appendSampleDiagnostic,
       appendOcrErrorLog,
       clearActiveOcrJob,
+      postOcrCandidateAttempt,
+      queueDeferredOcrSample,
       rememberAcceptedEventRecord,
       rememberBattleEventDictionaries,
       resetOcrWorkerAfterFailure,
@@ -2383,6 +2761,7 @@ export function App() {
     (message?: string) => {
       isOcrEnabledRef.current = false;
       setIsOcrEnabled(false);
+      deferredOcrSampleRef.current = null;
       clearActiveOcrJob();
       setPendingOcrJobCount(0);
       setOcrProgress(0);
@@ -2430,15 +2809,17 @@ export function App() {
       }
 
       if (pendingOcrJobsRef.current >= MAX_PENDING_OCR_JOBS) {
+        const replaced = deferredOcrSampleRef.current !== null;
+        deferredOcrSampleRef.current = sample;
         appendFrameSampleDiagnostic(
           sample,
-          "skippedBusy",
-          `pending OCR jobs ${pendingOcrJobsRef.current}`,
+          "ocrDeferred",
+          replaced ? "latest deferred sample replaced" : "latest sample deferred while OCR is busy",
         );
         return;
       }
 
-      const worker = ensureOcrWorker();
+      ensureOcrWorker();
       const nextPendingCount = pendingOcrJobsRef.current + 1;
       const jobId = `ocr-${ocrJobCounterRef.current + 1}`;
       const sourceFrameRef = createSourceFrameRef(sample.frameIndex, sample.timestampMs);
@@ -2449,33 +2830,17 @@ export function App() {
         roi: sample.roi,
         timestampMs: sample.timestampMs,
       };
-      const message: OCRWorkerRequest = {
-        type: "recognize",
-        jobId,
-        imageDataUrl: sample.ocrDataUrl,
-        meta,
-        config: OCR_WORKER_CONFIG,
-      };
-      const timeoutId = window.setTimeout(() => {
-        const activeJob = activeOcrJobRef.current;
-
-        if (!activeJob || activeJob.jobId !== jobId) {
-          return;
-        }
-
-        appendOcrErrorLog(
-          activeJob.jobId,
-          activeJob.meta,
-          `OCR job timed out after ${Math.round(OCR_JOB_TIMEOUT_MS / 1000)}s.`,
-        );
-        resetOcrWorkerAfterFailure(
-          "OCRの応答が一定時間返らなかったため、workerを再起動できる状態に戻しました。",
-          activeJob,
-        );
-      }, OCR_JOB_TIMEOUT_MS);
-
       ocrJobCounterRef.current += 1;
-      activeOcrJobRef.current = { jobId, meta, timeoutId };
+      const activeJob: ActiveOcrJob = {
+        jobId,
+        meta,
+        sample,
+        candidates: sample.ocrCandidates.slice(0, 3),
+        candidateIndex: 0,
+        evaluatedCandidates: [],
+        timeoutId: 0,
+      };
+      activeOcrJobRef.current = activeJob;
       cropEvidenceBySourceRef.current.set(sourceFrameRef, {
         sourceFrameRef,
         rawDataUrl: sample.rawDataUrl,
@@ -2486,18 +2851,19 @@ export function App() {
       });
       pruneOldestMapEntries(cropEvidenceBySourceRef.current, MAX_CROP_EVIDENCE);
       setPendingOcrJobCount(nextPendingCount);
-      appendFrameSampleDiagnostic(sample, "ocrQueued", null, jobId);
-      setOcrStatusLabel("認識リクエスト送信");
-      worker.postMessage(message);
+      postOcrCandidateAttempt(activeJob, 0, "ocrQueued");
     },
     [
       appendFrameSampleDiagnostic,
-      appendOcrErrorLog,
       ensureOcrWorker,
-      resetOcrWorkerAfterFailure,
+      postOcrCandidateAttempt,
       setPendingOcrJobCount,
     ],
   );
+
+  useEffect(() => {
+    queueOcrRecognitionRef.current = queueOcrRecognition;
+  }, [queueOcrRecognition]);
 
   useEffect(() => {
     roiRef.current = roi;
@@ -2728,7 +3094,8 @@ export function App() {
   const resetMedia = useCallback(() => {
     stopSampling();
     stopOcr();
-    stopTracks(stream);
+    stopTracks(streamRef.current);
+    streamRef.current = null;
     stopAudioInput();
     clearObjectUrl();
     setStream(null);
@@ -2743,7 +3110,7 @@ export function App() {
       videoRef.current.srcObject = null;
       videoRef.current.removeAttribute("src");
     }
-  }, [clearObjectUrl, stopAudioInput, stopOcr, stopSampling, stopTracks, stream]);
+  }, [clearObjectUrl, stopAudioInput, stopOcr, stopSampling, stopTracks]);
 
   useEffect(() => {
     return () => {
@@ -2752,11 +3119,11 @@ export function App() {
       }
 
       clearActiveOcrJob();
-      stopTracks(stream);
+      stopTracks(streamRef.current);
       clearObjectUrl();
       ocrWorkerRef.current?.terminate();
     };
-  }, [clearActiveOcrJob, clearObjectUrl, stopTracks, stream]);
+  }, [clearActiveOcrJob, clearObjectUrl, stopTracks]);
 
   useEffect(() => stopAudioInput, [stopAudioInput]);
 
@@ -2923,6 +3290,7 @@ export function App() {
         videoTrack?.addEventListener(
           "ended",
           () => {
+            streamRef.current = null;
             setStream(null);
             mediaModeRef.current = "idle";
             setMediaMode("idle");
@@ -2938,6 +3306,7 @@ export function App() {
           await playVideoElement(videoRef.current);
         }
 
+        streamRef.current = deviceStream;
         setStream(deviceStream);
         mediaModeRef.current = "device";
         setMediaMode("device");
@@ -3244,6 +3613,10 @@ export function App() {
     setSuppressedTimelineCount(0);
     cropEvidenceBySourceRef.current.clear();
     sampleDiagnosticCounterRef.current = 0;
+    phaseTransitionCounterRef.current = 0;
+    phaseDetectionSummaryRef.current = createEmptyPhaseDetectionSummary();
+    phaseTransitionsRef.current = [];
+    deferredOcrSampleRef.current = null;
     resetPhaseGateState();
     recentTimelineDeduplicationRecordsRef.current = [];
     recentConstrainedCandidateRecordsRef.current = [];
@@ -3336,12 +3709,12 @@ export function App() {
 
   const handleResetOpponentHudRoi = useCallback(() => {
     setOpponentHudRoi(DEFAULT_OPPONENT_HUD_ROI);
-    addLog("相手HPバーHUD ROIを初期位置へ戻しました。");
+    addLog("相手バトルHUD ROIを初期位置へ戻しました。");
   }, [addLog]);
 
   const handleResetPlayerHudRoi = useCallback(() => {
     setPlayerHudRoi(DEFAULT_PLAYER_HUD_ROI);
-    addLog("味方HPバーHUD ROIを初期位置へ戻しました。");
+    addLog("味方バトルHUD ROIを初期位置へ戻しました。");
   }, [addLog]);
 
   const handleResetVsRoi = useCallback(() => {
@@ -3792,9 +4165,9 @@ export function App() {
       roi,
       roiName: "Battle message ROI",
       opponentHudRoi,
-      opponentHudRoiName: "Opponent HP bar HUD ROI",
+      opponentHudRoiName: "Opponent battle HUD ROI",
       playerHudRoi,
-      playerHudRoiName: "Player HP bar HUD ROI",
+      playerHudRoiName: "Player battle HUD ROI",
       vsRoi,
       vsRoiName: "VS splash ROI",
       ocrMessages,
@@ -3802,6 +4175,8 @@ export function App() {
       unknowns: unknownEvents,
       frameEvidence,
       sampleDiagnostics,
+      phaseDetectionSummary: phaseDetectionSummaryRef.current,
+      phaseTransitions: phaseTransitionsRef.current,
       reviewNotes,
     });
   }, [
@@ -3841,6 +4216,12 @@ export function App() {
       );
       setOcrMessages(sortNewestFirst(document.ocrMessages));
       setSampleDiagnostics(sortNewestFirst(document.sampleDiagnostics ?? []));
+      phaseDetectionSummaryRef.current = document.phaseDetectionSummary;
+      phaseTransitionsRef.current = sortNewestFirst(document.phaseTransitions).slice(
+        0,
+        MAX_PHASE_TRANSITIONS,
+      );
+      phaseTransitionCounterRef.current = phaseTransitionsRef.current.length;
       setBattleEvents(restoredEvents);
       setUnknownEvents(sortNewestFirst(document.unknowns));
       setReviewNotes(
@@ -4240,7 +4621,7 @@ export function App() {
               ) : null}
               {isOpponentHudRoiVisible ? (
                 <RoiOverlay
-                  label="HPバーHUD ROI（相手）"
+                  label="バトルHUD ROI（相手）"
                   roi={opponentHudRoi}
                   tone="hud"
                   onChange={setOpponentHudRoi}
@@ -4248,7 +4629,7 @@ export function App() {
               ) : null}
               {isPlayerHudRoiVisible ? (
                 <RoiOverlay
-                  label="HPバーHUD ROI（味方）"
+                  label="バトルHUD ROI（味方）"
                   roi={playerHudRoi}
                   tone="hud"
                   onChange={setPlayerHudRoi}
@@ -4350,9 +4731,9 @@ export function App() {
                 onNumberChange={handleRoiNumberChange}
               />
               <RoiControlSection
-                title="HPバーHUD ROI（相手）"
-                actionLabelPrefix="相手HPバーHUD ROI"
-                numberLabelPrefix="相手HPバーHUD ROI"
+                title="バトルHUD ROI（相手）"
+                actionLabelPrefix="相手バトルHUD ROI"
+                numberLabelPrefix="相手バトルHUD ROI"
                 roi={opponentHudRoi}
                 isVisible={isOpponentHudRoiVisible}
                 onReset={handleResetOpponentHudRoi}
@@ -4360,9 +4741,9 @@ export function App() {
                 onNumberChange={handleOpponentHudRoiNumberChange}
               />
               <RoiControlSection
-                title="HPバーHUD ROI（味方）"
-                actionLabelPrefix="味方HPバーHUD ROI"
-                numberLabelPrefix="味方HPバーHUD ROI"
+                title="バトルHUD ROI（味方）"
+                actionLabelPrefix="味方バトルHUD ROI"
+                numberLabelPrefix="味方バトルHUD ROI"
                 roi={playerHudRoi}
                 isVisible={isPlayerHudRoiVisible}
                 onReset={handleResetPlayerHudRoi}

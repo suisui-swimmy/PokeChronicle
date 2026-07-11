@@ -1,6 +1,10 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type {
+  OCRWorkerRequest,
+  OCRWorkerResponse,
+} from "../core/ocr/workerMessages";
 import { App } from "./App";
 
 const videoTrack = {
@@ -46,6 +50,51 @@ const createObjectURL = vi.fn(() => "blob:mock-preview");
 const revokeObjectURL = vi.fn();
 const HEADER_MEDIA_SETTINGS_STORAGE_KEY = "pokechronicle:header-media-settings:v1";
 const ROI_SETTINGS_STORAGE_KEY = "pokechronicle:roi-settings:v1";
+const mockOcrWorkers: MockOcrWorker[] = [];
+
+class MockOcrWorker {
+  onmessage: ((event: MessageEvent<OCRWorkerResponse>) => void) | null = null;
+  onerror: ((event: ErrorEvent) => void) | null = null;
+  onmessageerror: ((event: MessageEvent) => void) | null = null;
+  postMessage = vi.fn<(message: OCRWorkerRequest) => void>();
+  terminate = vi.fn();
+
+  constructor() {
+    mockOcrWorkers.push(this);
+  }
+
+  emit(message: OCRWorkerResponse) {
+    this.onmessage?.({ data: message } as MessageEvent<OCRWorkerResponse>);
+  }
+}
+
+function createSyntheticMessageImage(width: number, height: number) {
+  const image = new ImageData(width, height);
+
+  for (let index = 0; index < image.data.length; index += 4) {
+    image.data[index] = 16;
+    image.data[index + 1] = 18;
+    image.data[index + 2] = 24;
+    image.data[index + 3] = 255;
+  }
+
+  const rowStarts = [Math.max(3, Math.floor(height * 0.24)), Math.max(8, Math.floor(height * 0.62))];
+
+  for (const y of rowStarts) {
+    for (let x = 4; x + 1 < width - 4; x += 6) {
+      for (let dy = 0; dy < 2 && y + dy < height; dy += 1) {
+        for (let dx = 0; dx < 2; dx += 1) {
+          const index = ((y + dy) * width + x + dx) * 4;
+          image.data[index] = 244;
+          image.data[index + 1] = 244;
+          image.data[index + 2] = 244;
+        }
+      }
+    }
+  }
+
+  return image;
+}
 
 function getBadgeForText(label: string) {
   return screen.getByText(label).closest(".input-badge");
@@ -55,6 +104,7 @@ describe("App", () => {
   beforeEach(() => {
     vi.useRealTimers();
     vi.clearAllMocks();
+    mockOcrWorkers.length = 0;
     window.localStorage.clear();
     Object.defineProperty(document, "fullscreenElement", {
       configurable: true,
@@ -146,11 +196,7 @@ describe("App", () => {
 
     Object.defineProperty(globalThis, "Worker", {
       configurable: true,
-      value: class {
-        addEventListener = vi.fn();
-        postMessage = vi.fn();
-        terminate = vi.fn();
-      },
+      value: MockOcrWorker,
     });
 
     Object.defineProperty(window, "AudioContext", {
@@ -353,8 +399,8 @@ describe("App", () => {
     expect(screen.getByRole("heading", { name: "ROI設定" })).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "メッセージROI表示" })).not.toBeChecked();
     expect(screen.queryByRole("checkbox", { name: "待機ROI表示" })).not.toBeInTheDocument();
-    expect(screen.getByRole("checkbox", { name: "相手HPバーHUD ROI表示" })).not.toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "味方HPバーHUD ROI表示" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "相手バトルHUD ROI表示" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "味方バトルHUD ROI表示" })).not.toBeChecked();
     expect(screen.getByRole("checkbox", { name: "VS ROI表示" })).not.toBeChecked();
     expect(screen.getByText(/x=0.1500 y=0.7200 w=0.5000 h=0.1400/)).toBeInTheDocument();
     expect(screen.getByText(/x=0.5500 y=0.0300 w=0.4300 h=0.1400/)).toBeInTheDocument();
@@ -367,14 +413,14 @@ describe("App", () => {
     expect(screen.getByRole("spinbutton", { name: "ROI W" })).toHaveValue(0.5);
     expect(screen.getByRole("spinbutton", { name: "ROI H" })).toHaveValue(0.14);
     expect(screen.queryByRole("spinbutton", { name: "通信待機ROI X" })).not.toBeInTheDocument();
-    expect(screen.getByRole("spinbutton", { name: "相手HPバーHUD ROI X" })).toHaveValue(0.55);
-    expect(screen.getByRole("spinbutton", { name: "相手HPバーHUD ROI Y" })).toHaveValue(0.03);
-    expect(screen.getByRole("spinbutton", { name: "相手HPバーHUD ROI W" })).toHaveValue(0.43);
-    expect(screen.getByRole("spinbutton", { name: "相手HPバーHUD ROI H" })).toHaveValue(0.14);
-    expect(screen.getByRole("spinbutton", { name: "味方HPバーHUD ROI X" })).toHaveValue(0.02);
-    expect(screen.getByRole("spinbutton", { name: "味方HPバーHUD ROI Y" })).toHaveValue(0.84);
-    expect(screen.getByRole("spinbutton", { name: "味方HPバーHUD ROI W" })).toHaveValue(0.46);
-    expect(screen.getByRole("spinbutton", { name: "味方HPバーHUD ROI H" })).toHaveValue(0.14);
+    expect(screen.getByRole("spinbutton", { name: "相手バトルHUD ROI X" })).toHaveValue(0.55);
+    expect(screen.getByRole("spinbutton", { name: "相手バトルHUD ROI Y" })).toHaveValue(0.03);
+    expect(screen.getByRole("spinbutton", { name: "相手バトルHUD ROI W" })).toHaveValue(0.43);
+    expect(screen.getByRole("spinbutton", { name: "相手バトルHUD ROI H" })).toHaveValue(0.14);
+    expect(screen.getByRole("spinbutton", { name: "味方バトルHUD ROI X" })).toHaveValue(0.02);
+    expect(screen.getByRole("spinbutton", { name: "味方バトルHUD ROI Y" })).toHaveValue(0.84);
+    expect(screen.getByRole("spinbutton", { name: "味方バトルHUD ROI W" })).toHaveValue(0.46);
+    expect(screen.getByRole("spinbutton", { name: "味方バトルHUD ROI H" })).toHaveValue(0.14);
     expect(screen.getByRole("spinbutton", { name: "VS ROI X" })).toHaveValue(0.34);
     expect(screen.getByRole("spinbutton", { name: "VS ROI Y" })).toHaveValue(0.32);
     expect(screen.getByRole("spinbutton", { name: "VS ROI W" })).toHaveValue(0.32);
@@ -392,8 +438,8 @@ describe("App", () => {
     expect(screen.getByRole("spinbutton", { name: "ROI W" })).toHaveValue(0.5);
     expect(screen.getByRole("spinbutton", { name: "ROI H" })).toHaveValue(0.14);
     expect(screen.queryByRole("button", { name: "待機ROIリセット" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "相手HPバーHUD ROIリセット" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "味方HPバーHUD ROIリセット" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "相手バトルHUD ROIリセット" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "味方バトルHUD ROIリセット" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "VS ROIリセット" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "メッセージROIリセット" })).toBeInTheDocument();
 
@@ -423,7 +469,7 @@ describe("App", () => {
     ).toBeDisabled();
     expect(screen.getByRole("heading", { name: "リアルタイムOCR" })).toBeInTheDocument();
     expect(screen.getByLabelText("OCR sampling diagnostics")).toHaveTextContent("sampled0");
-    expect(screen.getByLabelText("OCR sampling diagnostics")).toHaveTextContent("hpHudSampled0");
+    expect(screen.getByLabelText("OCR sampling diagnostics")).toHaveTextContent("battleHudSampled0");
     expect(screen.getByLabelText("OCR sampling diagnostics")).toHaveTextContent("vsSampled0");
     expect(screen.getByLabelText("OCR sampling diagnostics")).toHaveTextContent("skippedPhase0");
     expect(screen.getByLabelText("OCR sampling diagnostics")).toHaveTextContent("ocrQueued0");
@@ -884,6 +930,114 @@ describe("App", () => {
     ).toBeInTheDocument();
   });
 
+  it("retries a weak block candidate and records only the selected linewise switch event", async () => {
+    const user = userEvent.setup();
+    const canvasContext = {
+      drawImage: vi.fn(),
+      getImageData: vi.fn(
+        (_x: number, _y: number, width: number, height: number) =>
+          createSyntheticMessageImage(width, height),
+      ),
+      imageSmoothingEnabled: false,
+      putImageData: vi.fn(),
+    } as unknown as CanvasRenderingContext2D;
+
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
+      () => canvasContext,
+    );
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue(
+      "data:image/png;base64,mock",
+    );
+    vi.spyOn(HTMLVideoElement.prototype, "videoWidth", "get").mockReturnValue(640);
+    vi.spyOn(HTMLVideoElement.prototype, "videoHeight", "get").mockReturnValue(360);
+    vi.spyOn(window, "setInterval").mockImplementation(
+      () => 1 as unknown as ReturnType<typeof window.setInterval>,
+    );
+
+    render(<App />);
+
+    await screen.findByRole("combobox", { name: "映像デバイス" });
+    await user.click(screen.getByRole("button", { name: "開始" }));
+    await waitFor(() => expect(mockOcrWorkers).toHaveLength(1));
+    const worker = mockOcrWorkers[0];
+
+    await waitFor(() => expect(worker.postMessage).toHaveBeenCalledTimes(1));
+    const firstRequest = worker.postMessage.mock.calls[0][0];
+
+    expect(firstRequest.type).toBe("recognize");
+    if (firstRequest.type !== "recognize") {
+      throw new Error("recognize request was not queued");
+    }
+    expect(firstRequest.candidate).toMatchObject({ id: "primary", strategy: "block" });
+    expect(firstRequest.candidate.variantId).toContain("top-2-lines");
+
+    act(() => {
+      worker.emit({
+        type: "result",
+        jobId: firstRequest.jobId,
+        meta: firstRequest.meta,
+        candidate: firstRequest.candidate,
+        result: {
+          rawText: "くろまろは ー",
+          confidence: 0.86,
+          lines: [
+            {
+              text: "くろまろは ー",
+              confidence: 0.86,
+              bbox: null,
+            },
+          ],
+        },
+        segmentResults: [],
+        durationMs: 18,
+      });
+    });
+
+    await waitFor(() => expect(worker.postMessage).toHaveBeenCalledTimes(2));
+    const fallbackRequest = worker.postMessage.mock.calls[1][0];
+
+    expect(fallbackRequest.type).toBe("recognize");
+    if (fallbackRequest.type !== "recognize") {
+      throw new Error("fallback recognize request was not queued");
+    }
+    expect(fallbackRequest.candidate).toMatchObject({ id: "linewise", strategy: "linewise" });
+
+    act(() => {
+      worker.emit({
+        type: "result",
+        jobId: fallbackRequest.jobId,
+        meta: fallbackRequest.meta,
+        candidate: fallbackRequest.candidate,
+        result: {
+          rawText: "くろまろは ー\nエルフーンを 繰り出した/",
+          confidence: 0.74,
+          lines: [
+            {
+              text: "くろまろは ー",
+              confidence: 0.72,
+              bbox: null,
+            },
+            {
+              text: "エルフーンを 繰り出した/",
+              confidence: 0.76,
+              bbox: null,
+            },
+          ],
+        },
+        segmentResults: [],
+        durationMs: 24,
+      });
+    });
+
+    await user.click(screen.getByRole("tab", { name: "ログ" }));
+    await waitFor(() => {
+      expect(screen.getAllByText("ゆけっ! エルフーン!").length).toBeGreaterThan(0);
+    });
+    expect(within(screen.getByRole("tab", { name: /Timeline/ })).getByText("1")).toBeInTheDocument();
+    expect(within(screen.getByRole("tab", { name: /Unknown/ })).getByText("0")).toBeInTheDocument();
+    expect(worker.postMessage).toHaveBeenCalledTimes(2);
+  });
+
   it("configures ROI from analysis and data management", async () => {
     const user = userEvent.setup();
     render(<App />);
@@ -891,22 +1045,22 @@ describe("App", () => {
     expect(await screen.findByRole("combobox", { name: "映像デバイス" })).toHaveValue("video-usb");
     expect(screen.queryByLabelText("メッセージROI adjustment layer")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("通信待機ROI adjustment layer")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("HPバーHUD ROI（相手） adjustment layer")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("バトルHUD ROI（相手） adjustment layer")).not.toBeInTheDocument();
 
     expect(screen.getByLabelText("analysis and data management")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "ROI" }));
     expect(screen.queryByText("詳細調整")).not.toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "メッセージROI表示" })).not.toBeChecked();
     expect(screen.queryByRole("checkbox", { name: "待機ROI表示" })).not.toBeInTheDocument();
-    expect(screen.getByRole("checkbox", { name: "相手HPバーHUD ROI表示" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "相手バトルHUD ROI表示" })).not.toBeChecked();
     fireEvent.change(screen.getByRole("spinbutton", { name: "ROI X" }), {
       target: { value: "0.1" },
     });
-    fireEvent.change(screen.getByRole("spinbutton", { name: "相手HPバーHUD ROI X" }), {
+    fireEvent.change(screen.getByRole("spinbutton", { name: "相手バトルHUD ROI X" }), {
       target: { value: "0.44" },
     });
     expect(screen.getByRole("spinbutton", { name: "ROI X" })).toHaveValue(0.1);
-    expect(screen.getByRole("spinbutton", { name: "相手HPバーHUD ROI X" })).toHaveValue(0.44);
+    expect(screen.getByRole("spinbutton", { name: "相手バトルHUD ROI X" })).toHaveValue(0.44);
     expect(screen.getByText(/x=0.1000 y=0.7200 w=0.5000 h=0.1400/)).toBeInTheDocument();
     expect(screen.getByText(/x=0.4400 y=0.0300 w=0.4300 h=0.1400/)).toBeInTheDocument();
     await waitFor(() => {
@@ -930,8 +1084,8 @@ describe("App", () => {
       });
     });
 
-    fireEvent.click(screen.getByRole("checkbox", { name: "相手HPバーHUD ROI表示" }));
-    expect(screen.getByLabelText("HPバーHUD ROI（相手） adjustment layer")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: "相手バトルHUD ROI表示" }));
+    expect(screen.getByLabelText("バトルHUD ROI（相手） adjustment layer")).toBeInTheDocument();
     await waitFor(() => {
       expect(JSON.parse(window.localStorage.getItem(ROI_SETTINGS_STORAGE_KEY) ?? "{}")).toMatchObject({
         isOpponentHudRoiVisible: true,
@@ -940,13 +1094,13 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("checkbox", { name: "メッセージROI表示" }));
     expect(screen.queryByLabelText("メッセージROI adjustment layer")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("HPバーHUD ROI（相手） adjustment layer")).toBeInTheDocument();
+    expect(screen.getByLabelText("バトルHUD ROI（相手） adjustment layer")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "メッセージROIリセット" }));
     expect(screen.getByRole("spinbutton", { name: "ROI X" })).toHaveValue(0.15);
     expect(screen.getByRole("spinbutton", { name: "ROI W" })).toHaveValue(0.5);
-    fireEvent.click(screen.getByRole("button", { name: "相手HPバーHUD ROIリセット" }));
-    expect(screen.getByRole("spinbutton", { name: "相手HPバーHUD ROI X" })).toHaveValue(0.55);
+    fireEvent.click(screen.getByRole("button", { name: "相手バトルHUD ROIリセット" }));
+    expect(screen.getByRole("spinbutton", { name: "相手バトルHUD ROI X" })).toHaveValue(0.55);
     await user.click(screen.getByRole("tab", { name: "ログ" }));
     await user.click(screen.getByRole("tab", { name: /System/ }));
     expect(
@@ -975,13 +1129,13 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByLabelText("メッセージROI adjustment layer")).toBeInTheDocument();
-    expect(screen.getByLabelText("HPバーHUD ROI（相手） adjustment layer")).toBeInTheDocument();
-    expect(screen.getByLabelText("HPバーHUD ROI（味方） adjustment layer")).toBeInTheDocument();
+    expect(screen.getByLabelText("バトルHUD ROI（相手） adjustment layer")).toBeInTheDocument();
+    expect(screen.getByLabelText("バトルHUD ROI（味方） adjustment layer")).toBeInTheDocument();
     expect(screen.getByLabelText("VS ROI adjustment layer")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "ROI" }));
     expect(screen.getByRole("checkbox", { name: "メッセージROI表示" })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "相手HPバーHUD ROI表示" })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "味方HPバーHUD ROI表示" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "相手バトルHUD ROI表示" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "味方バトルHUD ROI表示" })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: "VS ROI表示" })).toBeChecked();
     expect(screen.getByText(/x=0.2400 y=0.6600 w=0.4200 h=0.1200/)).toBeInTheDocument();
     expect(screen.getByText(/x=0.4300 y=0.2000 w=0.1600 h=0.1300/)).toBeInTheDocument();
@@ -991,14 +1145,14 @@ describe("App", () => {
     expect(screen.getByRole("spinbutton", { name: "ROI Y" })).toHaveValue(0.66);
     expect(screen.getByRole("spinbutton", { name: "ROI W" })).toHaveValue(0.42);
     expect(screen.getByRole("spinbutton", { name: "ROI H" })).toHaveValue(0.12);
-    expect(screen.getByRole("spinbutton", { name: "相手HPバーHUD ROI X" })).toHaveValue(0.43);
-    expect(screen.getByRole("spinbutton", { name: "相手HPバーHUD ROI Y" })).toHaveValue(0.2);
-    expect(screen.getByRole("spinbutton", { name: "相手HPバーHUD ROI W" })).toHaveValue(0.16);
-    expect(screen.getByRole("spinbutton", { name: "相手HPバーHUD ROI H" })).toHaveValue(0.13);
-    expect(screen.getByRole("spinbutton", { name: "味方HPバーHUD ROI X" })).toHaveValue(0.03);
-    expect(screen.getByRole("spinbutton", { name: "味方HPバーHUD ROI Y" })).toHaveValue(0.82);
-    expect(screen.getByRole("spinbutton", { name: "味方HPバーHUD ROI W" })).toHaveValue(0.44);
-    expect(screen.getByRole("spinbutton", { name: "味方HPバーHUD ROI H" })).toHaveValue(0.12);
+    expect(screen.getByRole("spinbutton", { name: "相手バトルHUD ROI X" })).toHaveValue(0.43);
+    expect(screen.getByRole("spinbutton", { name: "相手バトルHUD ROI Y" })).toHaveValue(0.2);
+    expect(screen.getByRole("spinbutton", { name: "相手バトルHUD ROI W" })).toHaveValue(0.16);
+    expect(screen.getByRole("spinbutton", { name: "相手バトルHUD ROI H" })).toHaveValue(0.13);
+    expect(screen.getByRole("spinbutton", { name: "味方バトルHUD ROI X" })).toHaveValue(0.03);
+    expect(screen.getByRole("spinbutton", { name: "味方バトルHUD ROI Y" })).toHaveValue(0.82);
+    expect(screen.getByRole("spinbutton", { name: "味方バトルHUD ROI W" })).toHaveValue(0.44);
+    expect(screen.getByRole("spinbutton", { name: "味方バトルHUD ROI H" })).toHaveValue(0.12);
     expect(screen.getByRole("spinbutton", { name: "VS ROI X" })).toHaveValue(0.31);
     expect(screen.getByRole("spinbutton", { name: "VS ROI Y" })).toHaveValue(0.28);
     expect(screen.getByRole("spinbutton", { name: "VS ROI W" })).toHaveValue(0.34);
