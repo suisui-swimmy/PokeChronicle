@@ -79,6 +79,10 @@ function unique<T>(values: readonly T[]) {
   return [...new Set(values)];
 }
 
+function createEventBundleSignature(eventSignatures: readonly string[]) {
+  return [...eventSignatures].sort().join("\n");
+}
+
 export function assessOcrCandidate(candidate: EvaluatedOcrCandidate): OcrCandidateAssessment {
   const normalizedLength = Array.from(candidate.parseResult.normalizedText).length;
   const ocrConfidence = candidate.result.confidence ?? 0;
@@ -175,16 +179,23 @@ export function selectOcrCandidate(
     return (right.result.confidence ?? 0) - (left.result.confidence ?? 0);
   });
   const selected = ranked[0];
-  const strongSignatures = unique(
-    candidates.flatMap((candidate) => {
-      const assessment = assessments.get(candidate.candidate.id);
-      return assessment?.isStrong ? assessment.eventSignatures : [];
-    }),
+  const strongAssessments = candidates.flatMap((candidate) => {
+    const assessment = assessments.get(candidate.candidate.id);
+    return assessment?.isStrong ? [assessment] : [];
+  });
+  const strongBundles = unique(
+    strongAssessments.map((assessment) =>
+      createEventBundleSignature(assessment.eventSignatures),
+    ),
   );
-  const conflict = strongSignatures.length > 1;
+  const conflict = strongBundles.length > 1;
   const selectedAssessment = assessments.get(selected.candidate.id);
 
   if (conflict) {
+    const strongSignatures = unique(
+      strongAssessments.flatMap((assessment) => assessment.eventSignatures),
+    );
+
     return {
       selected,
       parseResult: createConflictParseResult(selected, strongSignatures),

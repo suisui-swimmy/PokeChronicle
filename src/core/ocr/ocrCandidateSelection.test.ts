@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseBattleMessage } from "../parser/seedParser";
+import { getParsedBattleEvents, parseBattleMessage } from "../parser/seedParser";
 import {
   selectOcrCandidate,
   shouldRetryOcrCandidate,
@@ -64,6 +64,60 @@ describe("adaptive OCR candidate selection", () => {
     );
 
     expect(shouldRetryOcrCandidate(primary)).toBe(false);
+  });
+
+  it("accepts two events emitted by one strong candidate", () => {
+    const primary = createCandidate(
+      "primary",
+      "くろまろは イベントにさんかした リザードンと\nエルフーンを 繰り出した/ 関",
+      0.93,
+    );
+    const selection = selectOcrCandidate([primary]);
+
+    expect(selection.conflict).toBe(false);
+    expect(selection.reason).toBe("strong-event-selected");
+    expect(getParsedBattleEvents(selection.parseResult).map((event) => event.actor.name)).toEqual([
+      "リザードン",
+      "エルフーン",
+    ]);
+  });
+
+  it("accepts strong candidates that agree on the same multi-event bundle", () => {
+    const primary = createCandidate(
+      "primary",
+      "くろまろは イベントにさんかした リザードンと\nエルフーンを 繰り出した!",
+      0.93,
+    );
+    const retry = createCandidate(
+      "linewise",
+      "くぐろまろは イベントにさんかがかしただ リザードンと\nエルフーンを 繰り出した!",
+      0.91,
+    );
+    const selection = selectOcrCandidate([primary, retry]);
+
+    expect(selection.conflict).toBe(false);
+    expect(getParsedBattleEvents(selection.parseResult).map((event) => event.actor.name)).toEqual([
+      "リザードン",
+      "エルフーン",
+    ]);
+  });
+
+  it("holds strong candidates with different multi-event bundles as unknown", () => {
+    const opponentSwitchIn = createCandidate(
+      "primary",
+      "くろまろは イベントにさんかした リザードンと\nエルフーンを 繰り出した!",
+      0.93,
+    );
+    const playerSwitchIn = createCandidate(
+      "linewise",
+      "ゆけっ! ドドゲザン!\nマフォクシー!",
+      0.9,
+    );
+    const selection = selectOcrCandidate([opponentSwitchIn, playerSwitchIn]);
+
+    expect(selection.conflict).toBe(true);
+    expect(selection.parseResult.status).toBe("unknown");
+    expect(selection.parseResult.candidateMatches.join("\n")).toContain("ocr-conflict:");
   });
 
   it("holds conflicting strong event signatures as unknown", () => {
