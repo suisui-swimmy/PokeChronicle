@@ -27,6 +27,8 @@ Use the Battle Log JSON as the source of truth. Use CSVs only as auxiliary evide
 
 Do not require the user to hand-list every missed message first. Start from the Battle Log JSON, let the report cluster unknowns and propose candidates, then ask for copied messages or screenshots only when OCR/preprocess context or battle context is still ambiguous.
 
+When the actual in-game wording cannot be established from the Battle Log, recognition candidates, saved frame evidence, or nearby events, ask the user to provide the correct wording. Identify the exact timestamp, frame, or unknown cluster and request only the minimum unresolved text instead of asking for a full missed-message list. Preserve meaningful line breaks from the user's answer in regression tests. Do not infer or activate a rule from an uncertain OCR/champout approximation; keep it as unknown, candidate, or `hold_review` until the ground truth is available.
+
 ## First Pass
 
 1. Read current project context before editing:

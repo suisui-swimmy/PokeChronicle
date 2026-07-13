@@ -6,9 +6,14 @@ import type {
   OCRRecognitionCandidateTrace,
   UnknownEvent,
 } from "./schema";
-import { getParsedBattleEvents, type BattleMessageParseResult } from "../parser/seedParser";
+import {
+  getParsedBattleEvents,
+  type BattleMessageParseResult,
+  type ParsedBattleEvent,
+} from "../parser/seedParser";
 
 export const DEFAULT_TIMELINE_DUPLICATE_WINDOW_MS = 2500;
+const SIDE_EFFECT_CONTEXT_WINDOW_MS = 6000;
 
 export interface TimelineObservationInput {
   id: string;
@@ -425,6 +430,36 @@ export function createAcceptedEventRecord(
   };
 }
 
+function inferContextualActorSide(
+  event: Pick<ParsedBattleEvent, "type" | "actor">,
+  input: TimelineObservationInput,
+) {
+  if (
+    event.type !== "side_start" ||
+    event.actor.side !== null ||
+    !input.parseResult.matchText.includes("追い風")
+  ) {
+    return event.actor;
+  }
+
+  const recentMove = [...(input.recentAcceptedEvents ?? [])]
+    .filter((record) => {
+      const deltaMs = input.timestampMs - record.timestampMs;
+
+      return (
+        record.eventType === "move" &&
+        record.actorSide !== null &&
+        deltaMs >= 0 &&
+        deltaMs <= SIDE_EFFECT_CONTEXT_WINDOW_MS
+      );
+    })
+    .sort((left, right) => right.timestampMs - left.timestampMs)[0];
+
+  return recentMove
+    ? { ...event.actor, side: recentMove.actorSide }
+    : event.actor;
+}
+
 function createBattleEvents(
   input: TimelineObservationInput,
   promotedCandidate: ParsedConstrainedCandidateMatch | null,
@@ -434,16 +469,24 @@ function createBattleEvents(
   }
 
   if (promotedCandidate) {
+    const actor = inferContextualActorSide(
+      {
+        type: promotedCandidate.eventType,
+        actor: {
+          name: promotedCandidate.actorName,
+          side: promotedCandidate.actorSide,
+        },
+      },
+      input,
+    );
+
     return [{
       id: `evt_${input.id}`,
       battleId: input.battleId,
       turn: null,
       timestampMs: input.timestampMs,
       type: promotedCandidate.eventType,
-      actor: {
-        name: promotedCandidate.actorName,
-        side: promotedCandidate.actorSide,
-      },
+      actor,
       move: promotedCandidate.move,
       target: promotedCandidate.targetName
         ? {
@@ -485,7 +528,7 @@ function createBattleEvents(
     turn: null,
     timestampMs: input.timestampMs,
     type: event.type,
-    actor: event.actor,
+    actor: inferContextualActorSide(event, input),
     move: event.move,
     target: event.target,
     rawText: input.rawText,

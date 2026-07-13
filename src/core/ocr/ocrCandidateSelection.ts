@@ -83,6 +83,37 @@ function createEventBundleSignature(eventSignatures: readonly string[]) {
   return [...eventSignatures].sort().join("\n");
 }
 
+function isHighSignalFaintCandidate(
+  events: readonly ParsedBattleEvent[],
+  matchText: string,
+  ocrConfidence: number,
+  eventConfidence: number,
+) {
+  return (
+    events.length === 1 &&
+    events[0].type === "faint" &&
+    Boolean(events[0].actor.name) &&
+    /(?:倒れ|たおれ|たおあれ|だおれ|おれだ|ひんし)/u.test(matchText) &&
+    ocrConfidence >= 0.75 &&
+    eventConfidence >= 0.78
+  );
+}
+
+function isHighSignalDegradedSwitchInCandidate(
+  events: readonly ParsedBattleEvent[],
+  ocrConfidence: number,
+  eventConfidence: number,
+) {
+  return (
+    events.length === 1 &&
+    events[0].type === "switch_in" &&
+    Boolean(events[0].actor.name) &&
+    events[0].classification.templateId === "switch_in_degraded_call" &&
+    ocrConfidence >= 0.7 &&
+    eventConfidence >= 0.68
+  );
+}
+
 export function assessOcrCandidate(candidate: EvaluatedOcrCandidate): OcrCandidateAssessment {
   const normalizedLength = Array.from(candidate.parseResult.normalizedText).length;
   const ocrConfidence = candidate.result.confidence ?? 0;
@@ -106,11 +137,31 @@ export function assessOcrCandidate(candidate: EvaluatedOcrCandidate): OcrCandida
     (method) => method === "seed_rule" || method === "template_dictionary",
   );
   const hasFuzzyMethod = methods.some((method) => method === "fuzzy_dictionary");
+  const hasHighSignalFaint = isHighSignalFaintCandidate(
+    events,
+    candidate.parseResult.matchText,
+    ocrConfidence,
+    eventConfidence,
+  );
+  const hasHighSignalDegradedSwitchIn = isHighSignalDegradedSwitchInCandidate(
+    events,
+    ocrConfidence,
+    eventConfidence,
+  );
   const isStrong =
     slotsComplete &&
     normalizedLength >= 3 &&
-    (hasOnlyStrongMethods || (hasFuzzyMethod && eventConfidence >= 0.82));
-  const methodScore = hasOnlyStrongMethods ? 18 : hasFuzzyMethod ? 7 : 3;
+    (hasOnlyStrongMethods ||
+      hasHighSignalFaint ||
+      hasHighSignalDegradedSwitchIn ||
+      (hasFuzzyMethod && eventConfidence >= 0.82));
+  const methodScore = hasOnlyStrongMethods
+    ? 18
+    : hasHighSignalFaint || hasHighSignalDegradedSwitchIn
+      ? 14
+      : hasFuzzyMethod
+        ? 7
+        : 3;
 
   return {
     score:

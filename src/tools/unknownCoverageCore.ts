@@ -24,10 +24,32 @@ import {
 } from "../core/parser/seedParser";
 import { normalizedOcrWeightedSimilarity } from "../core/dictionary/fuzzyMatch";
 import { createOcrMatchText } from "../core/normalize/ocrText";
+import type { DictionaryEntry } from "../core/dictionary/types";
 
 const DEFAULT_ROI = { x: 0, y: 0, w: 1, h: 1 } satisfies NormalizedRoi;
 const DEFAULT_TOP_LIMIT = 12;
 const RECENT_CONTEXT_WINDOW_MS = 2500;
+const ACCEPTED_EVENT_CONTEXT_WINDOW_MS = 6000;
+const MAX_SESSION_ROSTER_DICTIONARY_ENTRIES = 18;
+const MAX_OBSERVED_MOVE_DICTIONARY_ENTRIES = 96;
+
+function upsertReplayDictionaryEntry(
+  currentEntries: readonly DictionaryEntry[],
+  kind: "pokemon" | "move",
+  label: string | null,
+  limit: number,
+) {
+  if (!label) {
+    return currentEntries;
+  }
+
+  const idPrefix = kind === "pokemon" ? "replay-roster" : "replay-move";
+
+  return [
+    { id: `${idPrefix}:${encodeURIComponent(label)}`, label },
+    ...currentEntries.filter((entry) => entry.label !== label),
+  ].slice(0, limit);
+}
 
 export type RootCause =
   | "ocr_fragment"
@@ -243,7 +265,7 @@ function pruneAcceptedRecords(
   timestampMs: number,
 ) {
   return acceptedRecords.filter(
-    (record) => timestampMs - record.timestampMs <= RECENT_CONTEXT_WINDOW_MS,
+    (record) => timestampMs - record.timestampMs <= ACCEPTED_EVENT_CONTEXT_WINDOW_MS,
   );
 }
 
@@ -908,6 +930,8 @@ export function replayBattleLogCoverage(
   const dedupeRecords: TimelineDeduplicationRecord[] = [];
   let constrainedCandidateRecords: TimelineConstrainedCandidateRecord[] = [];
   let acceptedEventRecords: TimelineAcceptedEventRecord[] = [];
+  let sessionRosterDictionary: readonly DictionaryEntry[] = [];
+  let observedMoveDictionary: readonly DictionaryEntry[] = [];
   const replayItems: CoverageReplayItem[] = [];
   const acceptedEvents: BattleEvent[] = [];
   const unknowns: UnknownEvent[] = [];
@@ -934,6 +958,9 @@ export function replayBattleLogCoverage(
       rawText,
       ocrConfidence,
       lines: lines.map((line) => line.text),
+    }, undefined, {
+      sessionRosterDictionary,
+      observedMoveDictionary,
     });
 
     constrainedCandidateRecords = pruneConstrainedCandidates(constrainedCandidateRecords, timestampMs);
@@ -995,6 +1022,27 @@ export function replayBattleLogCoverage(
         dedupeRecords.push(dedupe);
       }
     });
+
+    for (const event of observation.events) {
+      sessionRosterDictionary = upsertReplayDictionaryEntry(
+        sessionRosterDictionary,
+        "pokemon",
+        event.actor.name,
+        MAX_SESSION_ROSTER_DICTIONARY_ENTRIES,
+      );
+      sessionRosterDictionary = upsertReplayDictionaryEntry(
+        sessionRosterDictionary,
+        "pokemon",
+        event.target?.name ?? null,
+        MAX_SESSION_ROSTER_DICTIONARY_ENTRIES,
+      );
+      observedMoveDictionary = upsertReplayDictionaryEntry(
+        observedMoveDictionary,
+        "move",
+        event.move,
+        MAX_OBSERVED_MOVE_DICTIONARY_ENTRIES,
+      );
+    }
 
     let unknown: UnknownEvent | null = null;
     let suppressedUnknown: UnknownEvent | null = null;

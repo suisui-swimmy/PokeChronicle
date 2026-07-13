@@ -561,6 +561,42 @@ describe("parseBattleMessage", () => {
     expect(events.map((event) => event.actor.name)).toEqual(["エルフーン", "マフォクシー"]);
   });
 
+  it("parses a degraded single switch-in call only with one resolved Pokemon segment", () => {
+    for (const rawText of [
+      "けつ/ ニンフンフイア/",
+      "わけつ/ ニンフンフイィア/ア",
+      "+もけつ/ ニンフイィイア/ア",
+    ]) {
+      expect(
+        parseBattleMessage({ rawText, ocrConfidence: 0.8 }),
+      ).toMatchObject({
+        status: "event",
+        event: {
+          type: "switch_in",
+          actor: { name: "ニンフィア" },
+          classification: { templateId: "switch_in_degraded_call" },
+        },
+      });
+    }
+  });
+
+  it("keeps degraded call-like UI and ambiguous Pokemon segments unknown", () => {
+    for (const input of [
+      { rawText: "けつ/ 特性/", ocrConfidence: 0.9 },
+      { rawText: "けつ ニンフィア", ocrConfidence: 0.9 },
+      { rawText: "けつ/ ニンフィア/ ガブリアス/", ocrConfidence: 0.9 },
+      { rawText: "けつ/ ニンフンフイア/", ocrConfidence: 0.55 },
+    ]) {
+      expect(parseBattleMessage(input)).toMatchObject({ status: "unknown" });
+    }
+
+    expect(
+      parseBattleMessage({ rawText: "ゆけっ! ニンフィア!", ocrConfidence: 0.9 }),
+    ).not.toMatchObject({
+      event: { classification: { templateId: "switch_in_degraded_call" } },
+    });
+  });
+
   it("ignores terminator suffix noise when resolving a two-line double switch-in", () => {
     const result = parseBattleMessage({
       rawText: "ゆけっ/ ドドゲグザン/      閲謀謀謀謀\nマフォクシー/",

@@ -1,4 +1,10 @@
 import type { BattleEvent } from "./schema";
+import { matchDictionaryEntry } from "../dictionary/fuzzyMatch";
+import { POKEMON_NAME_DICTIONARY } from "../dictionary/generatedBattleDictionary";
+
+const MEGA_FORM_DICTIONARY = POKEMON_NAME_DICTIONARY.filter((entry) =>
+  entry.label.startsWith("メガ"),
+);
 
 function formatParticipant(
   participant: { name: string | null; side: BattleEvent["actor"]["side"] } | null,
@@ -66,6 +72,33 @@ function getRankChangeModifier(type: "boost" | "unboost", signalText: string) {
   }
 
   return "";
+}
+
+function resolveMegaEvolutionForm(actorName: string, textCapture: string | null) {
+  const canonicalPrefix = `メガ${actorName}`;
+  const candidates = MEGA_FORM_DICTIONARY.filter((entry) =>
+    entry.label.startsWith(canonicalPrefix),
+  );
+
+  if (candidates.length === 1) {
+    return candidates[0].label;
+  }
+
+  if (candidates.length === 0 || !textCapture) {
+    return null;
+  }
+
+  const capturedForm = textCapture.startsWith("メガ")
+    ? textCapture
+    : `メガ${textCapture}`;
+  const match = matchDictionaryEntry(capturedForm, candidates, {
+    acceptScore: 0.68,
+    reviewScore: 0.6,
+    acceptMargin: 0.03,
+    similarity: "ocr_weighted",
+  });
+
+  return match.status === "accepted" ? match.best : null;
 }
 
 export function renderBattleEventCanonicalText(
@@ -201,10 +234,15 @@ export function renderBattleEventCanonicalText(
       if (
         (event.normalizedText?.includes("メガシンカ") ||
           classificationEvidence.includes("メガシンカ")) &&
-        actorSubject &&
-        textCapture
+        actorSubject
       ) {
-        return `${actorSubject}は メガ${textCapture}に メガシンカした!`;
+        const megaForm = event.actor.name
+          ? resolveMegaEvolutionForm(event.actor.name, textCapture)
+          : null;
+
+        return megaForm
+          ? `${actorSubject}は ${megaForm}に メガシンカした!`
+          : `${actorSubject}は メガシンカした!`;
       }
 
       return actorSubject ? `${actorSubject}の 効果が 発動した!` : "効果が 発動した!";
@@ -250,6 +288,20 @@ export function renderBattleEventCanonicalText(
       }
 
       return "天候が 元に戻った!";
+    case "side_start":
+      if (canonicalSignalText.includes("追い風")) {
+        if (event.actor.side === "opponent" || canonicalSignalText.includes("相手に")) {
+          return "相手に 追い風が 吹き始めた!";
+        }
+
+        if (canonicalSignalText.includes("味方に")) {
+          return "味方に 追い風が 吹き始めた!";
+        }
+
+        return "追い風が 吹き始めた!";
+      }
+
+      return "場の効果が 始まった!";
     case "side_end":
       if (canonicalSignalText.includes("味方の")) {
         return "味方の 追い風が 止んだ!";

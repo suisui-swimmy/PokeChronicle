@@ -81,6 +81,38 @@ describe("unknown coverage report", () => {
     );
   });
 
+  it("runtime同様にsession rosterを育て、崩れた同一技を別Pokemonとして増やさない", () => {
+    const replay = replayBattleLogCoverage({
+      battle: { id: "battle-session-roster" },
+      events: [],
+      unknowns: [],
+      ocrMessages: [
+        {
+          id: "ocr-1",
+          rawText: "相手の リザードンの ねっぷう!",
+          ocrConfidence: 0.9,
+          timestampMs: 1000,
+          frameIndex: 1,
+        },
+        {
+          id: "ocr-2",
+          rawText: "坪手の リザードマの でっぷう/",
+          ocrConfidence: 0.86,
+          timestampMs: 1800,
+          frameIndex: 2,
+        },
+      ],
+    });
+
+    expect(replay.eventTypeDistribution.move).toBe(1);
+    expect(replay.duplicateSuppressedCount).toBe(1);
+    expect(replay.replayItems[1].suppressedEvents[0]).toMatchObject({
+      type: "move",
+      actor: { name: "リザードン", side: "opponent" },
+      move: "ねっぷう",
+    });
+  });
+
   it("champout候補はbtl_setを優先しつつ、placeholder policy不足ならhold_reviewにする", () => {
     const replay = createReplayResult([
       createReplayItem({

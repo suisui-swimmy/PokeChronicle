@@ -167,6 +167,48 @@ describe("renderBattleEventCanonicalText", () => {
       renderBattleEventCanonicalText(
         event({
           type: "activate",
+          actor: { name: "マフォクシー", side: null },
+          normalizedText: "マフォクシーは メカ力マフォクシーに メガシンカした!",
+          classification: {
+            method: "template_dictionary",
+            templateId: "champout_activate_1a20jv9",
+            alternatives: ["template:champout_activate_1a20jv9:text=カ力マフォクシー"],
+          },
+        }),
+      ),
+    ).toBe("マフォクシーは メガマフォクシーに メガシンカした!");
+    expect(
+      renderBattleEventCanonicalText(
+        event({
+          type: "activate",
+          actor: { name: "リザードン", side: "opponent" },
+          normalizedText: "相手の リザードンは メカカリザートンに メガシンカした!",
+          classification: {
+            method: "template_dictionary",
+            templateId: "champout_activate_1a20jv9",
+            alternatives: ["template:champout_activate_1a20jv9:text=カカリザートン"],
+          },
+        }),
+      ),
+    ).toBe("相手の リザードンは メガシンカした!");
+    expect(
+      renderBattleEventCanonicalText(
+        event({
+          type: "activate",
+          actor: { name: "リザードン", side: "opponent" },
+          normalizedText: "相手の リザードンは メガリザードンYに メガシンカした!",
+          classification: {
+            method: "template_dictionary",
+            templateId: "champout_activate_1a20jv9",
+            alternatives: ["template:champout_activate_1a20jv9:text=リザードンY"],
+          },
+        }),
+      ),
+    ).toBe("相手の リザードンは メガリザードンYに メガシンカした!");
+    expect(
+      renderBattleEventCanonicalText(
+        event({
+          type: "activate",
           actor: { name: "ヤバソチャ", side: null },
           target: { name: "メタグロス", side: null },
           normalizedText: "ヤバソチャが たてた お茶を メタグロスは 飲みほした!",
@@ -227,6 +269,20 @@ describe("renderBattleEventCanonicalText", () => {
         }),
       ),
     ).toBe("ニンフィアは 攻撃の 反動で 動けない!");
+    expect(
+      renderBattleEventCanonicalText(
+        event({
+          type: "side_start",
+          actor: { name: null, side: "opponent" },
+          normalizedText: "用手に 追い風か 吹き始めた!",
+          classification: {
+            method: "template_dictionary",
+            templateId: "champout_side_start_13nk4c5",
+            alternatives: [],
+          },
+        }),
+      ),
+    ).toBe("相手に 追い風が 吹き始めた!");
     expect(
       renderBattleEventCanonicalText(
         event({

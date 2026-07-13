@@ -4,7 +4,10 @@ import type {
   ClassificationMethod,
 } from "../events/schema";
 import { createOcrMatchText, normalizeOcrText } from "../normalize/ocrText";
-import { matchDictionaryEntry } from "../dictionary/fuzzyMatch";
+import {
+  matchDictionaryEntry,
+  normalizedOcrWeightedSimilarity,
+} from "../dictionary/fuzzyMatch";
 import { BATTLE_DICTIONARY } from "../dictionary/generatedBattleDictionary";
 import { findDictionarySpans, type DictionarySpan } from "../dictionary/spanMatch";
 import { STAT_DICTIONARY } from "../dictionary/statDictionary";
@@ -904,6 +907,10 @@ interface DoubleSwitchInCandidate {
   evidence: string;
 }
 
+const DEGRADED_SWITCH_IN_CALL_TARGETS = ["ゆけっ", "いけっ"] as const;
+const MIN_DEGRADED_SWITCH_IN_CALL_SCORE = 0.72;
+const MIN_DEGRADED_SWITCH_IN_OCR_CONFIDENCE = 0.7;
+
 function createExactPokemonSpanMatch(segmentText: string, span: DictionarySpan): DictionaryMatch {
   return {
     input: segmentText,
@@ -1204,6 +1211,97 @@ function parseDoubleSwitchInEvent(
     candidate,
     acceptedResolutions,
   );
+}
+
+function scoreDegradedSwitchInCall(value: string) {
+  const callText = createOcrMatchText(value).replace(
+    /[^\p{Script=Hiragana}\p{Script=Katakana}]/gu,
+    "",
+  );
+  const callLength = countCharacters(callText);
+
+  if (callLength < 2 || callLength > 5) {
+    return 0;
+  }
+
+  if (/^(?:ゆけ|いけ)[っつ]?$/u.test(callText)) {
+    return 0;
+  }
+
+  if (/^(?:[\p{Script=Hiragana}\p{Script=Katakana}]?け[っつ])$/u.test(callText)) {
+    return 0.76;
+  }
+
+  return Math.max(
+    ...DEGRADED_SWITCH_IN_CALL_TARGETS.map((target) =>
+      normalizedOcrWeightedSimilarity(callText, target),
+    ),
+  );
+}
+
+function parseDegradedSingleSwitchInEvent(
+  rawText: string,
+  normalizedText: string,
+  matchText: string,
+  ocrConfidence: number | null | undefined,
+  dictionary: BattleMessageDictionary,
+) {
+  if ((ocrConfidence ?? 0) < MIN_DEGRADED_SWITCH_IN_OCR_CONFIDENCE) {
+    return null;
+  }
+
+  const segments = normalizeOcrText(rawText)
+    .split("!")
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  const callScores = segments.map(scoreDegradedSwitchInCall);
+  const bestCallScore = Math.max(0, ...callScores);
+
+  if (bestCallScore < MIN_DEGRADED_SWITCH_IN_CALL_SCORE) {
+    return null;
+  }
+
+  const resolutions = segments
+    .filter((_, index) => callScores[index] < MIN_DEGRADED_SWITCH_IN_CALL_SCORE)
+    .map((segment) => resolveSwitchInPokemon(segment, dictionary, ocrConfidence))
+    .filter((resolution): resolution is SwitchInPokemonResolution => resolution !== null)
+    .filter(
+      (resolution, index, values) =>
+        values.findIndex(
+          (candidate) => candidate.match.best === resolution.match.best,
+        ) === index,
+    );
+
+  if (resolutions.length !== 1) {
+    return null;
+  }
+
+  const resolution = resolutions[0];
+  const evidence = `switch-in-degraded-call:score=${bestCallScore.toFixed(2)}`;
+  const candidateMatches = [evidence, ...resolution.candidateMatches];
+
+  return {
+    status: "event",
+    rawText,
+    normalizedText,
+    matchText,
+    event: {
+      type: "switch_in",
+      actor: { name: resolution.match.best, side: null },
+      move: null,
+      target: null,
+      confidence: combineConfidence(ocrConfidence, [
+        bestCallScore,
+        resolution.match.score ?? 1,
+      ]),
+      classification: createClassification(
+        resolution.match.method === "fuzzy" ? "fuzzy_dictionary" : "template_dictionary",
+        "switch_in_degraded_call",
+        candidateMatches,
+      ),
+    },
+    candidateMatches,
+  } satisfies EventParseResult;
 }
 
 function createEventFromDictionaryActor(
@@ -2485,6 +2583,18 @@ export function parseBattleMessage(
 
   if (doubleSwitchInEvent) {
     return doubleSwitchInEvent;
+  }
+
+  const degradedSingleSwitchInEvent = parseDegradedSingleSwitchInEvent(
+    rawText,
+    normalizedText,
+    matchText,
+    ocrConfidence,
+    runtimeDictionary,
+  );
+
+  if (degradedSingleSwitchInEvent) {
+    return degradedSingleSwitchInEvent;
   }
 
   const activeTemplateRules = options.templateRules ?? STANDARD_TEMPLATE_RULES;

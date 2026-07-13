@@ -33,6 +33,35 @@ describe("adaptive OCR candidate selection", () => {
     expect(shouldRetryOcrCandidate(primary)).toBe(true);
   });
 
+  it("accepts an actor-resolved faint with an explicit faint surface", () => {
+    const primary = createCandidate(
+      "primary",
+      "ドドグザンは ただたおれだ/",
+      0.88,
+    );
+    const selection = selectOcrCandidate([primary]);
+
+    expect(shouldRetryOcrCandidate(primary)).toBe(false);
+    expect(selection.reason).toBe("strong-event-selected");
+    expect(selection.parseResult).toMatchObject({
+      status: "event",
+      event: { type: "faint", actor: { name: "ドドゲザン" } },
+    });
+  });
+
+  it("keeps a low-confidence fuzzy faint in review", () => {
+    const primary = createCandidate(
+      "primary",
+      "ドドグザンは ただたおれだ/",
+      0.6,
+    );
+    const selection = selectOcrCandidate([primary]);
+
+    expect(shouldRetryOcrCandidate(primary)).toBe(true);
+    expect(selection.reason).toBe("weak-event-held-for-review");
+    expect(selection.parseResult.status).toBe("unknown");
+  });
+
   it("prefers a parseable linewise switch-in over high-confidence junk", () => {
     const primary = createCandidate("primary", "くろまろは ー", 0.86);
     const linewise = createCandidate(
@@ -47,6 +76,26 @@ describe("adaptive OCR candidate selection", () => {
     expect(selection.parseResult).toMatchObject({
       status: "event",
       event: { type: "switch_in", actor: { name: "エルフーン" } },
+    });
+  });
+
+  it("accepts a safely constrained degraded single switch-in call", () => {
+    const primary = createCandidate(
+      "primary",
+      "けつ/ ニンフンフイア/",
+      0.76,
+    );
+    const selection = selectOcrCandidate([primary]);
+
+    expect(shouldRetryOcrCandidate(primary)).toBe(false);
+    expect(selection.reason).toBe("strong-event-selected");
+    expect(selection.parseResult).toMatchObject({
+      status: "event",
+      event: {
+        type: "switch_in",
+        actor: { name: "ニンフィア" },
+        classification: { templateId: "switch_in_degraded_call" },
+      },
     });
   });
 

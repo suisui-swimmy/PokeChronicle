@@ -306,4 +306,29 @@ describe("timeline observation", () => {
     expect(partial.unknown).toBeNull();
     expect(partial.ocrMessage.rawText).toBe(partialRawText);
   });
+
+  it("inherits a tailwind side from the recent move that caused it", () => {
+    const move = createObservation(
+      "相手の エルフーンの おいかぜ!",
+      "ocr-move",
+      1000,
+      0.9,
+    );
+    const moveRecord = move.event ? createAcceptedEventRecord(move.event) : null;
+    const rawText = "用手に 追い風か 吹き始めた/";
+    const sideStart = createObservationFromParse(
+      rawText,
+      parseBattleMessage({ rawText, ocrConfidence: 0.84 }),
+      "ocr-side-start",
+      5000,
+      0.84,
+      [],
+      moveRecord ? [moveRecord] : [],
+    );
+
+    expect(sideStart.event).toMatchObject({
+      type: "side_start",
+      actor: { name: null, side: "opponent" },
+    });
+  });
 });
