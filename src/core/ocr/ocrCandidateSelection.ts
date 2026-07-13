@@ -40,6 +40,7 @@ const ACTOR_OR_TARGET_EVENT_TYPES = new Set<ParsedBattleEvent["type"]>([
   "boost",
   "unboost",
   "protect",
+  "miss",
   "fail",
   "item",
   "ability",

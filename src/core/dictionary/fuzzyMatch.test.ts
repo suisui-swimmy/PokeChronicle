@@ -73,5 +73,6 @@ describe("normalizedOcrWeightedSimilarity", () => {
     expect(normalizedOcrWeightedSimilarity("アクアジエッツト", "アクアジェット")).toBeGreaterThan(
       0.82,
     );
+    expect(normalizedOcrWeightedSimilarity("ねっぶう", "ねっぷう")).toBeGreaterThan(0.9);
   });
 });

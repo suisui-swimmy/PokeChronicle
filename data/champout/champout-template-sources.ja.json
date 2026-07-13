@@ -46,9 +46,9 @@
     {
       "fileName": "btl_set.json",
       "status": "enabled",
-      "reason": "narrow live battle resolution messages for status, stat rank, faint, flinch, item priority/endure, effectiveness, fail, protection, redirection, mega evolution, weather/poison damage, and tea effect",
+      "reason": "narrow live battle resolution messages for status, stat rank, faint, flinch, item priority/endure, effectiveness, miss, fail, protection, redirection, mega evolution, weather/poison damage, and tea effect",
       "labelAllowPatterns": [
-        "^BTL_STRID_SET_(Dead|ShrinkExe|NoEffect|AffGood_1|DokuGet|YakedoGet|MahiGet|KoriGet|NemuriGet|MeromeroGet|KonranGet|DokuCure|YakedoCure|MahiCure|KoriMelt|NemuriWake|KonranCure|MeromeroCure|UseItem_Cure(Doku|Mahi|Nemuri|Koori|Yakedo|Konran|Mero)|UseItem_PriorityUpOnce|KoraeItem|WazaFailPoke|FushokugasuMiss|CantAction|WeatherDmg_Sand|DokuDamage|WideGuard|Konoyubi|MegaEvo|MotenashiNoKokoro)(_E)?$|^BTL_STRID_SET_Rank(up|down)Lv[12]_1_(P|E)_syn$"
+        "^BTL_STRID_SET_(Dead|ShrinkExe|NoEffect|WazaAvoid|AffGood_1|DokuGet|YakedoGet|MahiGet|KoriGet|NemuriGet|MeromeroGet|KonranGet|DokuCure|YakedoCure|MahiCure|KoriMelt|NemuriWake|KonranCure|MeromeroCure|UseItem_Cure(Doku|Mahi|Nemuri|Koori|Yakedo|Konran|Mero)|UseItem_PriorityUpOnce|KoraeItem|WazaFailPoke|FushokugasuMiss|CantAction|WeatherDmg_Sand|DokuDamage|WideGuard|Konoyubi|MegaEvo|MotenashiNoKokoro)(_E)?$|^BTL_STRID_SET_Rank(up|down)Lv[12]_1_(P|E)_syn$"
       ],
       "labelDenyPatterns": ["Already", "Act$", "TUTORIAL", "HELP", "BUTTON", "SELECT"],
       "textDenyHints": [],
@@ -63,6 +63,12 @@
           "eventType": "immune",
           "when": {
             "labelPatterns": ["^BTL_STRID_SET_NoEffect(_E)?$"]
+          }
+        },
+        {
+          "eventType": "miss",
+          "when": {
+            "labelPatterns": ["^BTL_STRID_SET_WazaAvoid(_E)?$"]
           }
         },
         {
@@ -146,6 +152,10 @@
         "byLabelPattern": [
           {
             "pattern": "^BTL_STRID_SET_(WazaFailPoke|FushokugasuMiss)(_E)?$",
+            "slots": ["target", "text"]
+          },
+          {
+            "pattern": "^BTL_STRID_SET_WazaAvoid(_E)?$",
             "slots": ["target", "text"]
           },
           {

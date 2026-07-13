@@ -51,7 +51,9 @@ import type { DictionaryEntry } from "../core/dictionary/types";
 import { summarizeBattleStats } from "../core/stats/battleStats";
 import {
   choosePreferredMessagePreprocessVariant,
+  createMessageMaskFingerprint,
   createMessagePreprocessVariants,
+  type MessageMaskFingerprint,
   type MessagePreprocessOptions,
   type MessageTextMask,
 } from "../core/preprocess/messagePreprocess";
@@ -75,6 +77,12 @@ import {
   shouldRetryOcrCandidate,
   type EvaluatedOcrCandidate,
 } from "../core/ocr/ocrCandidateSelection";
+import {
+  enqueueDeferredOcrSample,
+  MAX_DEFERRED_OCR_SAMPLES,
+  shouldPreemptOcrRetry,
+  takeNextDeferredOcrSample,
+} from "../core/ocr/ocrScheduler";
 import {
   getParsedBattleEvents,
   parseBattleMessage,
@@ -117,9 +125,12 @@ const NO_AUDIO_DEVICE_ID = "none";
 const DEFAULT_SAMPLE_FPS = 3;
 const MAX_FRAME_BUFFER = 8;
 const MAX_OCR_LOGS = 30;
-const MAX_OCR_MESSAGES = 80;
+const MAX_OCR_HISTORY = 1024;
+const MAX_EVENT_HISTORY = 512;
+const MAX_UNKNOWN_HISTORY = 512;
 const MAX_TIMELINE_ITEMS = 48;
-const MAX_UNKNOWN_EVENTS = 48;
+const MAX_RESOLVED_DISPLAY_ITEMS = 48;
+const MAX_UNKNOWN_DISPLAY_ITEMS = 48;
 const MAX_CROP_EVIDENCE = 80;
 const MAX_SAMPLE_DIAGNOSTICS = 600;
 const MAX_PHASE_TRANSITIONS = 64;
@@ -158,7 +169,9 @@ const SAMPLE_DIAGNOSTIC_STAGES: readonly FrameSampleDiagnosticStage[] = [
   "skippedPhase",
   "ocrQueued",
   "ocrRetryQueued",
+  "ocrRetryPreempted",
   "ocrDeferred",
+  "ocrDeferredDropped",
   "ocrCandidateSelected",
   "ocrCandidateConflict",
   "skippedBusy",
@@ -276,6 +289,7 @@ type CapturedFrameImages = {
   ocrDataUrl: string;
   ocrVariantId: string;
   ocrForegroundPixelRatio: number;
+  messageFingerprint: MessageMaskFingerprint;
   lineBandCount: number;
   lineCropVariants: ProcessedLineCropPreview[];
   ocrCandidates: OCRWorkerRecognitionCandidate[];
@@ -763,7 +777,9 @@ function formatDiagnosticStage(stage: FrameSampleDiagnosticStage) {
     messageWatchEnded: "messageWatchEnded",
     ocrQueued: "ocrQueued",
     ocrRetryQueued: "ocrRetryQueued",
+    ocrRetryPreempted: "ocrRetryPreempted",
     ocrDeferred: "ocrDeferred",
+    ocrDeferredDropped: "ocrDeferredDropped",
     ocrCandidateSelected: "ocrCandidateSelected",
     ocrCandidateConflict: "ocrCandidateConflict",
     skippedBusy: "skippedBusy",
@@ -1190,6 +1206,20 @@ function groupOcrLogs(entries: readonly OCRLogEntry[], limit: number) {
   return groups;
 }
 
+function createOcrLogEntryFromMessage(message: OCRMessage): OCRLogEntry {
+  return {
+    id: message.id,
+    frameIndex: message.frameIndex ?? 0,
+    timestampMs: message.timestampMs,
+    rawText: message.rawText,
+    normalizedText: message.normalizedText,
+    matchText: message.matchText,
+    confidence: message.ocrConfidence,
+    lineCount: message.lines.length,
+    status: message.normalizedText.length > 0 ? "recognized" : "empty",
+  };
+}
+
 function sortNewestFirst<T extends { timestampMs: number; id: string }>(items: readonly T[]) {
   return [...items].sort(
     (left, right) => right.timestampMs - left.timestampMs || right.id.localeCompare(left.id),
@@ -1572,6 +1602,10 @@ function captureRoiFrame(
   const selectedTextMask = selectedPreprocessVariant.id;
   const selectedRejectReason = selectedPreprocessVariant.rejectReason;
   const selectedLineCropVariants = selectedPreprocessVariant.lineCropVariants;
+  const messageFingerprint = createMessageMaskFingerprint(processedImageData, {
+    ...preprocess,
+    textMask: selectedTextMask,
+  });
   const fallbackVariants = preprocessVariants
     .filter((variant) => variant.id !== selectedTextMask && variant.isOcrCandidate)
     .sort((left, right) => right.score - left.score);
@@ -1718,6 +1752,7 @@ function captureRoiFrame(
     ocrDataUrl: preferredVariant.processedDataUrl,
     ocrVariantId: preferredVariant.id,
     ocrForegroundPixelRatio: preferredVariant.foregroundPixelRatio,
+    messageFingerprint,
     lineBandCount: detectedLineCount,
     lineCropVariants: [...lineCropPreviews, ...fallbackPreviewVariants],
     ocrCandidates,
@@ -1775,7 +1810,7 @@ export function App() {
   const phaseTransitionCounterRef = useRef(0);
   const pendingOcrJobsRef = useRef(0);
   const activeOcrJobRef = useRef<ActiveOcrJob | null>(null);
-  const deferredOcrSampleRef = useRef<FrameSample | null>(null);
+  const deferredOcrSamplesRef = useRef<FrameSample[]>([]);
   const queueOcrRecognitionRef = useRef<(sample: FrameSample) => void>(() => undefined);
   const phaseDetectionSummaryRef = useRef<PhaseDetectionSummary>(
     createEmptyPhaseDetectionSummary(),
@@ -2351,10 +2386,11 @@ export function App() {
     [addLog, clearActiveOcrJob, setPendingOcrJobCount],
   );
 
-  const queueDeferredOcrSample = useCallback(() => {
-    const deferredSample = deferredOcrSampleRef.current;
+  const queueNextDeferredOcrSample = useCallback(() => {
+    const next = takeNextDeferredOcrSample(deferredOcrSamplesRef.current);
+    const deferredSample = next.sample;
 
-    deferredOcrSampleRef.current = null;
+    deferredOcrSamplesRef.current = next.queue;
 
     if (
       !deferredSample ||
@@ -2397,7 +2433,7 @@ export function App() {
           "OCR候補の応答が一定時間返らなかったため、workerを再起動できる状態に戻しました。",
           currentJob,
         );
-        queueDeferredOcrSample();
+        queueNextDeferredOcrSample();
       }, OCR_JOB_TIMEOUT_MS);
 
       activeJob.candidateIndex = candidateIndex;
@@ -2433,7 +2469,7 @@ export function App() {
     [
       appendOcrErrorLog,
       appendSampleDiagnostic,
-      queueDeferredOcrSample,
+      queueNextDeferredOcrSample,
       resetOcrWorkerAfterFailure,
     ],
   );
@@ -2474,11 +2510,34 @@ export function App() {
 
         activeJob.evaluatedCandidates.push(evaluatedCandidate);
         const nextCandidateIndex = activeJob.candidateIndex + 1;
-
-        if (
+        const wantsRetry =
           shouldRetryOcrCandidate(evaluatedCandidate) &&
-          nextCandidateIndex < activeJob.candidates.length
-        ) {
+          nextCandidateIndex < activeJob.candidates.length;
+        const retryPreempted =
+          wantsRetry && shouldPreemptOcrRetry(deferredOcrSamplesRef.current);
+
+        if (retryPreempted) {
+          const detail = `${response.candidate.id} fallback skipped for ${deferredOcrSamplesRef.current.length} distinct queued message(s)`;
+          appendSampleDiagnostic({
+            frameIndex: response.meta.frameIndex,
+            timestampMs: response.meta.timestampMs,
+            stage: "ocrRetryPreempted",
+            detail,
+            preprocessVariantId: activeJob.sample.preprocessVariantId,
+            preprocessRejectReason: activeJob.sample.preprocessVariantRejectReason,
+            ocrVariantId: response.candidate.variantId,
+            ocrForegroundPixelRatio: activeJob.sample.ocrForegroundPixelRatio,
+            pendingOcrJobs: pendingOcrJobsRef.current,
+            ocrJobId: response.jobId,
+            ocrConfidence: response.result.confidence,
+            lineCount: response.result.lines.length,
+            ocrCandidateId: response.candidate.id,
+            ocrCandidateCount: activeJob.candidates.length,
+            ocrDurationMs: response.durationMs,
+            selectionReason: "new-distinct-message-priority",
+          });
+          addLog("後続の異なるメッセージを優先し、OCR fallbackを打ち切りました。");
+        } else if (wantsRetry) {
           addLog(
             `OCR fallbackを実行します: ${response.candidate.id} -> ${activeJob.candidates[nextCandidateIndex].id}`,
           );
@@ -2629,7 +2688,7 @@ export function App() {
 
         setOcrLogs((currentLogs) => [nextEntry, ...currentLogs].slice(0, MAX_OCR_LOGS));
         setOcrMessages((currentMessages) =>
-          [observation.ocrMessage, ...currentMessages].slice(0, MAX_OCR_MESSAGES),
+          [observation.ocrMessage, ...currentMessages].slice(0, MAX_OCR_HISTORY),
         );
 
         if (suppressedItemCount > 0) {
@@ -2639,12 +2698,12 @@ export function App() {
         if (acceptedEvents.length > 0) {
           lastAcceptedEventIdRef.current = acceptedEvents[acceptedEvents.length - 1].id;
           setBattleEvents((currentEvents) =>
-            [...acceptedEvents, ...currentEvents].slice(0, MAX_TIMELINE_ITEMS),
+            [...acceptedEvents, ...currentEvents].slice(0, MAX_EVENT_HISTORY),
           );
 
           if (acceptedEvents.some((acceptedEvent) => acceptedEvent.type === "battle_end")) {
             phaseGateStateRef.current.messagePhase = "ended";
-            deferredOcrSampleRef.current = null;
+            deferredOcrSamplesRef.current = [];
             addLog("勝負終了イベントを検出したため、以降のOCR投入を抑制します。");
           }
         }
@@ -2653,7 +2712,7 @@ export function App() {
           setUnknownEvents((currentUnknowns) =>
             [observation.unknown as UnknownEvent, ...currentUnknowns].slice(
               0,
-              MAX_UNKNOWN_EVENTS,
+              MAX_UNKNOWN_HISTORY,
             ),
           );
         }
@@ -2671,7 +2730,7 @@ export function App() {
         if (selection.conflict) {
           addLog("OCR候補が異なるeventを示したため、unknownへ保留しました。", "warn");
         }
-        queueDeferredOcrSample();
+        queueNextDeferredOcrSample();
         return;
       }
 
@@ -2687,7 +2746,7 @@ export function App() {
         }
 
         addLog(`OCRに失敗しました: ${response.message}`, "error");
-        queueDeferredOcrSample();
+        queueNextDeferredOcrSample();
         return;
       }
 
@@ -2706,7 +2765,7 @@ export function App() {
       appendOcrErrorLog,
       clearActiveOcrJob,
       postOcrCandidateAttempt,
-      queueDeferredOcrSample,
+      queueNextDeferredOcrSample,
       rememberAcceptedEventRecord,
       rememberBattleEventDictionaries,
       resetOcrWorkerAfterFailure,
@@ -2761,7 +2820,7 @@ export function App() {
     (message?: string) => {
       isOcrEnabledRef.current = false;
       setIsOcrEnabled(false);
-      deferredOcrSampleRef.current = null;
+      deferredOcrSamplesRef.current = [];
       clearActiveOcrJob();
       setPendingOcrJobCount(0);
       setOcrProgress(0);
@@ -2809,13 +2868,32 @@ export function App() {
       }
 
       if (pendingOcrJobsRef.current >= MAX_PENDING_OCR_JOBS) {
-        const replaced = deferredOcrSampleRef.current !== null;
-        deferredOcrSampleRef.current = sample;
+        const enqueueResult = enqueueDeferredOcrSample(
+          deferredOcrSamplesRef.current,
+          sample,
+          activeOcrJobRef.current?.sample.messageFingerprint ?? null,
+          MAX_DEFERRED_OCR_SAMPLES,
+        );
+        deferredOcrSamplesRef.current = enqueueResult.queue;
+        const detailByAction = {
+          ignored_active_duplicate: "active message duplicate ignored while OCR is busy",
+          replaced_deferred_duplicate: `queued duplicate replaced at slot ${(enqueueResult.replacedIndex ?? 0) + 1}`,
+          queued_distinct: `distinct message queued ${enqueueResult.queue.length}/${MAX_DEFERRED_OCR_SAMPLES}`,
+          dropped_queue_full: `distinct queue full ${enqueueResult.queue.length}/${MAX_DEFERRED_OCR_SAMPLES}`,
+        } satisfies Record<typeof enqueueResult.action, string>;
+        const stage =
+          enqueueResult.action === "dropped_queue_full"
+            ? "ocrDeferredDropped"
+            : "ocrDeferred";
         appendFrameSampleDiagnostic(
           sample,
-          "ocrDeferred",
-          replaced ? "latest deferred sample replaced" : "latest sample deferred while OCR is busy",
+          stage,
+          detailByAction[enqueueResult.action],
         );
+
+        if (enqueueResult.action === "dropped_queue_full") {
+          addLog("OCR待機queueが満杯のため、新しいメッセージ候補を破棄しました。", "warn");
+        }
         return;
       }
 
@@ -2854,6 +2932,7 @@ export function App() {
       postOcrCandidateAttempt(activeJob, 0, "ocrQueued");
     },
     [
+      addLog,
       appendFrameSampleDiagnostic,
       ensureOcrWorker,
       postOcrCandidateAttempt,
@@ -3616,7 +3695,7 @@ export function App() {
     phaseTransitionCounterRef.current = 0;
     phaseDetectionSummaryRef.current = createEmptyPhaseDetectionSummary();
     phaseTransitionsRef.current = [];
-    deferredOcrSampleRef.current = null;
+    deferredOcrSamplesRef.current = [];
     resetPhaseGateState();
     recentTimelineDeduplicationRecordsRef.current = [];
     recentConstrainedCandidateRecordsRef.current = [];
@@ -3783,6 +3862,14 @@ export function App() {
 
   const latestFrameSample = frameSamples[0] ?? null;
   const latestOcrLog = ocrLogs[0] ?? null;
+  const displayedBattleEvents = useMemo(
+    () => battleEvents.slice(0, MAX_RESOLVED_DISPLAY_ITEMS),
+    [battleEvents],
+  );
+  const displayedUnknownEvents = useMemo(
+    () => unknownEvents.slice(0, MAX_UNKNOWN_DISPLAY_ITEMS),
+    [unknownEvents],
+  );
   const reviewedUnknownCount = useMemo(
     () => unknownEvents.filter((unknown) => unknown.reviewStatus === "reviewed").length,
     [unknownEvents],
@@ -4200,6 +4287,10 @@ export function App() {
   const restoreBattleLogDocument = useCallback(
     (document: BattleLogDocument) => {
       const restoredEvents = sortNewestFirst(document.events);
+      const restoredOcrMessages = sortNewestFirst(document.ocrMessages).slice(
+        0,
+        MAX_OCR_HISTORY,
+      );
 
       cropEvidenceBySourceRef.current = new Map(
         document.frameEvidence.map((evidence) => [
@@ -4214,16 +4305,23 @@ export function App() {
           },
         ]),
       );
-      setOcrMessages(sortNewestFirst(document.ocrMessages));
-      setSampleDiagnostics(sortNewestFirst(document.sampleDiagnostics ?? []));
+      setOcrMessages(restoredOcrMessages);
+      setOcrLogs(
+        restoredOcrMessages
+          .slice(0, MAX_OCR_LOGS)
+          .map((message) => createOcrLogEntryFromMessage(message)),
+      );
+      setSampleDiagnostics(
+        sortNewestFirst(document.sampleDiagnostics ?? []).slice(0, MAX_SAMPLE_DIAGNOSTICS),
+      );
       phaseDetectionSummaryRef.current = document.phaseDetectionSummary;
       phaseTransitionsRef.current = sortNewestFirst(document.phaseTransitions).slice(
         0,
         MAX_PHASE_TRANSITIONS,
       );
       phaseTransitionCounterRef.current = phaseTransitionsRef.current.length;
-      setBattleEvents(restoredEvents);
-      setUnknownEvents(sortNewestFirst(document.unknowns));
+      setBattleEvents(restoredEvents.slice(0, MAX_EVENT_HISTORY));
+      setUnknownEvents(sortNewestFirst(document.unknowns).slice(0, MAX_UNKNOWN_HISTORY));
       setReviewNotes(
         Object.fromEntries(
           document.manualCorrections
@@ -5275,10 +5373,10 @@ export function App() {
                     <span>{battleEvents.length} resolved</span>
                   </div>
                   <ol className="resolved-list">
-                    {battleEvents.length === 0 ? (
+                    {displayedBattleEvents.length === 0 ? (
                       <li className="timeline-empty">解決ログ空</li>
                     ) : (
-                      battleEvents.map((event) => {
+                      displayedBattleEvents.map((event) => {
                         const sourceFrameRef = createSourceFrameRef(
                           event.source.frameIndex,
                           event.source.timestampMs,
@@ -5331,10 +5429,10 @@ export function App() {
                     </span>
                   </div>
                   <ol className="unknown-list">
-                    {unknownEvents.length === 0 ? (
+                    {displayedUnknownEvents.length === 0 ? (
                       <li className="timeline-empty">unknown空</li>
                     ) : (
-                      unknownEvents.map((unknown) => (
+                      displayedUnknownEvents.map((unknown) => (
                         <li key={unknown.id} className="unknown-entry">
                           <div className="timeline-meta">
                             <span>{unknown.id}</span>
@@ -5463,10 +5561,10 @@ export function App() {
           aria-label="解決済みログ"
         >
           <ol className="resolved-text-log" aria-label="resolved text log">
-            {battleEvents.length === 0 ? (
+            {displayedBattleEvents.length === 0 ? (
               <li className="resolved-text-log-empty">解決ログ空</li>
             ) : (
-              battleEvents.map((event) => (
+              displayedBattleEvents.map((event) => (
                 <li key={event.id}>{formatCanonicalEventText(event)}</li>
               ))
             )}

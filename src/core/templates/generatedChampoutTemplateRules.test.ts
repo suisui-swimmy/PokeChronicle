@@ -19,7 +19,7 @@ describe("generated champout template rules", () => {
     expect(CHAMPOUT_TEMPLATE_STATS).toMatchObject({
       sourceFileCount: 3,
       extractedTextCount: 851,
-      generatedRuleCount: 167,
+      generatedRuleCount: 169,
       eventTypeDistribution: {
         activate: 4,
         boost: 11,
@@ -31,6 +31,7 @@ describe("generated champout template rules", () => {
         faint: 2,
         immune: 2,
         item: 7,
+        miss: 2,
         protect: 6,
         redirection: 2,
         supereffective: 4,
@@ -39,7 +40,7 @@ describe("generated champout template rules", () => {
         weather_start: 4,
       },
     });
-    expect(CHAMPOUT_TEMPLATE_RULES.length).toBe(167);
+    expect(CHAMPOUT_TEMPLATE_RULES.length).toBe(169);
     expect(CHAMPOUT_TEMPLATE_RULES[0].source).toMatchObject({
       fileName: "btl_attack_syn.json",
       keyPath: "mSDataSet[0].OriginalText",
@@ -50,13 +51,14 @@ describe("generated champout template rules", () => {
       expect.objectContaining({
         fileName: "btl_set.json",
         reason:
-          "narrow live battle resolution messages for status, stat rank, faint, flinch, item priority/endure, effectiveness, fail, protection, redirection, mega evolution, weather/poison damage, and tea effect",
-        generatedRuleCount: 80,
+          "narrow live battle resolution messages for status, stat rank, faint, flinch, item priority/endure, effectiveness, miss, fail, protection, redirection, mega evolution, weather/poison damage, and tea effect",
+        generatedRuleCount: 82,
         eventTypeDistribution: expect.objectContaining({
           boost: 4,
           damage: 4,
           fail: 6,
           item: 4,
+          miss: 2,
           protect: 2,
           unboost: 4,
         }),
@@ -135,6 +137,15 @@ describe("generated champout template rules", () => {
       id: "champout_immune_j84h1z",
       eventType: "immune",
       patterns: ["{target}には効果が ないようだ..."],
+    });
+    expect(
+      CHAMPOUT_TEMPLATE_RULES.find(
+        (rule) => rule.source?.labelName === "BTL_STRID_SET_WazaAvoid_E",
+      ),
+    ).toMatchObject({
+      eventType: "miss",
+      patterns: ["相手の {target}には当たらなかった!"],
+      constants: { "target.side": "opponent" },
     });
     expect(
       CHAMPOUT_TEMPLATE_RULES.find(
@@ -341,6 +352,13 @@ describe("generated champout template rules", () => {
       event: {
         type: "immune",
         target: { name: "マフォクシー" },
+      },
+    });
+    expect(parseBattleMessage("相手の エルフーンには 当たらなかった!")).toMatchObject({
+      status: "event",
+      event: {
+        type: "miss",
+        target: { name: "エルフーン", side: "opponent" },
       },
     });
     expect(parseBattleMessage("ヤバソチャは注目の的に なった!")).toMatchObject({

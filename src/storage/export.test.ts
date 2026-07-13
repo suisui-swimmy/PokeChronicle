@@ -195,6 +195,81 @@ describe("battle log export", () => {
     ]);
   });
 
+  it("preserves session histories beyond the UI display limits in JSON and CSV", () => {
+    const ocrMessages = Array.from({ length: 96 }, (_, index): OCRMessage => ({
+      ...ocrMessage,
+      id: `ocr_history_${index + 1}`,
+      frameIndex: index + 1,
+      timestampMs: index * 100,
+    }));
+    const events = Array.from({ length: 64 }, (_, index): BattleEvent => ({
+      ...battleEvent,
+      id: `evt_history_${index + 1}`,
+      timestampMs: index * 100,
+      source: {
+        ...battleEvent.source,
+        frameIndex: index + 1,
+        timestampMs: index * 100,
+      },
+    }));
+    const unknowns = Array.from({ length: 64 }, (_, index): UnknownEvent => ({
+      ...unknownEvent,
+      id: `unk_history_${index + 1}`,
+      timestampMs: index * 100 + 50,
+      sourceFrameRef: `frame:${index + 1}:${index * 100 + 50}`,
+      reviewStatus: "unreviewed",
+    }));
+    const document = createBattleLogDocument({
+      battleId: "battle_history",
+      title: "History battle",
+      startedAt: null,
+      media: {
+        sourceKind: "none",
+        videoLabel: null,
+        audioLabel: null,
+        width: null,
+        height: null,
+        frameRate: null,
+      },
+      roi: { x: 0.1, y: 0.7, w: 0.8, h: 0.2 },
+      roiName: "Battle message ROI",
+      opponentHudRoi: { x: 0.55, y: 0.03, w: 0.43, h: 0.14 },
+      opponentHudRoiName: "Opponent battle HUD ROI",
+      playerHudRoi: { x: 0.02, y: 0.84, w: 0.46, h: 0.14 },
+      playerHudRoiName: "Player battle HUD ROI",
+      vsRoi: { x: 0.34, y: 0.32, w: 0.32, h: 0.32 },
+      vsRoiName: "VS splash ROI",
+      ocrMessages,
+      events,
+      unknowns,
+      frameEvidence: [],
+      reviewNotes: {},
+    });
+    const parsed = parseBattleLogJson(serializeBattleLogDocument(document));
+    const eventsCsv = createEventsCsv(document.events);
+    const unknownsCsv = createUnknownsCsv(document.unknowns);
+
+    expect(document.ocrMessages).toHaveLength(96);
+    expect(document.events).toHaveLength(64);
+    expect(document.unknowns).toHaveLength(64);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) {
+      throw new Error(parsed.error);
+    }
+    expect(parsed.document.ocrMessages).toHaveLength(96);
+    expect(parsed.document.ocrMessages.some((message) => message.id === "ocr_history_96")).toBe(
+      true,
+    );
+    expect(parsed.document.events).toHaveLength(64);
+    expect(parsed.document.events.some((event) => event.id === "evt_history_64")).toBe(true);
+    expect(parsed.document.unknowns).toHaveLength(64);
+    expect(parsed.document.unknowns.some((unknown) => unknown.id === "unk_history_64")).toBe(
+      true,
+    );
+    expect(eventsCsv.match(/evt_history_/g)).toHaveLength(64);
+    expect(unknownsCsv.match(/unk_history_/g)).toHaveLength(64);
+  });
+
   it("round-trips valid JSON and rejects unsupported documents", () => {
     const document = createBattleLogDocument(
       {

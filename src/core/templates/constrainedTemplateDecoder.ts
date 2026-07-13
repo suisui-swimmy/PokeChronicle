@@ -35,8 +35,11 @@ export interface PlaceholderResolution {
   score: number;
   margin: number;
   method: DictionaryMatch["method"] | "free_text";
+  status: DictionaryMatch["status"];
   start: number;
   end: number;
+  unmatchedPrefix: string;
+  unmatchedSuffix: string;
   evidence: string;
 }
 
@@ -216,7 +219,11 @@ function findNextLiteralBoundary(
   return boundary;
 }
 
-function createCandidateSegments(text: string) {
+function isMoveBoundaryNoise(value: string) {
+  return /^[A-Za-z0-9ー一_＿\-=]+$/u.test(value);
+}
+
+function createCandidateSegments(text: string, kind: "pokemon" | "move" | "target" | "stat") {
   const cleanText = createOcrMatchText(text).slice(0, MAX_SEGMENT_LENGTH);
   const seen = new Set<string>();
   const segments: Array<{ text: string; start: number; end: number }> = [];
@@ -238,6 +245,38 @@ function createCandidateSegments(text: string) {
 
   addSegment(0, cleanText.length);
 
+  if (kind === "move") {
+    const allowedStarts = [0];
+
+    if (cleanText.length > 1) {
+      allowedStarts.push(1);
+    }
+
+    for (let start = 1; start <= Math.min(3, cleanText.length - 1); start += 1) {
+      if (!isMoveBoundaryNoise(cleanText.slice(0, start))) {
+        break;
+      }
+
+      allowedStarts.push(start);
+    }
+
+    for (const start of [...new Set(allowedStarts)]) {
+      addSegment(start, cleanText.length);
+
+      const minEnd = Math.max(start + 1, cleanText.length - MAX_SUFFIX_NOISE_LENGTH);
+      for (let end = cleanText.length - 1; end >= minEnd; end -= 1) {
+        addSegment(start, end);
+      }
+    }
+
+    return segments.sort(
+      (left, right) =>
+        Math.abs(cleanText.length - left.text.length) -
+          Math.abs(cleanText.length - right.text.length) ||
+        left.start - right.start,
+    );
+  }
+
   for (let start = 1; start < cleanText.length; start += 1) {
     addSegment(start, cleanText.length);
   }
@@ -256,8 +295,8 @@ function createCandidateSegments(text: string) {
 
   return segments.sort(
     (left, right) =>
-      Math.abs(right.text.length - cleanText.length) -
-        Math.abs(left.text.length - cleanText.length) ||
+      Math.abs(cleanText.length - left.text.length) -
+        Math.abs(cleanText.length - right.text.length) ||
       right.text.length - left.text.length,
   );
 }
@@ -294,7 +333,7 @@ function resolveDictionaryPlaceholder(
     | (PlaceholderResolution & { rankingScore: number; secondScore: number | null })
     | null = null;
 
-  for (const segment of createCandidateSegments(segmentText)) {
+  for (const segment of createCandidateSegments(segmentText, kind)) {
     const segmentLength = countCharacters(segment.text);
 
     if (normalizedSegmentLength > 3 && segmentLength < 3) {
@@ -351,8 +390,11 @@ function resolveDictionaryPlaceholder(
       score: match.score,
       margin,
       method: match.method,
+      status: match.status,
       start: start + segment.start,
       end: start + segment.end,
+      unmatchedPrefix: normalizedSegmentText.slice(0, segment.start),
+      unmatchedSuffix: normalizedSegmentText.slice(segment.end),
       evidence: formatDictionaryEvidence(kind, match, segment.text),
       rankingScore,
       secondScore: match.secondScore,
@@ -398,8 +440,11 @@ function resolveTextPlaceholder(
     score: 0.82,
     margin: 1,
     method: "free_text",
+    status: "accepted",
     start,
     end: start + value.length,
+    unmatchedPrefix: "",
+    unmatchedSuffix: "",
     evidence: `text:${value}`,
   };
 }
@@ -450,6 +495,28 @@ function isAcceptedCandidate(
   }
 
   if (candidate.confidenceScore < MIN_FINAL_SCORE || candidate.margin < MIN_MARGIN) {
+    return false;
+  }
+
+  const unsafeMoveResolution = allDictionaryResolutions.find((resolution) => {
+    if (resolution.kind !== "move") {
+      return false;
+    }
+
+    const meaningfulPrefix = resolution.unmatchedPrefix.replace(
+      /^[A-Za-z0-9ー一_＿\-=]+/u,
+      "",
+    );
+
+    return (
+      resolution.status !== "accepted" ||
+      countCharacters(meaningfulPrefix) > 1 ||
+      (resolution.method !== "exact" &&
+        /(?:から|まで|より|って|と|で|を|に|が|は|へ)$/u.test(resolution.inputText))
+    );
+  });
+
+  if (unsafeMoveResolution) {
     return false;
   }
 

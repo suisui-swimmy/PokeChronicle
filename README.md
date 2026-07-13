@@ -24,6 +24,7 @@ The M8 MVP is closed on top of the static app foundation:
 - Bounded in-memory frame sample buffer
 - Browser OCR provider interface and Tesseract.js worker integration
 - 必要なフレームだけを最大3候補（block、行別、代替maskまたはsparse）で再認識する適応型OCR
+- 二値message fingerprintで異なる後続文面を最大3件のFIFOに保持し、新しい文面が待つ場合は残りfallbackより次メッセージを優先
 - Real-time OCR log entries with raw text, normalized text, confidence, timestamp, and frame index
 - Generated Pokemon and move name dictionaries from local `others/` reference lists
 - Safe fuzzy dictionary matching that keeps low-confidence corrections reviewable
@@ -39,6 +40,7 @@ The M8 MVP is closed on top of the static app foundation:
 - Minimal unknown review UI with reviewed status and correction notes
 - IndexedDB storage adapters remain available internally; the MVP UI focuses on explicit Battle Log JSON restore/export
 - Schema-versioned Battle Log JSON export/import
+- UI表示を小さく保ったまま、session export履歴をOCR 1024件、event 512件、unknown 512件まで保持
 - OCR候補の選択根拠、バトルHUD/VSの永続集計、最大64件のphase遷移を含む診断export
 - Events CSV and Unknown messages CSV export
 - Bounded representative crop evidence in saved/exported logs
@@ -79,7 +81,7 @@ npm run report:champout
 npm run generate:champout-templates
 ```
 
-The current enabled source files are `btl_attack_syn.json`, `btl_std.json`, and the narrowly selected `btl_set.json`. The `btl_set.json` allowlist includes only reviewed live-message categories such as status/faint/effectiveness and the single-stat `RankupLv` / `RankdownLv` Lv1-Lv2 messages. Add more `btl_*.json` files one at a time only after checking the scan report, label allow/deny patterns, event type distribution, parser behavior, and tests.
+The current enabled source files are `btl_attack_syn.json`, `btl_std.json`, and the narrowly selected `btl_set.json`. The `btl_set.json` allowlist includes only reviewed live-message categories such as status/faint/effectiveness, `WazaAvoid(_E)` miss messages, and the single-stat `RankupLv` / `RankdownLv` Lv1-Lv2 messages. Add more `btl_*.json` files one at a time only after checking the scan report, label allow/deny patterns, event type distribution, parser behavior, and tests.
 
 The runtime app imports only `data/generated/champout-event-rules.ja.json`. It does not read `others/champout`, and it does not bundle the full raw dump. Source files, source commit, license, and notice details are recorded in the generated JSON and `THIRD_PARTY_NOTICES.md`.
 

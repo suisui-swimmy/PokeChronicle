@@ -124,6 +124,8 @@ export function renderBattleEventCanonicalText(
       return targetObject ? `${targetObject}に 効果は いまひとつだ!` : "効果は いまひとつだ!";
     case "immune":
       return targetObject ? `${targetObject}に 効果が ない!` : "効果が ない!";
+    case "miss":
+      return targetObject ? `${targetObject}には 当たらなかった!` : "当たらなかった!";
     case "critical":
       return "急所に 当たった!";
     case "flinch":

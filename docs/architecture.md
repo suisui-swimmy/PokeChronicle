@@ -91,11 +91,12 @@ M5 turns OCR/parser output into reviewable in-memory evidence:
 
 M6 makes the review data durable without adding a runtime server:
 
-- `src/storage/export.ts` builds schema-versioned Battle Log JSON documents from OCR messages, parsed events, unknowns, ROI metadata, media metadata, bounded crop evidence, and manual corrections. OCR messageには最大3件の候補履歴を保持し、HUD/VSの永続集計と最大64件のphase遷移もexportする。
+- `src/storage/export.ts` builds schema-versioned Battle Log JSON documents from OCR messages, parsed events, unknowns, ROI metadata, media metadata, bounded crop evidence, and manual corrections. OCR messageには最大3件の候補履歴を保持し、HUD/VSの永続集計と最大64件のphase遷移もexportする。session履歴はOCR 1024件、event 512件、unknown 512件まで保持し、UIはresolved/unknown各48件とOCR Raw 30件だけを描画する。
 - `src/storage/indexedDb.ts` is the only browser storage adapter for Battle Logs. It stores the current document in IndexedDB and can restore the latest saved log after a reload.
 - JSON import is for user-controlled Battle Log restore, not champout/template import. Imported logs are validated by `schemaVersion` before they replace the review state.
 - Events CSV and Unknown messages CSV exports are derived from the same Battle Log document. Unknown CSV includes review notes from durable manual corrections.
 - The app saves only bounded ROI crop evidence. It never stores the full video file or an unbounded frame stream.
+- OCR実行中は二値message fingerprintごとに最新frameへ置換しながら、異なる文面を最大3件のFIFOへ保持する。別文面が待っている場合は現在文面の残りfallbackを中断し、短い連続メッセージを優先する。
 
 ## M7 Generated Champout Pack Boundary
 
@@ -104,7 +105,7 @@ M7 includes a standard generated champout template pack:
 - `scripts/report-champout-files.mjs` scans `others/champout/rom-txt/jpn/btl_*.json`, summarizes candidate counts, label prefixes, placeholder patterns, event type distribution, and risk hints, and intentionally omits raw `OriginalText` dumps from committed output.
 - `data/champout/champout-template-sources.ja.json` is the hand-reviewed source configuration. It supports `enabled`, `hold`, and `disabled` source statuses; only `enabled` files are generated into the runtime pack.
 - `scripts/generate-champout-templates.mjs` is a development/build-time Node script. It verifies the local `others/champout` MIT license and source commit, reads selected Japanese battle text files, and writes `data/generated/champout-event-rules.ja.json`.
-- The generated pack is compact: it currently uses `OriginalText` from `btl_attack_syn.json`, `btl_std.json`, and narrowly allow-listed live-message labels from `btl_set.json`, including status/faint/effectiveness and single-stat `RankupLv` / `RankdownLv` Lv1-Lv2 messages. It records source file, key path, label name, original text, and source commit for each generated rule. Short but high-signal templates such as `{pokemon}の{move}!`, `{pokemon}戻れ!`, and `{pokemon}の{stat}が 上がった!` are allowed because the parser constrains their placeholders to dictionaries.
+- The generated pack is compact: it currently uses `OriginalText` from `btl_attack_syn.json`, `btl_std.json`, and narrowly allow-listed live-message labels from `btl_set.json`, including status/faint/effectiveness, `WazaAvoid(_E)` miss messages, and single-stat `RankupLv` / `RankdownLv` Lv1-Lv2 messages. It records source file, key path, label name, original text, and source commit for each generated rule. Short but high-signal templates such as `{pokemon}の{move}!`, `{pokemon}戻れ!`, and `{pokemon}の{stat}が 上がった!` are allowed because the parser constrains their placeholders to dictionaries.
 - `src/core/templates/generatedChampoutTemplateRules.ts` imports the generated JSON. Runtime code does not read from `others/champout`.
 - `src/core/templates/standardTemplateRules.ts` combines `SEED_TEMPLATE_RULES` with generated champout rules for live parsing.
 - Third-party source, MIT license, source commit, and notice details are recorded in `THIRD_PARTY_NOTICES.md`.

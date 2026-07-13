@@ -19,9 +19,9 @@
   "stats": {
     "sourceFileCount": 3,
     "extractedTextCount": 851,
-    "battleCandidateCount": 171,
-    "generatedRuleCount": 167,
-    "skippedTextCount": 684,
+    "battleCandidateCount": 173,
+    "generatedRuleCount": 169,
+    "skippedTextCount": 682,
     "duplicateRuleCount": 4,
     "maxGeneratedRules": 600,
     "eventTypeDistribution": {
@@ -38,6 +38,7 @@
       "heal": 1,
       "immune": 2,
       "item": 7,
+      "miss": 2,
       "move": 2,
       "protect": 6,
       "redirection": 2,
@@ -97,11 +98,11 @@
       },
       {
         "fileName": "btl_set.json",
-        "reason": "narrow live battle resolution messages for status, stat rank, faint, flinch, item priority/endure, effectiveness, fail, protection, redirection, mega evolution, weather/poison damage, and tea effect",
+        "reason": "narrow live battle resolution messages for status, stat rank, faint, flinch, item priority/endure, effectiveness, miss, fail, protection, redirection, mega evolution, weather/poison damage, and tea effect",
         "extractedTextCount": 734,
-        "battleCandidateCount": 80,
-        "generatedRuleCount": 80,
-        "skippedTextCount": 654,
+        "battleCandidateCount": 82,
+        "generatedRuleCount": 82,
+        "skippedTextCount": 652,
         "eventTypeDistribution": {
           "activate": 4,
           "boost": 4,
@@ -111,6 +112,7 @@
           "flinch": 2,
           "immune": 2,
           "item": 4,
+          "miss": 2,
           "protect": 2,
           "redirection": 2,
           "status": 14,
@@ -1901,6 +1903,45 @@
         "keyPath": "mSDataSet[31].OriginalText",
         "labelName": "BTL_STRID_SET_NoEffect_E",
         "originalText": "相手の {0}には効果が ないようだ...",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_miss_15ksrjy",
+      "eventType": "miss",
+      "priority": 50,
+      "patterns": [
+        "{target}には当たらなかった!"
+      ],
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[32].OriginalText",
+        "labelName": "BTL_STRID_SET_WazaAvoid",
+        "originalText": "{0}には当たらなかった!",
+        "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
+      }
+    },
+    {
+      "id": "champout_miss_1535kge",
+      "eventType": "miss",
+      "priority": 50,
+      "patterns": [
+        "相手の {target}には当たらなかった!"
+      ],
+      "constants": {
+        "target.side": "opponent"
+      },
+      "maxGap": 4,
+      "maxTextCaptureLength": 18,
+      "confidence": 0.84,
+      "source": {
+        "fileName": "btl_set.json",
+        "keyPath": "mSDataSet[33].OriginalText",
+        "labelName": "BTL_STRID_SET_WazaAvoid_E",
+        "originalText": "相手の {0}には当たらなかった!",
         "sourceCommit": "d2885a864f041744df1de1b35f4ab3d2e52cf4db"
       }
     },

@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   analyzeProcessedMessageImageData,
+  areMessageMaskFingerprintsSimilar,
   choosePreferredMessagePreprocessVariant,
+  createMessageMaskFingerprint,
   createMessageLineCropVariants,
   createMessagePreprocessVariants,
   detectMessageLineBands,
+  getMessageMaskFingerprintDistance,
   isBrightYellowTextPixel,
   preprocessMessageImageData,
   preprocessMessageImageDataWithMetrics,
@@ -288,6 +291,47 @@ describe("preprocessMessageImageData", () => {
     expect(yellow?.metrics.foregroundPixelCount).toBeGreaterThan(0);
     expect(yellow?.isOcrCandidate).toBe(false);
     expect(yellow?.rejectReason).toBe("component");
+  });
+});
+
+describe("message mask fingerprint", () => {
+  const options: MessagePreprocessOptions = {
+    whiteThreshold: 180,
+    background: "black",
+    invert: false,
+  };
+
+  it("treats the same message mask as the same fingerprint", () => {
+    const first = createSolidProcessedImage(64, 32, 0);
+    const second = createSolidProcessedImage(64, 32, 0);
+
+    for (const image of [first, second]) {
+      drawProcessedTextRow(image, 8, 255, 4, 30);
+      drawProcessedTextRow(image, 22, 255, 8, 44);
+    }
+
+    const firstFingerprint = createMessageMaskFingerprint(first, options);
+    const secondFingerprint = createMessageMaskFingerprint(second, options);
+
+    expect(getMessageMaskFingerprintDistance(firstFingerprint, secondFingerprint)).toBe(0);
+    expect(areMessageMaskFingerprintsSimilar(firstFingerprint, secondFingerprint)).toBe(true);
+  });
+
+  it("separates masks whose text occupies different regions", () => {
+    const leftMessage = createSolidProcessedImage(64, 32, 0);
+    const rightMessage = createSolidProcessedImage(64, 32, 0);
+    drawProcessedTextRow(leftMessage, 8, 255, 2, 24);
+    drawProcessedTextRow(leftMessage, 22, 255, 4, 28);
+    drawProcessedTextRow(rightMessage, 8, 255, 38, 62);
+    drawProcessedTextRow(rightMessage, 22, 255, 34, 60);
+
+    const leftFingerprint = createMessageMaskFingerprint(leftMessage, options);
+    const rightFingerprint = createMessageMaskFingerprint(rightMessage, options);
+
+    expect(getMessageMaskFingerprintDistance(leftFingerprint, rightFingerprint)).toBeGreaterThan(
+      0.16,
+    );
+    expect(areMessageMaskFingerprintsSimilar(leftFingerprint, rightFingerprint)).toBe(false);
   });
 });
 

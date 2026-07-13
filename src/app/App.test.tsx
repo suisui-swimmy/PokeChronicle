@@ -5,6 +5,11 @@ import type {
   OCRWorkerRequest,
   OCRWorkerResponse,
 } from "../core/ocr/workerMessages";
+import type { BattleEvent, OCRMessage, UnknownEvent } from "../core/events/schema";
+import {
+  createBattleLogDocument,
+  serializeBattleLogDocument,
+} from "../storage/export";
 import { App } from "./App";
 
 const videoTrack = {
@@ -68,7 +73,11 @@ class MockOcrWorker {
   }
 }
 
-function createSyntheticMessageImage(width: number, height: number) {
+function createSyntheticMessageImage(
+  width: number,
+  height: number,
+  region: "full" | "left" | "right" = "full",
+) {
   const image = new ImageData(width, height);
 
   for (let index = 0; index < image.data.length; index += 4) {
@@ -80,8 +89,11 @@ function createSyntheticMessageImage(width: number, height: number) {
 
   const rowStarts = [Math.max(3, Math.floor(height * 0.24)), Math.max(8, Math.floor(height * 0.62))];
 
+  const xStart = region === "right" ? Math.floor(width * 0.58) : 4;
+  const xEnd = region === "left" ? Math.floor(width * 0.42) : width - 4;
+
   for (const y of rowStarts) {
-    for (let x = 4; x + 1 < width - 4; x += 6) {
+    for (let x = xStart; x + 1 < xEnd; x += 6) {
       for (let dy = 0; dy < 2 && y + dy < height; dy += 1) {
         for (let dx = 0; dx < 2; dx += 1) {
           const index = ((y + dy) * width + x + dx) * 4;
@@ -1036,6 +1048,222 @@ describe("App", () => {
     expect(within(screen.getByRole("tab", { name: /Timeline/ })).getByText("1")).toBeInTheDocument();
     expect(within(screen.getByRole("tab", { name: /Unknown/ })).getByText("0")).toBeInTheDocument();
     expect(worker.postMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it("preempts fallback when a different message fingerprint is waiting", async () => {
+    const user = userEvent.setup();
+    let messageRegion: "left" | "right" = "left";
+    const canvasContext = {
+      drawImage: vi.fn(),
+      getImageData: vi.fn(
+        (_x: number, _y: number, width: number, height: number) =>
+          createSyntheticMessageImage(
+            width,
+            height,
+            width >= 300 ? messageRegion : "full",
+          ),
+      ),
+      imageSmoothingEnabled: false,
+      putImageData: vi.fn(),
+    } as unknown as CanvasRenderingContext2D;
+
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
+      () => canvasContext,
+    );
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue(
+      "data:image/png;base64,mock",
+    );
+    vi.spyOn(HTMLVideoElement.prototype, "videoWidth", "get").mockReturnValue(640);
+    vi.spyOn(HTMLVideoElement.prototype, "videoHeight", "get").mockReturnValue(360);
+    const samplingInterval = vi
+      .spyOn(window, "setInterval")
+      .mockImplementation(() => 1 as unknown as ReturnType<typeof window.setInterval>);
+
+    render(<App />);
+
+    await screen.findByRole("combobox", { name: "映像デバイス" });
+    await user.click(screen.getByRole("button", { name: "開始" }));
+    await waitFor(() => expect(mockOcrWorkers).toHaveLength(1));
+    const worker = mockOcrWorkers[0];
+    await waitFor(() => expect(worker.postMessage).toHaveBeenCalledTimes(1));
+    const firstRequest = worker.postMessage.mock.calls[0][0];
+
+    expect(firstRequest.type).toBe("recognize");
+    if (firstRequest.type !== "recognize") {
+      throw new Error("recognize request was not queued");
+    }
+
+    messageRegion = "right";
+    const sampleFrame = samplingInterval.mock.calls.find(([, timeout]) => timeout === 333)?.[0];
+    expect(typeof sampleFrame).toBe("function");
+    act(() => (sampleFrame as () => void)());
+
+    await user.click(screen.getByRole("tab", { name: "OCR" }));
+    await waitFor(() => {
+      expect(screen.getByLabelText("OCR sampling diagnostic log")).toHaveTextContent(
+        "distinct message queued",
+      );
+    });
+
+    act(() => {
+      worker.emit({
+        type: "result",
+        jobId: firstRequest.jobId,
+        meta: firstRequest.meta,
+        candidate: firstRequest.candidate,
+        result: {
+          rawText: "くろまろは ー",
+          confidence: 0.86,
+          lines: [
+            {
+              text: "くろまろは ー",
+              confidence: 0.86,
+              bbox: null,
+            },
+          ],
+        },
+        segmentResults: [],
+        durationMs: 18,
+      });
+    });
+
+    await waitFor(() => expect(worker.postMessage).toHaveBeenCalledTimes(2));
+    const nextMessageRequest = worker.postMessage.mock.calls[1][0];
+
+    expect(nextMessageRequest.type).toBe("recognize");
+    if (nextMessageRequest.type !== "recognize") {
+      throw new Error("next message recognize request was not queued");
+    }
+    expect(nextMessageRequest.jobId).not.toBe(firstRequest.jobId);
+    expect(nextMessageRequest.candidate).toMatchObject({ id: "primary", strategy: "block" });
+    expect(
+      worker.postMessage.mock.calls.some(
+        ([request]) => request.type === "recognize" && request.candidate.id === "linewise",
+      ),
+    ).toBe(false);
+
+    await user.click(screen.getByRole("tab", { name: "ログ" }));
+    await user.click(screen.getByRole("tab", { name: /System/ }));
+    expect(
+      within(screen.getByRole("tabpanel", { name: /System/ })).getByText(
+        "後続の異なるメッセージを優先し、OCR fallbackを打ち切りました。",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps imported session history while bounding each rendered review list", async () => {
+    const user = userEvent.setup();
+    const ocrMessages = Array.from({ length: 90 }, (_, index): OCRMessage => ({
+      id: `ocr_history_${index + 1}`,
+      battleId: "battle_history",
+      rawText: `OCR raw ${index + 1}`,
+      normalizedText: `OCR raw ${index + 1}`,
+      matchText: `ocrraw${index + 1}`,
+      ocrConfidence: 0.8,
+      timestampMs: index * 100,
+      frameIndex: index + 1,
+      roi: { x: 0.15, y: 0.72, w: 0.5, h: 0.14 },
+      lines: [],
+    }));
+    const events = Array.from({ length: 60 }, (_, index): BattleEvent => ({
+      id: `evt_history_${index + 1}`,
+      battleId: "battle_history",
+      turn: null,
+      timestampMs: index * 100,
+      type: "move",
+      actor: { name: "マフォクシー", side: "player" },
+      move: "ねっぷう",
+      target: null,
+      rawText: `マフォクシーの ねっぷう! ${index + 1}`,
+      normalizedText: `マフォクシーのねっぷう!${index + 1}`,
+      confidence: 0.9,
+      classification: {
+        method: "seed_rule",
+        templateId: "attack_actor_move",
+        alternatives: [],
+      },
+      source: {
+        frameIndex: index + 1,
+        timestampMs: index * 100,
+        cropObjectUrl: null,
+      },
+    }));
+    const unknowns = Array.from({ length: 60 }, (_, index): UnknownEvent => ({
+      id: `unk_history_${index + 1}`,
+      battleId: "battle_history",
+      timestampMs: index * 100 + 50,
+      afterEventId: null,
+      rawText: `unknown ${index + 1}`,
+      normalizedText: `unknown ${index + 1}`,
+      ocrConfidence: 0.5,
+      candidateMatches: [],
+      sourceFrameRef: `frame:${index + 1}:${index * 100 + 50}`,
+      reviewStatus: "unreviewed",
+    }));
+    const battleLog = createBattleLogDocument({
+      battleId: "battle_history",
+      title: "History battle",
+      startedAt: null,
+      media: {
+        sourceKind: "none",
+        videoLabel: null,
+        audioLabel: null,
+        width: null,
+        height: null,
+        frameRate: null,
+      },
+      roi: { x: 0.15, y: 0.72, w: 0.5, h: 0.14 },
+      roiName: "Battle message ROI",
+      opponentHudRoi: { x: 0.55, y: 0.03, w: 0.43, h: 0.14 },
+      opponentHudRoiName: "Opponent battle HUD ROI",
+      playerHudRoi: { x: 0.02, y: 0.84, w: 0.46, h: 0.14 },
+      playerHudRoiName: "Player battle HUD ROI",
+      vsRoi: { x: 0.34, y: 0.32, w: 0.32, h: 0.32 },
+      vsRoiName: "VS splash ROI",
+      ocrMessages,
+      events,
+      unknowns,
+      frameEvidence: [],
+      reviewNotes: {},
+    });
+    const serialized = serializeBattleLogDocument(battleLog);
+    const importFile = new File([serialized], "history.json", { type: "application/json" });
+    Object.defineProperty(importFile, "text", {
+      configurable: true,
+      value: vi.fn().mockResolvedValue(serialized),
+    });
+
+    render(<App />);
+    await screen.findByRole("combobox", { name: "映像デバイス" });
+    await user.click(screen.getByRole("tab", { name: "データ" }));
+    const importInput = document.querySelector<HTMLInputElement>(
+      'input[accept="application/json,.json"]',
+    );
+    expect(importInput).not.toBeNull();
+    fireEvent.change(importInput as HTMLInputElement, {
+      target: { files: [importFile] },
+    });
+
+    await user.click(screen.getByRole("tab", { name: "ログ" }));
+    await waitFor(() => {
+      expect(within(screen.getByRole("tab", { name: /解決済み/ })).getByText("60")).toBeInTheDocument();
+      expect(within(screen.getByRole("tab", { name: /Unknown/ })).getByText("60")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("tab", { name: /解決済み/ }));
+    expect(
+      within(screen.getByRole("tabpanel", { name: /解決済み/ })).getAllByRole("listitem"),
+    ).toHaveLength(48);
+
+    await user.click(screen.getByRole("tab", { name: /Unknown/ }));
+    expect(
+      within(screen.getByRole("tabpanel", { name: /Unknown/ })).getAllByRole("listitem"),
+    ).toHaveLength(48);
+
+    await user.click(screen.getByRole("tab", { name: /OCR Raw/ }));
+    expect(
+      within(screen.getByRole("tabpanel", { name: /OCR Raw/ })).getAllByRole("listitem"),
+    ).toHaveLength(30);
   });
 
   it("configures ROI from analysis and data management", async () => {

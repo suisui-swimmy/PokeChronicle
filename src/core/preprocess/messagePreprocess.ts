@@ -14,6 +14,13 @@ export interface MessagePreprocessMetrics {
   foregroundPixelRatio: number;
 }
 
+export interface MessageMaskFingerprint {
+  columns: number;
+  rows: number;
+  cells: number[];
+  foregroundPixelRatio: number;
+}
+
 export interface MessageForegroundComponentMetrics {
   componentCount: number;
   largestComponentPixelCount: number;
@@ -220,6 +227,114 @@ export function analyzeProcessedMessageImageData(
     foregroundPixelRatio:
       totalPixelCount === 0 ? 0 : foregroundPixelCount / totalPixelCount,
   };
+}
+
+const FINGERPRINT_COLUMNS = 16;
+const FINGERPRINT_ROWS = 8;
+const FINGERPRINT_LEVELS = 15;
+
+export function createMessageMaskFingerprint(
+  processed: ImageData,
+  options: MessagePreprocessOptions,
+): MessageMaskFingerprint {
+  const { foregroundValue } = getOutputValues(options.background, options.invert);
+  const columns = FINGERPRINT_COLUMNS;
+  const rows = FINGERPRINT_ROWS;
+  const foregroundCounts = Array.from({ length: columns * rows }, () => 0);
+  const pixelCounts = Array.from({ length: columns * rows }, () => 0);
+  let foregroundPixelCount = 0;
+
+  for (let y = 0; y < processed.height; y += 1) {
+    const cellY = Math.min(rows - 1, Math.floor((y * rows) / Math.max(1, processed.height)));
+
+    for (let x = 0; x < processed.width; x += 1) {
+      const cellX = Math.min(
+        columns - 1,
+        Math.floor((x * columns) / Math.max(1, processed.width)),
+      );
+      const cellIndex = cellY * columns + cellX;
+      const dataIndex = (y * processed.width + x) * 4;
+      const isForeground = isProcessedForegroundPixel(
+        processed.data,
+        dataIndex,
+        foregroundValue,
+      );
+
+      pixelCounts[cellIndex] += 1;
+      if (isForeground) {
+        foregroundCounts[cellIndex] += 1;
+        foregroundPixelCount += 1;
+      }
+    }
+  }
+
+  const totalPixelCount = processed.width * processed.height;
+
+  return {
+    columns,
+    rows,
+    cells: foregroundCounts.map((count, index) => {
+      const cellPixelCount = pixelCounts[index];
+      const density = cellPixelCount === 0 ? 0 : count / cellPixelCount;
+
+      return Math.round(Math.min(1, density * 4) * FINGERPRINT_LEVELS);
+    }),
+    foregroundPixelRatio:
+      totalPixelCount === 0 ? 0 : foregroundPixelCount / totalPixelCount,
+  };
+}
+
+export function getMessageMaskFingerprintDistance(
+  left: MessageMaskFingerprint,
+  right: MessageMaskFingerprint,
+) {
+  if (
+    left.columns !== right.columns ||
+    left.rows !== right.rows ||
+    left.cells.length !== right.cells.length ||
+    left.cells.length === 0
+  ) {
+    return 1;
+  }
+
+  let activeCellCount = 0;
+  let cellDistanceTotal = 0;
+  let occupancyMismatchCount = 0;
+
+  left.cells.forEach((leftValue, index) => {
+    const rightValue = right.cells[index] ?? 0;
+
+    if (leftValue === 0 && rightValue === 0) {
+      return;
+    }
+
+    activeCellCount += 1;
+    cellDistanceTotal += Math.abs(leftValue - rightValue) / FINGERPRINT_LEVELS;
+    if ((leftValue === 0) !== (rightValue === 0)) {
+      occupancyMismatchCount += 1;
+    }
+  });
+
+  const cellDistance = activeCellCount === 0 ? 0 : cellDistanceTotal / activeCellCount;
+  const occupancyDistance =
+    activeCellCount === 0 ? 0 : occupancyMismatchCount / activeCellCount;
+  const densityDistance = Math.min(
+    1,
+    Math.abs(left.foregroundPixelRatio - right.foregroundPixelRatio) * 8,
+  );
+
+  return Math.min(
+    1,
+    cellDistance * 0.65 + occupancyDistance * 0.25 + densityDistance * 0.1,
+  );
+}
+
+export function areMessageMaskFingerprintsSimilar(
+  left: MessageMaskFingerprint,
+  right: MessageMaskFingerprint,
+  maxDistance = 0.16,
+) {
+  return getMessageMaskFingerprintDistance(left, right) <= maxDistance;
 }
 
 export function analyzeProcessedForegroundComponents(

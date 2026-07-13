@@ -850,7 +850,7 @@ function parseContextEvent(
         });
       }
 
-      if (type === "boost" || type === "unboost") {
+      if (type === "boost" || type === "unboost" || type === "switch_out") {
         return null;
       }
 
@@ -1052,7 +1052,7 @@ function collectOwnDoubleSwitchInCandidates(
     (segment, index, values) => values.indexOf(segment) === index,
   );
 
-  if (uniqueSegments.length !== 2) {
+  if (uniqueSegments.length < 2) {
     return null;
   }
 
@@ -1177,17 +1177,15 @@ function parseDoubleSwitchInEvent(
     return null;
   }
 
-  const resolutions = candidate.segments.map((segment) =>
-    resolveSwitchInPokemon(segment, dictionary, ocrConfidence),
-  );
-
-  if (resolutions.some((resolution) => !resolution)) {
-    return null;
-  }
-
-  const acceptedResolutions = resolutions.filter(
-    (resolution): resolution is SwitchInPokemonResolution => resolution !== null,
-  );
+  const acceptedResolutions = candidate.segments
+    .map((segment) => resolveSwitchInPokemon(segment, dictionary, ocrConfidence))
+    .filter((resolution): resolution is SwitchInPokemonResolution => resolution !== null)
+    .filter(
+      (resolution, index, resolutions) =>
+        resolutions.findIndex(
+          (candidateResolution) => candidateResolution.match.best === resolution.match.best,
+        ) === index,
+    );
   const pokemonNames = acceptedResolutions.map((resolution) => resolution.match.best);
 
   if (
@@ -2072,6 +2070,15 @@ function isConstrainedImmuneSurface(surfaceText: string) {
   );
 }
 
+function isConstrainedMissSurface(surfaceText: string) {
+  return includesAny(surfaceText, [
+    "当たらなかった",
+    "当たらなかつた",
+    "あたらなかった",
+    "あたらなかつた",
+  ]);
+}
+
 function isConstrainedBoostSurface(surfaceText: string) {
   return (
     surfaceText.includes("が") &&
@@ -2157,6 +2164,10 @@ function selectConstrainedTemplateSurfaces(
     }
 
     if (eventTypes.has("immune") && isConstrainedImmuneSurface(surface.matchText)) {
+      return true;
+    }
+
+    if (eventTypes.has("miss") && isConstrainedMissSurface(surface.matchText)) {
       return true;
     }
 
@@ -2287,6 +2298,7 @@ function selectConstrainedTemplateRules(
   const hasStatusCureShape = surfaceTexts.some(isConstrainedStatusCureSurface);
   const hasStatusShape = surfaceTexts.some(isConstrainedStatusSurface);
   const hasImmuneShape = surfaceTexts.some(isConstrainedImmuneSurface);
+  const hasMissShape = surfaceTexts.some(isConstrainedMissSurface);
   const hasBoostShape = surfaceTexts.some(isConstrainedBoostSurface);
   const hasUnboostShape = surfaceTexts.some(isConstrainedUnboostSurface);
   const hasProtectShape = surfaceTexts.some(isConstrainedProtectSurface);
@@ -2334,6 +2346,10 @@ function selectConstrainedTemplateRules(
 
     if (rule.eventType === "immune") {
       return hasImmuneShape;
+    }
+
+    if (rule.eventType === "miss") {
+      return hasMissShape;
     }
 
     if (rule.eventType === "boost") {

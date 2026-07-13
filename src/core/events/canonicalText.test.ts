@@ -106,6 +106,14 @@ describe("renderBattleEventCanonicalText", () => {
     ).toBe("エルフーンは たおれた!");
     expect(
       renderBattleEventCanonicalText(
+        event({
+          type: "miss",
+          target: { name: "エルフーン", side: "opponent" },
+        }),
+      ),
+    ).toBe("相手の エルフーンには 当たらなかった!");
+    expect(
+      renderBattleEventCanonicalText(
         event({ type: "redirection", actor: { name: "ヤバソチャ", side: null } }),
       ),
     ).toBe("ヤバソチャは 注目の的に なった!");

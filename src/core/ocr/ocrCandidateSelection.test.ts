@@ -56,6 +56,16 @@ describe("adaptive OCR candidate selection", () => {
     expect(shouldRetryOcrCandidate(primary)).toBe(false);
   });
 
+  it("treats a target-resolved miss as a complete primary event", () => {
+    const primary = createCandidate(
+      "primary",
+      "相手の エルフーンには 当たらなかった!",
+      0.94,
+    );
+
+    expect(shouldRetryOcrCandidate(primary)).toBe(false);
+  });
+
   it("holds conflicting strong event signatures as unknown", () => {
     const move = createCandidate("primary", "相手の リザードンの ねっぷう!", 0.82);
     const switchIn = createCandidate("linewise", "ゆけっ! ガブリアス!", 0.8);

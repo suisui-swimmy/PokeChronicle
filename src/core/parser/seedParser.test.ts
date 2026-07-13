@@ -561,6 +561,19 @@ describe("parseBattleMessage", () => {
     expect(events.map((event) => event.actor.name)).toEqual(["エルフーン", "マフォクシー"]);
   });
 
+  it("ignores terminator suffix noise when resolving a two-line double switch-in", () => {
+    const result = parseBattleMessage({
+      rawText: "ゆけっ/ ドドゲグザン/      閲謀謀謀謀\nマフォクシー/",
+      lines: ["ゆけっ/ ドドゲグザン/      閲謀謀謀謀", "マフォクシー/"],
+      ocrConfidence: 0.74,
+    });
+
+    expect(getParsedBattleEvents(result).map((event) => event.actor.name)).toEqual([
+      "ドドゲザン",
+      "マフォクシー",
+    ]);
+  });
+
   it("parses titled trainer double switch-in messages as two switch-in events", () => {
     const result = parseBattleMessage({
       rawText: "Mercysanは ランクマスター エルフーンと\nイダイトウを 繰り出した!",
@@ -579,6 +592,39 @@ describe("parseBattleMessage", () => {
     });
     expect(events).toHaveLength(2);
     expect(events.map((event) => event.actor.name)).toEqual(["エルフーン", "イダイトウ"]);
+  });
+
+  it("ignores an arbitrary title before the first Pokemon in trainer double switch-in text", () => {
+    const result = parseBattleMessage({
+      rawText:
+        "くろまろは イベントにさんかした リザードンと\nエルフーンを 繰り出した!",
+      lines: [
+        "くろまろは イベントにさんかした リザードンと",
+        "エルフーンを 繰り出した!",
+      ],
+      ocrConfidence: 0.92,
+    });
+
+    expect(getParsedBattleEvents(result).map((event) => event.actor.name)).toEqual([
+      "リザードン",
+      "エルフーン",
+    ]);
+  });
+
+  it("lets the generated trainer switch-out template resolve the withdrawn Pokemon", () => {
+    expect(
+      parseBattleMessage({
+        rawText: "くろまろは\nリザードンを 引っこめた!",
+        lines: ["くろまろは", "リザードンを 引っこめた!"],
+        ocrConfidence: 0.93,
+      }),
+    ).toMatchObject({
+      status: "event",
+      event: {
+        type: "switch_out",
+        actor: { name: "リザードン" },
+      },
+    });
   });
 
   it("parses switch messages from terminator-trimmed noisy surfaces", () => {
@@ -1163,6 +1209,13 @@ describe("parseBattleMessage", () => {
     ).toMatchObject({ status: "unknown" });
     expect(
       parseBattleMessage({
+        rawText:
+          "相手の リザードンの リザードナイトYと\nぐろまろの ゼンブイリングが 反応した/",
+        ocrConfidence: 0.9,
+      }),
+    ).toMatchObject({ status: "unknown" });
+    expect(
+      parseBattleMessage({
         rawText: "相手の リザードンの ねっぷう!",
         ocrConfidence: 0.9,
       }),
@@ -1178,6 +1231,36 @@ describe("parseBattleMessage", () => {
     ).toMatchObject({
       status: "event",
       event: { type: "move", actor: { name: "カビゴン" }, move: "ねごと" },
+    });
+  });
+
+  it("uses boundary-covered fuzzy text for uniquely resolvable heat wave variants", () => {
+    expect(
+      parseBattleMessage({
+        rawText: "相手の リザードンの\nねっぶう/",
+        ocrConfidence: 0.9,
+      }),
+    ).toMatchObject({
+      status: "event",
+      event: { type: "move", actor: { name: "リザードン" }, move: "ねっぷう" },
+    });
+    expect(
+      parseBattleMessage({
+        rawText: "マフォグシーの\nねつぷふう/",
+        ocrConfidence: 0.84,
+      }),
+    ).toMatchObject({
+      status: "event",
+      event: { type: "move", actor: { name: "マフォクシー" }, move: "ねっぷう" },
+    });
+    expect(
+      parseBattleMessage({
+        rawText: "相手の リザードンの\nねつふうっう/ R喪",
+        ocrConfidence: 0.8,
+      }),
+    ).toMatchObject({
+      status: "event",
+      event: { type: "move", actor: { name: "リザードン" }, move: "ねっぷう" },
     });
   });
 
