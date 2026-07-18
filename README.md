@@ -20,6 +20,9 @@ The M8 MVP is closed on top of the static app foundation:
 - 3fps / 5fps ROI frame sampling
 - Raw ROI crop and Canvas-preprocessed preview
 - White-text candidate extraction, solid background, inversion, and upscale controls
+- OCRとは別の12fps軽量MessageWatcher。最大幅320pxのROIで白/黄色mask、本文行band、foreground component、message fingerprintを確認し、表示発生を先に記録
+- `MessageObservation`単位のライブログ。`検出中 → 解析中 → 解決 / 未解決 / 未読`を同じ行で更新し、1観測から複数eventも表示
+- OCRが空・timeout・busy中のdrop・preprocess/density rejectでも観測を失わず、内容を読めなかった場合はevent typeを推測せず`未読`として保持
 - 赤/マゼンタ系または青/紫系のネームプレート構造を使う、HP残量色に依存しないバトルHUDフェーズ検出
 - Bounded in-memory frame sample buffer
 - Browser OCR provider interface and Tesseract.js worker integration
@@ -39,7 +42,7 @@ The M8 MVP is closed on top of the static app foundation:
 - Consecutive same raw OCR messages are grouped in the raw OCR tab
 - Minimal unknown review UI with reviewed status and correction notes
 - IndexedDB storage adapters remain available internally; the MVP UI focuses on explicit Battle Log JSON restore/export
-- Schema-versioned Battle Log JSON export/import
+- `messageObservations`と観測summaryを含むschema-versioned Battle Log JSON export/import。旧JSONは空観測へbackfillし、右ログは従来のresolved eventsへfallback
 - UI表示を小さく保ったまま、session export履歴をOCR 1024件、event 512件、unknown 512件まで保持
 - OCR候補の選択根拠、バトルHUD/VSの永続集計、最大64件のphase遷移を含む診断export
 - Events CSV and Unknown messages CSV export

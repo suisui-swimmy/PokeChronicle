@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type {
   BattleEvent,
   FrameSampleDiagnostic,
+  MessageObservation,
   OCRMessage,
   UnknownEvent,
 } from "../core/events/schema";
@@ -16,6 +17,7 @@ import {
 const ocrMessage: OCRMessage = {
   id: "ocr_1",
   battleId: "battle_test",
+  observationId: "msg_obs_1",
   rawText: "ミミッキュの\nじゃれつく！",
   normalizedText: "ミミッキュのじゃれつく!",
   matchText: "ミミッキュのじゃれつく",
@@ -46,6 +48,7 @@ const ocrMessage: OCRMessage = {
 const battleEvent: BattleEvent = {
   id: "evt_1",
   battleId: "battle_test",
+  observationId: "msg_obs_1",
   turn: null,
   timestampMs: 1200,
   type: "move",
@@ -78,6 +81,32 @@ const unknownEvent: UnknownEvent = {
   candidateMatches: ["candidate:a"],
   sourceFrameRef: "frame:5:1800",
   reviewStatus: "reviewed",
+};
+
+const messageObservation: MessageObservation = {
+  id: "msg_obs_1",
+  battleId: "battle_test",
+  openedAtMs: 1100,
+  closedAtMs: 1500,
+  frameStart: 3,
+  frameEnd: 5,
+  lifecycle: "closed",
+  resolution: "resolved",
+  visualFingerprint: {
+    columns: 2,
+    rows: 2,
+    cells: [4, 4, 0, 0],
+    foregroundPixelRatio: 0.08,
+  },
+  maxPresenceScore: 0.82,
+  bestFrameIndex: 4,
+  bestEvidenceRef: "frame:4:1200",
+  ocrAttemptCount: 1,
+  ocrMessageIds: ["ocr_1"],
+  eventIds: ["evt_1"],
+  unknownEventIds: [],
+  failureReason: null,
+  openedWhileOcrBusy: true,
 };
 
 const sampleDiagnostic: FrameSampleDiagnostic = {
@@ -123,6 +152,7 @@ describe("battle log export", () => {
         ocrMessages: [ocrMessage],
         events: [battleEvent],
         unknowns: [unknownEvent],
+        messageObservations: [messageObservation],
         frameEvidence: [
           {
             id: "frame_1",
@@ -168,10 +198,20 @@ describe("battle log export", () => {
     expect(document.vsSplashRoiProfile.roi).toEqual({ x: 0.34, y: 0.32, w: 0.32, h: 0.32 });
     expect(document.waitIndicatorRoiProfile).toBeUndefined();
     expect(document.sampleDiagnostics).toEqual([sampleDiagnostic]);
+    expect(document.messageObservations).toEqual([messageObservation]);
+    expect(document.messageObservationSummary).toEqual({
+      detectedCount: 1,
+      resolvedCount: 1,
+      ocrUnknownCount: 0,
+      unreadCount: 0,
+      openedWhileOcrBusyCount: 1,
+    });
     expect(document.ocrMessages[0].recognitionCandidates?.[0]).toMatchObject({
       id: "primary",
       selected: true,
     });
+    expect(document.ocrMessages[0].observationId).toBe("msg_obs_1");
+    expect(document.events[0].observationId).toBe("msg_obs_1");
     expect(document.phaseDetectionSummary.opponentHud.sampleCount).toBe(10);
     expect(document.phaseTransitions).toHaveLength(64);
     expect(document.phaseTransitions[0]).toMatchObject({
@@ -219,6 +259,20 @@ describe("battle log export", () => {
       sourceFrameRef: `frame:${index + 1}:${index * 100 + 50}`,
       reviewStatus: "unreviewed",
     }));
+    const messageObservations = Array.from(
+      { length: 64 },
+      (_, index): MessageObservation => ({
+        ...messageObservation,
+        id: `msg_obs_history_${index + 1}`,
+        openedAtMs: index * 100,
+        closedAtMs: index * 100 + 80,
+        frameStart: index + 1,
+        frameEnd: index + 1,
+        ocrMessageIds: [`ocr_history_${index + 1}`],
+        eventIds: [`evt_history_${index + 1}`],
+        openedWhileOcrBusy: index % 2 === 0,
+      }),
+    );
     const document = createBattleLogDocument({
       battleId: "battle_history",
       title: "History battle",
@@ -242,6 +296,7 @@ describe("battle log export", () => {
       ocrMessages,
       events,
       unknowns,
+      messageObservations,
       frameEvidence: [],
       reviewNotes: {},
     });
@@ -252,6 +307,8 @@ describe("battle log export", () => {
     expect(document.ocrMessages).toHaveLength(96);
     expect(document.events).toHaveLength(64);
     expect(document.unknowns).toHaveLength(64);
+    expect(document.messageObservations).toHaveLength(64);
+    expect(document.messageObservationSummary.openedWhileOcrBusyCount).toBe(32);
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) {
       throw new Error(parsed.error);
@@ -266,6 +323,12 @@ describe("battle log export", () => {
     expect(parsed.document.unknowns.some((unknown) => unknown.id === "unk_history_64")).toBe(
       true,
     );
+    expect(parsed.document.messageObservations).toHaveLength(64);
+    expect(
+      parsed.document.messageObservations.some(
+        (observation) => observation.id === "msg_obs_history_64",
+      ),
+    ).toBe(true);
     expect(eventsCsv.match(/evt_history_/g)).toHaveLength(64);
     expect(unknownsCsv.match(/unk_history_/g)).toHaveLength(64);
   });
@@ -348,6 +411,8 @@ describe("battle log export", () => {
     );
     const olderDocument = structuredClone(document) as Partial<typeof document>;
     delete olderDocument.ocrMessages?.[0]?.recognitionCandidates;
+    delete olderDocument.messageObservations;
+    delete olderDocument.messageObservationSummary;
     delete olderDocument.sampleDiagnostics;
     delete olderDocument.phaseDetectionSummary;
     delete olderDocument.phaseTransitions;
@@ -357,6 +422,14 @@ describe("battle log export", () => {
     expect(result).toMatchObject({
       ok: true,
       document: {
+        messageObservations: [],
+        messageObservationSummary: {
+          detectedCount: 0,
+          resolvedCount: 0,
+          ocrUnknownCount: 0,
+          unreadCount: 0,
+          openedWhileOcrBusyCount: 0,
+        },
         sampleDiagnostics: [],
         phaseDetectionSummary: { opponentHud: { sampleCount: 0 } },
         phaseTransitions: [],
@@ -365,6 +438,8 @@ describe("battle log export", () => {
         vsSplashRoiProfile: { roi: { x: 0.34, y: 0.32, w: 0.32, h: 0.32 } },
       },
       warnings: [
+        "message observationsがないため検出履歴なしで読み込みます。",
+        "message observation summaryがないため観測履歴から再集計します。",
         "sample diagnosticsがないためサンプラー診断なしで読み込みます。",
         "phase detection summaryがないため空集計として扱います。",
         "phase transitionsがないため遷移履歴なしで読み込みます。",
@@ -373,6 +448,57 @@ describe("battle log export", () => {
     if (result.ok) {
       expect(result.document.ocrMessages[0].recognitionCandidates).toBeUndefined();
     }
+  });
+
+  it("backfills the durable OCR-busy flag and recomputes observation summary", () => {
+    const document = createBattleLogDocument({
+      battleId: "battle_test",
+      title: "Test battle",
+      startedAt: null,
+      media: {
+        sourceKind: "none",
+        videoLabel: null,
+        audioLabel: null,
+        width: null,
+        height: null,
+        frameRate: null,
+      },
+      roi: { x: 0, y: 0, w: 1, h: 1 },
+      roiName: "Battle message ROI",
+      opponentHudRoi: { x: 0.55, y: 0.03, w: 0.43, h: 0.14 },
+      opponentHudRoiName: "Opponent battle HUD ROI",
+      playerHudRoi: { x: 0.02, y: 0.84, w: 0.46, h: 0.14 },
+      playerHudRoiName: "Player battle HUD ROI",
+      vsRoi: { x: 0.34, y: 0.32, w: 0.32, h: 0.32 },
+      vsRoiName: "VS splash ROI",
+      ocrMessages: [],
+      events: [],
+      unknowns: [],
+      messageObservations: [messageObservation],
+      frameEvidence: [],
+      reviewNotes: {},
+    });
+    const olderDocument = structuredClone(document) as unknown as Record<string, unknown>;
+    const [olderObservation] = olderDocument.messageObservations as Array<
+      Partial<MessageObservation>
+    >;
+    delete olderObservation.openedWhileOcrBusy;
+    delete olderDocument.messageObservationSummary;
+
+    const result = parseBattleLogJson(JSON.stringify(olderDocument));
+
+    expect(result).toMatchObject({
+      ok: true,
+      document: {
+        messageObservations: [{ id: "msg_obs_1", openedWhileOcrBusy: false }],
+        messageObservationSummary: {
+          detectedCount: 1,
+          resolvedCount: 1,
+          openedWhileOcrBusyCount: 0,
+        },
+      },
+      warnings: ["message observation summaryがないため観測履歴から再集計します。"],
+    });
   });
 
   it("imports legacy JSON with or without wait ROI profiles", () => {

@@ -18,10 +18,12 @@ function createObservation(
   id = "ocr-1",
   timestampMs = 1000,
   ocrConfidence: number | null = 0.91,
+  observationId: string | null = null,
 ) {
   return createTimelineObservation({
     id,
     battleId: "battle_test",
+    observationId,
     rawText,
     parseResult: parseBattleMessage(rawText),
     ocrConfidence,
@@ -82,9 +84,11 @@ describe("timeline observation", () => {
       "ocr-double",
       1400,
       0.92,
+      "msg_obs_double",
     );
 
     expect(observation.ocrMessage.rawText).toBe("ゆけっ! エルフーン!\nマフォクシー!");
+    expect(observation.ocrMessage.observationId).toBe("msg_obs_double");
     expect(observation.events).toHaveLength(2);
     expect(observation.events.map((event) => event.id)).toEqual([
       "evt_ocr-double_1",
@@ -94,18 +98,29 @@ describe("timeline observation", () => {
       "エルフーン",
       "マフォクシー",
     ]);
+    expect(observation.events.map((event) => event.observationId)).toEqual([
+      "msg_obs_double",
+      "msg_obs_double",
+    ]);
     expect(observation.dedupes).toHaveLength(2);
     expect(observation.unknown).toBeNull();
   });
 
   it("keeps unsupported OCR text as a reviewable unknown", () => {
-    const observation = createObservation("まだ分類できないメッセージ");
+    const observation = createObservation(
+      "まだ分類できないメッセージ",
+      "ocr-1",
+      1000,
+      0.91,
+      "msg_obs_unknown",
+    );
 
     expect(observation.event).toBeNull();
     expect(observation.unknown).toMatchObject({
       id: "unk_ocr-1",
       battleId: "battle_test",
       afterEventId: "evt_previous",
+      observationId: "msg_obs_unknown",
       reviewStatus: "unreviewed",
       sourceFrameRef: createSourceFrameRef(12, 1000),
     });

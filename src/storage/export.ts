@@ -7,6 +7,7 @@ import {
   type BattleLogRoiProfile,
   type FrameSampleDiagnostic,
   type ManualCorrection,
+  type MessageObservation,
   type NormalizedRoi,
   type OCRMessage,
   type PhaseDetectionSummary,
@@ -14,6 +15,7 @@ import {
   type UnknownEvent,
   createEmptyPhaseDetectionSummary,
 } from "../core/events/schema";
+import { summarizeMessageObservations } from "../core/events/messageObservation";
 
 export const BATTLE_LOG_APP_VERSION = "0.1.0";
 const MAX_PHASE_TRANSITIONS = 64;
@@ -34,6 +36,7 @@ export interface BattleLogBuildInput {
   ocrMessages: readonly OCRMessage[];
   events: readonly BattleEvent[];
   unknowns: readonly UnknownEvent[];
+  messageObservations?: readonly MessageObservation[];
   frameEvidence: readonly BattleLogFrameEvidence[];
   sampleDiagnostics?: readonly FrameSampleDiagnostic[];
   phaseDetectionSummary?: PhaseDetectionSummary;
@@ -47,6 +50,13 @@ export type BattleLogParseResult =
 
 function byTimestampThenId<T extends { timestampMs: number; id: string }>(left: T, right: T) {
   return left.timestampMs - right.timestampMs || left.id.localeCompare(right.id);
+}
+
+function byOpenedAtThenId(
+  left: Pick<MessageObservation, "openedAtMs" | "id">,
+  right: Pick<MessageObservation, "openedAtMs" | "id">,
+) {
+  return left.openedAtMs - right.openedAtMs || left.id.localeCompare(right.id);
 }
 
 function createManualCorrections(
@@ -105,6 +115,7 @@ export function createBattleLogDocument(
     roi: input.vsRoi,
     updatedAt: exportedAtIso,
   };
+  const messageObservations = [...(input.messageObservations ?? [])].sort(byOpenedAtThenId);
 
   return {
     schemaVersion: BATTLE_LOG_SCHEMA_VERSION,
@@ -123,6 +134,8 @@ export function createBattleLogDocument(
     ocrMessages: [...input.ocrMessages].sort(byTimestampThenId),
     events: [...input.events].sort(byTimestampThenId),
     unknowns: [...input.unknowns].sort(byTimestampThenId),
+    messageObservations,
+    messageObservationSummary: summarizeMessageObservations(messageObservations),
     frameEvidence: [...input.frameEvidence],
     sampleDiagnostics: [...(input.sampleDiagnostics ?? [])].sort(byTimestampThenId),
     phaseDetectionSummary: input.phaseDetectionSummary ?? createEmptyPhaseDetectionSummary(),
@@ -240,6 +253,22 @@ export function parseBattleLogJson(text: string): BattleLogParseResult {
     warnings.push("frame evidenceがないためcrop previewなしで読み込みます。");
     parsed.frameEvidence = [];
   }
+
+  if (!Array.isArray(parsed.messageObservations)) {
+    warnings.push("message observationsがないため検出履歴なしで読み込みます。");
+    parsed.messageObservations = [];
+  } else {
+    parsed.messageObservations = parsed.messageObservations.map((observation) =>
+      isRecord(observation) && typeof observation.openedWhileOcrBusy !== "boolean"
+        ? { ...observation, openedWhileOcrBusy: false }
+        : observation,
+    ) as MessageObservation[];
+  }
+
+  if (!isRecord(parsed.messageObservationSummary)) {
+    warnings.push("message observation summaryがないため観測履歴から再集計します。");
+  }
+  parsed.messageObservationSummary = summarizeMessageObservations(parsed.messageObservations);
 
   if (!Array.isArray(parsed.sampleDiagnostics)) {
     warnings.push("sample diagnosticsがないためサンプラー診断なしで読み込みます。");

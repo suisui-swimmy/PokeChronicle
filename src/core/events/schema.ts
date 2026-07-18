@@ -1,3 +1,5 @@
+import type { MessageMaskFingerprint } from "../preprocess/messagePreprocess";
+
 export const BATTLE_LOG_SCHEMA_VERSION = "0.1.0" as const;
 
 export type BattleEventType =
@@ -81,6 +83,7 @@ export interface OCRRecognitionCandidateTrace {
 export interface OCRMessage {
   id: string;
   battleId: string;
+  observationId?: string | null;
   rawText: string;
   normalizedText: string;
   matchText: string;
@@ -95,6 +98,7 @@ export interface OCRMessage {
 export interface BattleEvent {
   id: string;
   battleId: string;
+  observationId?: string | null;
   turn: number | null;
   timestampMs: number;
   type: BattleEventType;
@@ -115,6 +119,7 @@ export interface BattleEvent {
 export interface UnknownEvent {
   id: string;
   battleId: string;
+  observationId?: string | null;
   timestampMs: number;
   afterEventId: string | null;
   rawText: string;
@@ -123,6 +128,55 @@ export interface UnknownEvent {
   candidateMatches: string[];
   sourceFrameRef: string | null;
   reviewStatus: "unreviewed" | "reviewed";
+}
+
+export type MessageObservationLifecycle = "active" | "closed";
+
+export type MessageObservationResolution =
+  | "pending"
+  | "resolved"
+  | "ocr_unknown"
+  | "unread";
+
+export type MessageObservationFailureReason =
+  | "ocr_empty"
+  | "ocr_timeout"
+  | "ocr_error"
+  | "ocr_busy"
+  | "ocr_deferred_dropped"
+  | "preprocess_rejected"
+  | "density_rejected"
+  | "no_ocr_attempt"
+  | "parser_unknown"
+  | null;
+
+export interface MessageObservation {
+  id: string;
+  battleId: string;
+  openedAtMs: number;
+  closedAtMs: number | null;
+  frameStart: number;
+  frameEnd: number | null;
+  lifecycle: MessageObservationLifecycle;
+  resolution: MessageObservationResolution;
+  visualFingerprint: MessageMaskFingerprint;
+  maxPresenceScore: number;
+  bestFrameIndex: number | null;
+  bestEvidenceRef: string | null;
+  ocrAttemptCount: number;
+  ocrMessageIds: string[];
+  eventIds: string[];
+  unknownEventIds: string[];
+  failureReason: MessageObservationFailureReason;
+  openedWhileOcrBusy: boolean;
+}
+
+export interface MessageObservationSummary {
+  detectedCount: number;
+  resolvedCount: number;
+  ocrUnknownCount: number;
+  unreadCount: number;
+  openedWhileOcrBusyCount: number;
 }
 
 export type BattleLogMediaSourceKind = "device" | "video-file" | "image-file" | "none";
@@ -173,6 +227,13 @@ export type FrameSampleDiagnosticStage =
   | "messageWatchArmed"
   | "messageWatchExpired"
   | "messageWatchEnded"
+  | "messageWatchOpened"
+  | "messageWatchChanged"
+  | "messageWatchClosed"
+  | "messageWatchResolved"
+  | "messageWatchOcrUnknown"
+  | "messageWatchUnread"
+  | "messageWatchStaleClosed"
   | "ocrQueued"
   | "ocrRetryQueued"
   | "ocrRetryPreempted"
@@ -244,9 +305,25 @@ export interface VsSplashImageSignalDiagnostic {
   brightPixelRatio: number;
 }
 
+export interface MessagePresenceImageSignalDiagnostic {
+  kind: "message_presence";
+  roi: NormalizedRoi;
+  score: number;
+  isVisible: boolean;
+  fingerprint: string | null;
+  foregroundRatio: number;
+  whiteForegroundRatio: number;
+  yellowForegroundRatio: number;
+  lineBandCount: number;
+  componentCount: number;
+  largestComponentRatio: number;
+  rejectReason: string | null;
+}
+
 export type FrameImageSignalDiagnostic =
   | BattleHudImageSignalDiagnostic
   | HpHudImageSignalDiagnostic
+  | MessagePresenceImageSignalDiagnostic
   | VsSplashImageSignalDiagnostic
   | LegacyWaitIndicatorImageSignalDiagnostic;
 
@@ -357,6 +434,8 @@ export interface BattleLogDocument {
   ocrMessages: OCRMessage[];
   events: BattleEvent[];
   unknowns: UnknownEvent[];
+  messageObservations: MessageObservation[];
+  messageObservationSummary: MessageObservationSummary;
   frameEvidence: BattleLogFrameEvidence[];
   sampleDiagnostics: FrameSampleDiagnostic[];
   phaseDetectionSummary: PhaseDetectionSummary;
@@ -409,6 +488,14 @@ export function createEmptyBattleLog(battleId: string): BattleLogDocument {
     ocrMessages: [],
     events: [],
     unknowns: [],
+    messageObservations: [],
+    messageObservationSummary: {
+      detectedCount: 0,
+      resolvedCount: 0,
+      ocrUnknownCount: 0,
+      unreadCount: 0,
+      openedWhileOcrBusyCount: 0,
+    },
     frameEvidence: [],
     sampleDiagnostics: [],
     phaseDetectionSummary: createEmptyPhaseDetectionSummary(),

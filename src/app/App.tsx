@@ -28,6 +28,8 @@ import {
   type FrameImageSignalDiagnostic,
   type FrameSampleDiagnostic,
   type FrameSampleDiagnosticStage,
+  type MessageObservation,
+  type MessageObservationFailureReason,
   type NormalizedRoi,
   type OCRMessage,
   type OCRRecognitionCandidateTrace,
@@ -47,6 +49,24 @@ import {
   type TimelineDeduplicationRecord,
 } from "../core/events/timeline";
 import { renderBattleEventCanonicalText } from "../core/events/canonicalText";
+import {
+  advanceMessageWatcher,
+  attachMessageObservationOcrMessage,
+  closeActiveMessageWatcher,
+  closeMessageObservation,
+  createInitialMessageWatcherState,
+  createMessageObservation,
+  recordMessageObservationFailure,
+  recordMessageObservationOcrAttempt,
+  resolveMessageObservationAsOcrUnknown,
+  resolveMessageObservationWithEvents,
+  settleMessageObservationUnread,
+  updateMessageObservationBestEvidence,
+  type MessageWatcherCloseReason,
+  type MessageWatcherSample,
+  type MessageWatcherState,
+  type MessageWatcherTransition,
+} from "../core/events/messageObservation";
 import type { DictionaryEntry } from "../core/dictionary/types";
 import { summarizeBattleStats } from "../core/stats/battleStats";
 import {
@@ -57,6 +77,10 @@ import {
   type MessagePreprocessOptions,
   type MessageTextMask,
 } from "../core/preprocess/messagePreprocess";
+import {
+  analyzeMessagePresence,
+  type MessagePresenceAnalysis,
+} from "../core/preprocess/messagePresenceDetection";
 import {
   analyzeBattleHudImage,
   analyzeVsSplashImage,
@@ -123,14 +147,18 @@ const DEFAULT_IS_VS_ROI_VISIBLE = false;
 const MIN_ROI_SIZE = 0.08;
 const NO_AUDIO_DEVICE_ID = "none";
 const DEFAULT_SAMPLE_FPS = 3;
+const DEFAULT_MESSAGE_WATCH_FPS = 12;
+const MESSAGE_WATCH_MAX_WIDTH = 320;
 const MAX_FRAME_BUFFER = 8;
 const MAX_OCR_LOGS = 30;
 const MAX_OCR_HISTORY = 1024;
 const MAX_EVENT_HISTORY = 512;
 const MAX_UNKNOWN_HISTORY = 512;
+const MAX_MESSAGE_OBSERVATION_HISTORY = 512;
 const MAX_TIMELINE_ITEMS = 48;
 const MAX_RESOLVED_DISPLAY_ITEMS = 48;
 const MAX_UNKNOWN_DISPLAY_ITEMS = 48;
+const MAX_MESSAGE_OBSERVATION_DISPLAY_ITEMS = 48;
 const MAX_CROP_EVIDENCE = 80;
 const MAX_SAMPLE_DIAGNOSTICS = 600;
 const MAX_PHASE_TRANSITIONS = 64;
@@ -150,6 +178,7 @@ const HEADER_MEDIA_SETTINGS_STORAGE_KEY = "pokechronicle:header-media-settings:v
 const ROI_SETTINGS_STORAGE_KEY = "pokechronicle:roi-settings:v1";
 const RESOLVED_LOG_RESIZE_STEP = 24;
 const MAX_PENDING_OCR_JOBS = 1;
+const MAX_OCR_ATTEMPTS_PER_OBSERVATION = 2;
 const OCR_JOB_TIMEOUT_MS = 60_000;
 const TIMELINE_DUPLICATE_WINDOW_MS = 2500;
 const MAX_TIMELINE_DEDUPE_RECORDS = 32;
@@ -167,6 +196,13 @@ const SAMPLE_DIAGNOSTIC_STAGES: readonly FrameSampleDiagnosticStage[] = [
   "messagePhaseOpened",
   "messagePhaseClosed",
   "skippedPhase",
+  "messageWatchOpened",
+  "messageWatchChanged",
+  "messageWatchClosed",
+  "messageWatchResolved",
+  "messageWatchOcrUnknown",
+  "messageWatchUnread",
+  "messageWatchStaleClosed",
   "ocrQueued",
   "ocrRetryQueued",
   "ocrRetryPreempted",
@@ -310,6 +346,7 @@ type FrameSample = CapturedFrameImages & {
   roi: NormalizedRoi;
   preprocess: MessagePreprocessOptions;
   upscaleFactor: number;
+  observationId?: string | null;
 };
 
 type HudRoiLabel = "opponent" | "player";
@@ -775,6 +812,13 @@ function formatDiagnosticStage(stage: FrameSampleDiagnosticStage) {
     messageWatchArmed: "messageWatchArmed",
     messageWatchExpired: "messageWatchExpired",
     messageWatchEnded: "messageWatchEnded",
+    messageWatchOpened: "messageWatchOpened",
+    messageWatchChanged: "messageWatchChanged",
+    messageWatchClosed: "messageWatchClosed",
+    messageWatchResolved: "messageWatchResolved",
+    messageWatchOcrUnknown: "messageWatchOcrUnknown",
+    messageWatchUnread: "messageWatchUnread",
+    messageWatchStaleClosed: "messageWatchStaleClosed",
     ocrQueued: "ocrQueued",
     ocrRetryQueued: "ocrRetryQueued",
     ocrRetryPreempted: "ocrRetryPreempted",
@@ -836,6 +880,34 @@ function createVsSplashImageSignalDiagnostic(
   };
 }
 
+function formatMessageFingerprint(
+  fingerprint: MessagePresenceAnalysis["fingerprint"],
+) {
+  return fingerprint
+    ? fingerprint.cells.map((value) => value.toString(16)).join("")
+    : null;
+}
+
+function createMessagePresenceImageSignalDiagnostic(
+  roi: NormalizedRoi,
+  analysis: MessagePresenceAnalysis,
+): FrameImageSignalDiagnostic {
+  return {
+    kind: "message_presence",
+    roi,
+    score: analysis.presenceScore,
+    isVisible: analysis.present,
+    fingerprint: formatMessageFingerprint(analysis.fingerprint),
+    foregroundRatio: analysis.foregroundRatio,
+    whiteForegroundRatio: analysis.whiteForegroundRatio,
+    yellowForegroundRatio: analysis.yellowForegroundRatio,
+    lineBandCount: analysis.lineBandCount,
+    componentCount: analysis.componentCount,
+    largestComponentRatio: analysis.largestComponentRatio,
+    rejectReason: analysis.rejectReason,
+  };
+}
+
 function formatSampleDiagnosticDetail(diagnostic: FrameSampleDiagnostic) {
   const details: string[] = [];
 
@@ -873,6 +945,18 @@ function formatSampleDiagnosticDetail(diagnostic: FrameSampleDiagnostic) {
           imageSignal.largeComponentScore,
         )}`,
       );
+    } else if (imageSignal.kind === "message_presence") {
+      details.push(
+        `message ${imageSignal.isVisible ? "present" : "absent"} ${formatSignalScore(
+          imageSignal,
+        )}`,
+      );
+      details.push(
+        `foreground ${formatTextDensity(imageSignal.foregroundRatio)} / ${imageSignal.lineBandCount} bands / ${imageSignal.componentCount} components`,
+      );
+      if (imageSignal.fingerprint) {
+        details.push(`fingerprint ${imageSignal.fingerprint}`);
+      }
     } else {
       details.push(
         `wait ${imageSignal.isVisible ? "visible" : "hidden"} ${formatSignalScore(imageSignal)}`,
@@ -1248,15 +1332,20 @@ function downloadTextFile(filename: string, content: string, type: string) {
 }
 
 function pruneOldestMapEntries<TKey, TValue>(map: Map<TKey, TValue>, maxSize: number) {
+  const deletedKeys: TKey[] = [];
+
   while (map.size > maxSize) {
     const firstKey = map.keys().next().value as TKey | undefined;
 
     if (firstKey === undefined) {
-      return;
+      break;
     }
 
     map.delete(firstKey);
+    deletedKeys.push(firstKey);
   }
+
+  return deletedKeys;
 }
 
 function updateTimelineDeduplicationRecords(
@@ -1510,6 +1599,55 @@ function captureRoiImageData(
     cropWidth: crop.width,
     cropHeight: crop.height,
   };
+}
+
+function captureScaledRoiImageData(
+  source: FrameSourceElement,
+  roi: NormalizedRoi,
+  maxWidth: number,
+) {
+  const { width: sourceWidth, height: sourceHeight } = getFrameSourceDimensions(source);
+
+  if (!sourceWidth || !sourceHeight) {
+    return null;
+  }
+
+  const crop = mapDisplayRoiToSourceRect(
+    roi,
+    { width: sourceWidth, height: sourceHeight },
+    getFrameDisplayDimensions(source, sourceWidth, sourceHeight),
+  );
+
+  if (!crop) {
+    return null;
+  }
+
+  const scale = Math.min(1, Math.max(1, maxWidth) / crop.width);
+  const width = Math.max(1, Math.round(crop.width * scale));
+  const height = Math.max(1, Math.round(crop.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+
+  if (!context) {
+    return null;
+  }
+
+  context.imageSmoothingEnabled = true;
+  context.drawImage(
+    source,
+    crop.x,
+    crop.y,
+    crop.width,
+    crop.height,
+    0,
+    0,
+    width,
+    height,
+  );
+
+  return context.getImageData(0, 0, width, height);
 }
 
 function captureBattleHudObservation(
@@ -1789,8 +1927,11 @@ export function App() {
   const audioGainNodeRef = useRef<GainNode | null>(null);
   const audioSourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const samplingTimerRef = useRef<number | null>(null);
+  const messageWatchTimerRef = useRef<number | null>(null);
+  const deferredOcrTimerIdsRef = useRef<Set<number>>(new Set());
   const ocrWorkerRef = useRef<Worker | null>(null);
   const cropEvidenceBySourceRef = useRef<Map<string, CropEvidence>>(new Map());
+  const observationEvidenceRefById = useRef<Map<string, string>>(new Map());
   const recentTimelineDeduplicationRecordsRef = useRef<TimelineDeduplicationRecord[]>([]);
   const recentConstrainedCandidateRecordsRef = useRef<TimelineConstrainedCandidateRecord[]>([]);
   const recentAcceptedEventRecordsRef = useRef<TimelineAcceptedEventRecord[]>([]);
@@ -1805,12 +1946,20 @@ export function App() {
   const hasAttemptedSavedMediaAutoStartRef = useRef(false);
   const lastAcceptedEventIdRef = useRef<string | null>(null);
   const frameIndexRef = useRef(0);
+  const messageWatchFrameIndexRef = useRef(0);
+  const messageObservationCounterRef = useRef(0);
   const ocrJobCounterRef = useRef(0);
   const sampleDiagnosticCounterRef = useRef(0);
   const phaseTransitionCounterRef = useRef(0);
   const pendingOcrJobsRef = useRef(0);
   const activeOcrJobRef = useRef<ActiveOcrJob | null>(null);
   const deferredOcrSamplesRef = useRef<FrameSample[]>([]);
+  const scheduledDeferredObservationIdsRef = useRef<Set<string>>(new Set());
+  const messageWatcherStateRef = useRef<MessageWatcherState>(
+    createInitialMessageWatcherState(),
+  );
+  const messageObservationsRef = useRef<MessageObservation[]>([]);
+  const usableOcrTextObservationIdsRef = useRef<Set<string>>(new Set());
   const queueOcrRecognitionRef = useRef<(sample: FrameSample) => void>(() => undefined);
   const phaseDetectionSummaryRef = useRef<PhaseDetectionSummary>(
     createEmptyPhaseDetectionSummary(),
@@ -1884,6 +2033,7 @@ export function App() {
   const [sampleDiagnostics, setSampleDiagnostics] = useState<FrameSampleDiagnostic[]>([]);
   const [battleEvents, setBattleEvents] = useState<BattleEvent[]>([]);
   const [unknownEvents, setUnknownEvents] = useState<UnknownEvent[]>([]);
+  const [messageObservations, setMessageObservations] = useState<MessageObservation[]>([]);
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
   const [suppressedTimelineCount, setSuppressedTimelineCount] = useState(0);
   const [resolvedLogPanelWidth, setResolvedLogPanelWidth] = useState<number | null>(null);
@@ -1960,6 +2110,425 @@ export function App() {
       });
     },
     [appendSampleDiagnostic],
+  );
+  const commitMessageObservations = useCallback(
+    (nextObservations: readonly MessageObservation[]) => {
+      const bounded = [...nextObservations].slice(0, MAX_MESSAGE_OBSERVATION_HISTORY);
+      messageObservationsRef.current = bounded;
+      setMessageObservations(bounded);
+    },
+    [],
+  );
+  const appendMessageWatchDiagnostic = useCallback(
+    (input: {
+      stage: Extract<
+        FrameSampleDiagnosticStage,
+        | "messageWatchOpened"
+        | "messageWatchChanged"
+        | "messageWatchClosed"
+        | "messageWatchResolved"
+        | "messageWatchOcrUnknown"
+        | "messageWatchUnread"
+        | "messageWatchStaleClosed"
+      >;
+      observationId: string;
+      frameIndex: number;
+      timestampMs: number;
+      detail: string;
+      analysis?: MessagePresenceAnalysis | null;
+    }) => {
+      appendSampleDiagnostic({
+        frameIndex: input.frameIndex,
+        timestampMs: input.timestampMs,
+        stage: input.stage,
+        detail: `${input.observationId} / ${input.detail}`,
+        preprocessVariantId: null,
+        preprocessRejectReason: input.analysis?.rejectReason ?? null,
+        ocrVariantId: null,
+        ocrForegroundPixelRatio: input.analysis?.foregroundRatio ?? null,
+        pendingOcrJobs: pendingOcrJobsRef.current,
+        ocrJobId: null,
+        ocrConfidence: null,
+        lineCount: input.analysis?.lineBandCount ?? null,
+        imageSignal: input.analysis
+          ? createMessagePresenceImageSignalDiagnostic(roiRef.current, input.analysis)
+          : null,
+      });
+    },
+    [appendSampleDiagnostic],
+  );
+  const appendObservationResolutionDiagnostic = useCallback(
+    (
+      previous: MessageObservation,
+      next: MessageObservation,
+      timestampMs: number,
+      frameIndex: number,
+    ) => {
+      if (previous.resolution === next.resolution || next.resolution === "pending") {
+        return;
+      }
+
+      const durationMs = Math.max(0, timestampMs - next.openedAtMs);
+      const detail = `resolution ${next.resolution} / ${durationMs}ms / ${next.ocrAttemptCount} OCR attempt(s)${
+        next.failureReason ? ` / ${next.failureReason}` : ""
+      }`;
+      const stage =
+        next.resolution === "resolved"
+          ? "messageWatchResolved"
+          : next.resolution === "ocr_unknown"
+            ? "messageWatchOcrUnknown"
+            : "messageWatchUnread";
+      appendMessageWatchDiagnostic({
+        stage,
+        observationId: next.id,
+        frameIndex,
+        timestampMs,
+        detail,
+      });
+      addLog(
+        next.resolution === "resolved"
+          ? `バトルメッセージを解決しました: ${next.id}`
+          : next.resolution === "ocr_unknown"
+            ? `OCR文字列を未解決として記録しました: ${next.id}`
+            : `内容を認識できないメッセージを記録しました: ${next.id} (${next.failureReason ?? "unknown"})`,
+        next.resolution === "unread" ? "warn" : "info",
+      );
+    },
+    [addLog, appendMessageWatchDiagnostic],
+  );
+  const updateMessageObservationById = useCallback(
+    (
+      observationId: string,
+      updater: (observation: MessageObservation) => MessageObservation,
+      transitionContext?: { timestampMs: number; frameIndex: number },
+    ) => {
+      const index = messageObservationsRef.current.findIndex(
+        (observation) => observation.id === observationId,
+      );
+
+      if (index < 0) {
+        return null;
+      }
+
+      const previous = messageObservationsRef.current[index];
+      const next = updater(previous);
+
+      if (next === previous) {
+        return next;
+      }
+
+      const observations = [...messageObservationsRef.current];
+      observations[index] = next;
+      commitMessageObservations(observations);
+
+      if (transitionContext) {
+        appendObservationResolutionDiagnostic(
+          previous,
+          next,
+          transitionContext.timestampMs,
+          transitionContext.frameIndex,
+        );
+      }
+
+      return next;
+    },
+    [
+      appendObservationResolutionDiagnostic,
+      commitMessageObservations,
+    ],
+  );
+  const getObservationPendingOcrJobCount = useCallback((observationId: string) => {
+    const activeCount =
+      activeOcrJobRef.current?.sample.observationId === observationId ? 1 : 0;
+    const deferredCount = deferredOcrSamplesRef.current.some(
+      (sample) => sample.observationId === observationId,
+    )
+      ? 1
+      : 0;
+    const scheduledCount = scheduledDeferredObservationIdsRef.current.has(observationId)
+      ? 1
+      : 0;
+
+    return activeCount + deferredCount + scheduledCount;
+  }, []);
+  const settleObservationIfIdle = useCallback(
+    (
+      observationId: string,
+      timestampMs: number,
+      frameIndex: number,
+      failureReason?: MessageObservationFailureReason,
+    ) =>
+      updateMessageObservationById(
+        observationId,
+        (observation) =>
+          settleMessageObservationUnread(observation, {
+            pendingOcrJobCount: getObservationPendingOcrJobCount(observationId),
+            hasUsableOcrText: usableOcrTextObservationIdsRef.current.has(observationId),
+            failureReason,
+          }),
+        { timestampMs, frameIndex },
+      ),
+    [getObservationPendingOcrJobCount, updateMessageObservationById],
+  );
+  const storeObservationCropEvidence = useCallback(
+    (
+      observationId: string,
+      sample: FrameSample,
+      presenceScore: number,
+    ) => {
+      const sourceFrameRef = createSourceFrameRef(sample.frameIndex, sample.timestampMs);
+      const previousEvidenceRef = observationEvidenceRefById.current.get(observationId);
+
+      if (previousEvidenceRef && previousEvidenceRef !== sourceFrameRef) {
+        cropEvidenceBySourceRef.current.delete(previousEvidenceRef);
+      }
+
+      cropEvidenceBySourceRef.current.set(sourceFrameRef, {
+        sourceFrameRef,
+        rawDataUrl: sample.rawDataUrl,
+        processedDataUrl: sample.processedDataUrl,
+        cropWidth: sample.cropWidth,
+        cropHeight: sample.cropHeight,
+        capturedAt: sample.capturedAt,
+      });
+      observationEvidenceRefById.current.set(observationId, sourceFrameRef);
+      const evictedEvidenceKeys = pruneOldestMapEntries(
+        cropEvidenceBySourceRef.current,
+        MAX_CROP_EVIDENCE,
+      );
+
+      if (evictedEvidenceKeys.length > 0) {
+        const evictedEvidenceSet = new Set(evictedEvidenceKeys);
+        for (const [storedObservationId, storedEvidenceRef] of
+          observationEvidenceRefById.current) {
+          if (evictedEvidenceSet.has(storedEvidenceRef)) {
+            observationEvidenceRefById.current.delete(storedObservationId);
+          }
+        }
+        commitMessageObservations(
+          messageObservationsRef.current.map((observation) =>
+            observation.bestEvidenceRef &&
+            evictedEvidenceSet.has(observation.bestEvidenceRef)
+              ? {
+                  ...observation,
+                  bestEvidenceRef: null,
+                  bestFrameIndex: null,
+                }
+              : observation,
+          ),
+        );
+      }
+      updateMessageObservationById(observationId, (observation) => {
+        if (!observation.bestEvidenceRef) {
+          return {
+            ...observation,
+            bestFrameIndex: sample.frameIndex,
+            bestEvidenceRef: sourceFrameRef,
+            maxPresenceScore: Math.max(observation.maxPresenceScore, presenceScore),
+          };
+        }
+
+        return updateMessageObservationBestEvidence(observation, {
+          presenceScore,
+          frameIndex: sample.frameIndex,
+          evidenceRef: sourceFrameRef,
+        });
+      });
+
+      return sourceFrameRef;
+    },
+    [commitMessageObservations, updateMessageObservationById],
+  );
+  const captureObservationPrioritySample = useCallback(
+    (
+      source: FrameSourceElement,
+      transition: Extract<MessageWatcherTransition, { type: "opened" | "updated" }>,
+      watcherSample: MessageWatcherSample,
+    ) => {
+      const captured = captureRoiFrame(
+        source,
+        roiRef.current,
+        preprocessOptionsRef.current,
+        upscaleFactorRef.current,
+      );
+
+      if (!captured) {
+        updateMessageObservationById(transition.id, (observation) =>
+          recordMessageObservationFailure(observation, "preprocess_rejected"),
+        );
+        return;
+      }
+
+      const timestampMs = watcherSample.timestampMs;
+      const nextSample: FrameSample = {
+        ...captured,
+        id: `watch-${watcherSample.frameIndex}-${timestampMs}`,
+        frameIndex: watcherSample.frameIndex,
+        timestampMs,
+        capturedAt: new Date().toLocaleTimeString("ja-JP", { hour12: false }),
+        roi: roiRef.current,
+        preprocess: preprocessOptionsRef.current,
+        upscaleFactor: upscaleFactorRef.current,
+        observationId: transition.id,
+      };
+
+      setFrameSamples((currentSamples) =>
+        [nextSample, ...currentSamples].slice(0, MAX_FRAME_BUFFER),
+      );
+      storeObservationCropEvidence(
+        transition.id,
+        nextSample,
+        watcherSample.analysis.presenceScore,
+      );
+
+      if (transition.type === "opened") {
+        appendFrameSampleDiagnostic(
+          nextSample,
+          "sampled",
+          "message watcher priority sample",
+        );
+        queueOcrRecognitionRef.current(nextSample);
+      }
+    },
+    [
+      appendFrameSampleDiagnostic,
+      storeObservationCropEvidence,
+      updateMessageObservationById,
+    ],
+  );
+  const applyMessageWatcherTransitions = useCallback(
+    (
+      transitions: readonly MessageWatcherTransition[],
+      sample: MessageWatcherSample,
+      source: FrameSourceElement | null,
+        analysis: MessagePresenceAnalysis | null,
+    ) => {
+      for (const transition of transitions) {
+        if (transition.type === "opened") {
+          const openedWhileOcrBusy = pendingOcrJobsRef.current > 0;
+          const createdObservation = createMessageObservation({
+            id: transition.id,
+            battleId: LIVE_BATTLE_ID,
+            openedAtMs: transition.openedAtMs,
+            frameStart: transition.frameStart,
+            visualFingerprint: transition.fingerprint,
+            presenceScore: transition.maxPresenceScore,
+            bestFrameIndex: transition.bestFrameIndex,
+            openedWhileOcrBusy,
+          });
+          const observation = openedWhileOcrBusy
+            ? recordMessageObservationFailure(createdObservation, "ocr_busy")
+            : createdObservation;
+          commitMessageObservations([
+            observation,
+            ...messageObservationsRef.current.filter(
+              (currentObservation) => currentObservation.id !== observation.id,
+            ),
+          ]);
+          appendMessageWatchDiagnostic({
+            stage: "messageWatchOpened",
+            observationId: transition.id,
+            frameIndex: sample.frameIndex,
+            timestampMs: sample.timestampMs,
+            detail: `opened / score ${Math.round(transition.maxPresenceScore * 100)}%${
+              openedWhileOcrBusy ? " / OCR busy" : ""
+            }`,
+            analysis,
+          });
+          addLog(`バトルメッセージ表示を検出しました: ${transition.id}`);
+
+          if (source) {
+            captureObservationPrioritySample(source, transition, sample);
+          }
+          continue;
+        }
+
+        if (transition.type === "updated") {
+          if (source) {
+            captureObservationPrioritySample(source, transition, sample);
+          }
+          continue;
+        }
+
+        if (transition.reason === "fingerprint_changed") {
+          appendMessageWatchDiagnostic({
+            stage: "messageWatchChanged",
+            observationId: transition.id,
+            frameIndex: transition.frameEnd,
+            timestampMs: transition.closedAtMs,
+            detail: "different fingerprint stabilized",
+            analysis,
+          });
+        }
+
+        updateMessageObservationById(transition.id, (observation) =>
+          closeMessageObservation(observation, {
+            closedAtMs: transition.closedAtMs,
+            frameEnd: transition.frameEnd,
+          }),
+        );
+        appendMessageWatchDiagnostic({
+          stage:
+            transition.reason === "stale"
+              ? "messageWatchStaleClosed"
+              : "messageWatchClosed",
+          observationId: transition.id,
+          frameIndex: transition.frameEnd,
+          timestampMs: transition.closedAtMs,
+          detail: `closed / ${transition.reason}`,
+          analysis,
+        });
+        addLog(`バトルメッセージ表示を終了しました: ${transition.id} (${transition.reason})`);
+        settleObservationIfIdle(
+          transition.id,
+          transition.closedAtMs,
+          transition.frameEnd,
+        );
+      }
+    },
+    [
+      addLog,
+      appendMessageWatchDiagnostic,
+      captureObservationPrioritySample,
+      commitMessageObservations,
+      settleObservationIfIdle,
+      updateMessageObservationById,
+    ],
+  );
+  const closeMessageWatcher = useCallback(
+    (
+      reason: Extract<
+        MessageWatcherCloseReason,
+        "analysis_stopped" | "media_ended" | "stream_stopped"
+      >,
+    ) => {
+      const timestampMs = Math.max(
+        0,
+        Math.round(performance.now() - samplingStartMsRef.current),
+      );
+      const frameIndex = messageWatchFrameIndexRef.current;
+      const result = closeActiveMessageWatcher(messageWatcherStateRef.current, {
+        timestampMs,
+        frameIndex,
+        reason,
+      });
+      messageWatcherStateRef.current = result.state;
+      applyMessageWatcherTransitions(
+        result.transitions,
+        {
+          timestampMs,
+          frameIndex,
+          analysis: {
+            present: false,
+            presenceScore: 0,
+            fingerprint: null,
+          },
+        },
+        null,
+        null,
+      );
+    },
+    [applyMessageWatcherTransitions],
   );
   const resetPhaseGateState = useCallback(() => {
     phaseGateStateRef.current = {
@@ -2386,22 +2955,130 @@ export function App() {
     [addLog, clearActiveOcrJob, setPendingOcrJobCount],
   );
 
+  const preservePartialOcrResult = useCallback(
+    (activeJob: ActiveOcrJob | null | undefined) => {
+      const observationId = activeJob?.sample.observationId ?? null;
+      const usableCandidates =
+        activeJob?.evaluatedCandidates.filter(
+          (candidate) => candidate.parseResult.normalizedText.length > 0,
+        ) ?? [];
+
+      if (!activeJob || !observationId || usableCandidates.length === 0) {
+        return false;
+      }
+
+      const selection = selectOcrCandidate(usableCandidates);
+      const selectedResult = selection.selected.result;
+      const parseResult = selection.parseResult;
+      const partialMessageId = `${activeJob.jobId}-partial`;
+      const partialMessage: OCRMessage = {
+        id: partialMessageId,
+        battleId: LIVE_BATTLE_ID,
+        observationId,
+        rawText: selectedResult.rawText,
+        normalizedText: parseResult.normalizedText,
+        matchText: parseResult.matchText,
+        ocrConfidence: selectedResult.confidence,
+        timestampMs: activeJob.meta.timestampMs,
+        frameIndex: activeJob.meta.frameIndex,
+        roi: activeJob.meta.roi,
+        lines: selectedResult.lines,
+      };
+      const partialLog: OCRLogEntry = {
+        id: partialMessageId,
+        frameIndex: activeJob.meta.frameIndex,
+        timestampMs: activeJob.meta.timestampMs,
+        rawText: selectedResult.rawText,
+        normalizedText: parseResult.normalizedText,
+        matchText: parseResult.matchText,
+        parseResult,
+        confidence: selectedResult.confidence,
+        lineCount: selectedResult.lines.length,
+        status: "recognized",
+      };
+      const resolutionTimestampMs = Math.max(
+        activeJob.meta.timestampMs,
+        Math.round(performance.now() - samplingStartMsRef.current),
+      );
+
+      usableOcrTextObservationIdsRef.current.add(observationId);
+      setOcrMessages((currentMessages) =>
+        [partialMessage, ...currentMessages].slice(0, MAX_OCR_HISTORY),
+      );
+      setOcrLogs((currentLogs) =>
+        [partialLog, ...currentLogs].slice(0, MAX_OCR_LOGS),
+      );
+      updateMessageObservationById(
+        observationId,
+        (observation) =>
+          resolveMessageObservationAsOcrUnknown(
+            attachMessageObservationOcrMessage(observation, partialMessageId),
+            {
+              ocrMessageId: partialMessageId,
+              unknownEventIds: [],
+            },
+          ),
+        {
+          timestampMs: resolutionTimestampMs,
+          frameIndex: activeJob.meta.frameIndex,
+        },
+      );
+      addLog(
+        "OCR fallbackの失敗前に取得できた文字列を未解決として保持しました。",
+        "warn",
+      );
+      return true;
+    },
+    [addLog, updateMessageObservationById],
+  );
+
   const queueNextDeferredOcrSample = useCallback(() => {
     const next = takeNextDeferredOcrSample(deferredOcrSamplesRef.current);
     const deferredSample = next.sample;
 
     deferredOcrSamplesRef.current = next.queue;
 
-    if (
-      !deferredSample ||
-      !isOcrEnabledRef.current ||
-      phaseGateStateRef.current.messagePhase === "ended"
-    ) {
+    if (!deferredSample) {
       return;
     }
 
-    window.setTimeout(() => queueOcrRecognitionRef.current(deferredSample), 0);
-  }, []);
+    if (
+      !isOcrEnabledRef.current ||
+      phaseGateStateRef.current.messagePhase === "ended"
+    ) {
+      if (deferredSample.observationId) {
+        updateMessageObservationById(
+          deferredSample.observationId,
+          (observation) =>
+            recordMessageObservationFailure(
+              observation,
+              "ocr_deferred_dropped",
+            ),
+        );
+        settleObservationIfIdle(
+          deferredSample.observationId,
+          deferredSample.timestampMs,
+          deferredSample.frameIndex,
+          "ocr_deferred_dropped",
+        );
+      }
+      return;
+    }
+
+    const deferredObservationId = deferredSample.observationId ?? null;
+
+    if (deferredObservationId) {
+      scheduledDeferredObservationIdsRef.current.add(deferredObservationId);
+    }
+    const timerId = window.setTimeout(() => {
+      deferredOcrTimerIdsRef.current.delete(timerId);
+      if (deferredObservationId) {
+        scheduledDeferredObservationIdsRef.current.delete(deferredObservationId);
+      }
+      queueOcrRecognitionRef.current(deferredSample);
+    }, 0);
+    deferredOcrTimerIdsRef.current.add(timerId);
+  }, [settleObservationIfIdle, updateMessageObservationById]);
 
   const postOcrCandidateAttempt = useCallback(
     (
@@ -2429,11 +3106,27 @@ export function App() {
           currentJob.meta,
           `OCR candidate timed out after ${Math.round(OCR_JOB_TIMEOUT_MS / 1000)}s.`,
         );
+        const preservedPartialResult = preservePartialOcrResult(currentJob);
+        if (currentJob.sample.observationId && !preservedPartialResult) {
+          updateMessageObservationById(
+            currentJob.sample.observationId,
+            (observation) =>
+              recordMessageObservationFailure(observation, "ocr_timeout"),
+          );
+        }
         resetOcrWorkerAfterFailure(
           "OCR候補の応答が一定時間返らなかったため、workerを再起動できる状態に戻しました。",
           currentJob,
         );
         queueNextDeferredOcrSample();
+        if (currentJob.sample.observationId) {
+          settleObservationIfIdle(
+            currentJob.sample.observationId,
+            currentJob.meta.timestampMs + OCR_JOB_TIMEOUT_MS,
+            currentJob.meta.frameIndex,
+            "ocr_timeout",
+          );
+        }
       }, OCR_JOB_TIMEOUT_MS);
 
       activeJob.candidateIndex = candidateIndex;
@@ -2469,8 +3162,11 @@ export function App() {
     [
       appendOcrErrorLog,
       appendSampleDiagnostic,
+      preservePartialOcrResult,
       queueNextDeferredOcrSample,
       resetOcrWorkerAfterFailure,
+      settleObservationIfIdle,
+      updateMessageObservationById,
     ],
   );
 
@@ -2632,6 +3328,7 @@ export function App() {
         const observation = createTimelineObservation({
           id: response.jobId,
           battleId: LIVE_BATTLE_ID,
+          observationId: response.meta.observationId ?? null,
           rawText: selectedResult.rawText,
           parseResult,
           ocrConfidence: selectedResult.confidence,
@@ -2703,7 +3400,37 @@ export function App() {
 
           if (acceptedEvents.some((acceptedEvent) => acceptedEvent.type === "battle_end")) {
             phaseGateStateRef.current.messagePhase = "ended";
+            const droppedObservationIds = new Set(
+              deferredOcrSamplesRef.current
+                .map((sample) => sample.observationId)
+                .filter(
+                  (observationId): observationId is string =>
+                    Boolean(observationId),
+                ),
+            );
+            scheduledDeferredObservationIdsRef.current.forEach((observationId) =>
+              droppedObservationIds.add(observationId),
+            );
             deferredOcrSamplesRef.current = [];
+            deferredOcrTimerIdsRef.current.forEach((timerId) =>
+              window.clearTimeout(timerId),
+            );
+            deferredOcrTimerIdsRef.current.clear();
+            scheduledDeferredObservationIdsRef.current.clear();
+            droppedObservationIds.forEach((observationId) => {
+              updateMessageObservationById(observationId, (currentObservation) =>
+                recordMessageObservationFailure(
+                  currentObservation,
+                  "ocr_deferred_dropped",
+                ),
+              );
+              settleObservationIfIdle(
+                observationId,
+                response.meta.timestampMs,
+                response.meta.frameIndex,
+                "ocr_deferred_dropped",
+              );
+            });
             addLog("勝負終了イベントを検出したため、以降のOCR投入を抑制します。");
           }
         }
@@ -2715,6 +3442,61 @@ export function App() {
               MAX_UNKNOWN_HISTORY,
             ),
           );
+        }
+
+        const messageObservationId = response.meta.observationId ?? null;
+
+        if (messageObservationId) {
+          const resolutionTimestampMs = Math.max(
+            response.meta.timestampMs,
+            Math.round(performance.now() - samplingStartMsRef.current),
+          );
+
+          if (hasText) {
+            usableOcrTextObservationIdsRef.current.add(messageObservationId);
+          }
+
+          updateMessageObservationById(
+            messageObservationId,
+            (currentObservation) => {
+              const withOcrMessage = attachMessageObservationOcrMessage(
+                currentObservation,
+                observation.ocrMessage.id,
+              );
+
+              if (acceptedEvents.length > 0) {
+                return resolveMessageObservationWithEvents(withOcrMessage, {
+                  ocrMessageId: observation.ocrMessage.id,
+                  eventIds: acceptedEvents.map((event) => event.id),
+                });
+              }
+
+              if (hasText) {
+                return resolveMessageObservationAsOcrUnknown(withOcrMessage, {
+                  ocrMessageId: observation.ocrMessage.id,
+                  unknownEventIds:
+                    observation.unknown && !suppressUnknown
+                      ? [observation.unknown.id]
+                      : [],
+                });
+              }
+
+              return recordMessageObservationFailure(withOcrMessage, "ocr_empty");
+            },
+            {
+              timestampMs: resolutionTimestampMs,
+              frameIndex: response.meta.frameIndex,
+            },
+          );
+
+          if (!hasText) {
+            settleObservationIfIdle(
+              messageObservationId,
+              resolutionTimestampMs,
+              response.meta.frameIndex,
+              "ocr_empty",
+            );
+          }
         }
 
         if (observation.dedupes.length > 0) {
@@ -2735,6 +3517,15 @@ export function App() {
       }
 
       if (response.type === "error") {
+        const failedActiveJob =
+          activeOcrJobRef.current?.jobId === response.jobId
+            ? activeOcrJobRef.current
+            : null;
+        const failedObservationId =
+          failedActiveJob
+            ? failedActiveJob.sample.observationId ?? null
+            : response.meta?.observationId ?? null;
+        const preservedPartialResult = preservePartialOcrResult(failedActiveJob);
         clearActiveOcrJob(response.jobId);
         setPendingOcrJobCount(pendingOcrJobsRef.current - 1);
         setOcrProgress(0);
@@ -2745,8 +3536,21 @@ export function App() {
           resetOcrWorkerAfterFailure(`OCR workerが停止しました: ${response.message}`);
         }
 
+        if (failedObservationId && !preservedPartialResult) {
+          updateMessageObservationById(failedObservationId, (observation) =>
+            recordMessageObservationFailure(observation, "ocr_error"),
+          );
+        }
         addLog(`OCRに失敗しました: ${response.message}`, "error");
         queueNextDeferredOcrSample();
+        if (failedObservationId) {
+          settleObservationIfIdle(
+            failedObservationId,
+            response.meta?.timestampMs ?? 0,
+            response.meta?.frameIndex ?? 0,
+            "ocr_error",
+          );
+        }
         return;
       }
 
@@ -2765,11 +3569,14 @@ export function App() {
       appendOcrErrorLog,
       clearActiveOcrJob,
       postOcrCandidateAttempt,
+      preservePartialOcrResult,
       queueNextDeferredOcrSample,
       rememberAcceptedEventRecord,
       rememberBattleEventDictionaries,
       resetOcrWorkerAfterFailure,
       setPendingOcrJobCount,
+      settleObservationIfIdle,
+      updateMessageObservationById,
     ],
   );
 
@@ -2785,23 +3592,63 @@ export function App() {
     worker.onerror = (event) => {
       const activeJob = activeOcrJobRef.current;
       const message = event.message || "OCR workerの起動または実行に失敗しました。";
+      const observationId = activeJob?.sample.observationId ?? null;
+      const preservedPartialResult = preservePartialOcrResult(activeJob);
       if (activeJob) {
         appendOcrErrorLog(activeJob.jobId, activeJob.meta, message);
       }
+      if (observationId && !preservedPartialResult) {
+        updateMessageObservationById(observationId, (observation) =>
+          recordMessageObservationFailure(observation, "ocr_error"),
+        );
+      }
       resetOcrWorkerAfterFailure(`OCR workerの起動または実行に失敗しました: ${message}`, activeJob);
+      queueNextDeferredOcrSample();
+      if (observationId) {
+        settleObservationIfIdle(
+          observationId,
+          Math.max(0, Math.round(performance.now() - samplingStartMsRef.current)),
+          activeJob?.meta.frameIndex ?? messageWatchFrameIndexRef.current,
+          "ocr_error",
+        );
+      }
     };
     worker.onmessageerror = () => {
       const activeJob = activeOcrJobRef.current;
       const message = "OCR workerからの応答を読み取れませんでした。";
+      const observationId = activeJob?.sample.observationId ?? null;
+      const preservedPartialResult = preservePartialOcrResult(activeJob);
       if (activeJob) {
         appendOcrErrorLog(activeJob.jobId, activeJob.meta, message);
       }
+      if (observationId && !preservedPartialResult) {
+        updateMessageObservationById(observationId, (observation) =>
+          recordMessageObservationFailure(observation, "ocr_error"),
+        );
+      }
       resetOcrWorkerAfterFailure(message, activeJob);
+      queueNextDeferredOcrSample();
+      if (observationId) {
+        settleObservationIfIdle(
+          observationId,
+          Math.max(0, Math.round(performance.now() - samplingStartMsRef.current)),
+          activeJob?.meta.frameIndex ?? messageWatchFrameIndexRef.current,
+          "ocr_error",
+        );
+      }
     };
     ocrWorkerRef.current = worker;
 
     return worker;
-  }, [appendOcrErrorLog, handleOcrWorkerMessage, resetOcrWorkerAfterFailure]);
+  }, [
+    appendOcrErrorLog,
+    handleOcrWorkerMessage,
+    preservePartialOcrResult,
+    queueNextDeferredOcrSample,
+    resetOcrWorkerAfterFailure,
+    settleObservationIfIdle,
+    updateMessageObservationById,
+  ]);
 
   const requestOcrWorkerShutdown = useCallback(() => {
     if (!ocrWorkerRef.current) {
@@ -2818,20 +3665,77 @@ export function App() {
 
   const stopOcr = useCallback(
     (message?: string) => {
+      const activeJob = activeOcrJobRef.current;
+      const activeObservationId = activeJob?.sample.observationId ?? null;
+      const preservedPartialResult = preservePartialOcrResult(activeJob);
+      const droppedObservationIds = new Set(
+        deferredOcrSamplesRef.current
+          .map((sample) => sample.observationId)
+          .filter((observationId): observationId is string => Boolean(observationId)),
+      );
+      scheduledDeferredObservationIdsRef.current.forEach((observationId) =>
+        droppedObservationIds.add(observationId),
+      );
+      const timestampMs = Math.max(
+        0,
+        Math.round(performance.now() - samplingStartMsRef.current),
+      );
+      const frameIndex = messageWatchFrameIndexRef.current;
+
+      if (activeObservationId && !preservedPartialResult) {
+        updateMessageObservationById(activeObservationId, (observation) =>
+          recordMessageObservationFailure(observation, "ocr_error"),
+        );
+      }
+      droppedObservationIds.forEach((observationId) => {
+        updateMessageObservationById(observationId, (observation) =>
+          recordMessageObservationFailure(observation, "ocr_deferred_dropped"),
+        );
+      });
+
       isOcrEnabledRef.current = false;
       setIsOcrEnabled(false);
       deferredOcrSamplesRef.current = [];
+      deferredOcrTimerIdsRef.current.forEach((timerId) =>
+        window.clearTimeout(timerId),
+      );
+      deferredOcrTimerIdsRef.current.clear();
+      scheduledDeferredObservationIdsRef.current.clear();
       clearActiveOcrJob();
       setPendingOcrJobCount(0);
       setOcrProgress(0);
       setOcrStatusLabel("停止中");
       requestOcrWorkerShutdown();
+      if (activeObservationId) {
+        settleObservationIfIdle(
+          activeObservationId,
+          timestampMs,
+          frameIndex,
+          "ocr_error",
+        );
+      }
+      droppedObservationIds.forEach((observationId) => {
+        settleObservationIfIdle(
+          observationId,
+          timestampMs,
+          frameIndex,
+          "ocr_deferred_dropped",
+        );
+      });
 
       if (message) {
         addLog(message);
       }
     },
-    [addLog, clearActiveOcrJob, requestOcrWorkerShutdown, setPendingOcrJobCount],
+    [
+      addLog,
+      clearActiveOcrJob,
+      preservePartialOcrResult,
+      requestOcrWorkerShutdown,
+      setPendingOcrJobCount,
+      settleObservationIfIdle,
+      updateMessageObservationById,
+    ],
   );
 
   const queueOcrRecognition = useCallback(
@@ -2841,6 +3745,17 @@ export function App() {
       }
 
       if (sample.preprocessVariantRejectReason) {
+        if (sample.observationId) {
+          updateMessageObservationById(sample.observationId, (observation) =>
+            recordMessageObservationFailure(observation, "preprocess_rejected"),
+          );
+          settleObservationIfIdle(
+            sample.observationId,
+            sample.timestampMs,
+            sample.frameIndex,
+            "preprocess_rejected",
+          );
+        }
         appendFrameSampleDiagnostic(
           sample,
           "skippedPreprocess",
@@ -2856,6 +3771,17 @@ export function App() {
         sample.ocrForegroundPixelRatio < MIN_TEXT_PIXEL_RATIO ||
         sample.ocrForegroundPixelRatio > MAX_TEXT_PIXEL_RATIO
       ) {
+        if (sample.observationId) {
+          updateMessageObservationById(sample.observationId, (observation) =>
+            recordMessageObservationFailure(observation, "density_rejected"),
+          );
+          settleObservationIfIdle(
+            sample.observationId,
+            sample.timestampMs,
+            sample.frameIndex,
+            "density_rejected",
+          );
+        }
         appendFrameSampleDiagnostic(
           sample,
           "skippedDensity",
@@ -2867,11 +3793,24 @@ export function App() {
         return;
       }
 
+      if (sample.observationId) {
+        const observation = messageObservationsRef.current.find(
+          (candidate) => candidate.id === sample.observationId,
+        );
+
+        if (
+          observation &&
+          observation.ocrAttemptCount >= MAX_OCR_ATTEMPTS_PER_OBSERVATION
+        ) {
+          return;
+        }
+      }
+
       if (pendingOcrJobsRef.current >= MAX_PENDING_OCR_JOBS) {
         const enqueueResult = enqueueDeferredOcrSample(
           deferredOcrSamplesRef.current,
           sample,
-          activeOcrJobRef.current?.sample.messageFingerprint ?? null,
+          activeOcrJobRef.current?.sample ?? null,
           MAX_DEFERRED_OCR_SAMPLES,
         );
         deferredOcrSamplesRef.current = enqueueResult.queue;
@@ -2892,6 +3831,22 @@ export function App() {
         );
 
         if (enqueueResult.action === "dropped_queue_full") {
+          const droppedObservationId = enqueueResult.droppedSample?.observationId;
+
+          if (droppedObservationId) {
+            updateMessageObservationById(droppedObservationId, (observation) =>
+              recordMessageObservationFailure(
+                observation,
+                "ocr_deferred_dropped",
+              ),
+            );
+            settleObservationIfIdle(
+              droppedObservationId,
+              sample.timestampMs,
+              sample.frameIndex,
+              "ocr_deferred_dropped",
+            );
+          }
           addLog("OCR待機queueが満杯のため、新しいメッセージ候補を破棄しました。", "warn");
         }
         return;
@@ -2905,6 +3860,7 @@ export function App() {
         cropHeight: sample.cropHeight,
         cropWidth: sample.cropWidth,
         frameIndex: sample.frameIndex,
+        observationId: sample.observationId ?? null,
         roi: sample.roi,
         timestampMs: sample.timestampMs,
       };
@@ -2919,15 +3875,31 @@ export function App() {
         timeoutId: 0,
       };
       activeOcrJobRef.current = activeJob;
-      cropEvidenceBySourceRef.current.set(sourceFrameRef, {
-        sourceFrameRef,
-        rawDataUrl: sample.rawDataUrl,
-        processedDataUrl: sample.processedDataUrl,
-        cropWidth: sample.cropWidth,
-        cropHeight: sample.cropHeight,
-        capturedAt: sample.capturedAt,
-      });
-      pruneOldestMapEntries(cropEvidenceBySourceRef.current, MAX_CROP_EVIDENCE);
+      if (sample.observationId) {
+        if (!observationEvidenceRefById.current.has(sample.observationId)) {
+          const observation = messageObservationsRef.current.find(
+            (candidate) => candidate.id === sample.observationId,
+          );
+          storeObservationCropEvidence(
+            sample.observationId,
+            sample,
+            observation?.maxPresenceScore ?? 0,
+          );
+        }
+        updateMessageObservationById(sample.observationId, (observation) =>
+          recordMessageObservationOcrAttempt(observation),
+        );
+      } else {
+        cropEvidenceBySourceRef.current.set(sourceFrameRef, {
+          sourceFrameRef,
+          rawDataUrl: sample.rawDataUrl,
+          processedDataUrl: sample.processedDataUrl,
+          cropWidth: sample.cropWidth,
+          cropHeight: sample.cropHeight,
+          capturedAt: sample.capturedAt,
+        });
+        pruneOldestMapEntries(cropEvidenceBySourceRef.current, MAX_CROP_EVIDENCE);
+      }
       setPendingOcrJobCount(nextPendingCount);
       postOcrCandidateAttempt(activeJob, 0, "ocrQueued");
     },
@@ -2937,6 +3909,9 @@ export function App() {
       ensureOcrWorker,
       postOcrCandidateAttempt,
       setPendingOcrJobCount,
+      settleObservationIfIdle,
+      storeObservationCropEvidence,
+      updateMessageObservationById,
     ],
   );
 
@@ -3155,23 +4130,34 @@ export function App() {
   }, []);
 
   const stopSampling = useCallback(
-    (message?: string) => {
+    (
+      message?: string,
+      reason: Extract<
+        MessageWatcherCloseReason,
+        "analysis_stopped" | "media_ended" | "stream_stopped"
+      > = "analysis_stopped",
+    ) => {
       if (samplingTimerRef.current !== null) {
         window.clearInterval(samplingTimerRef.current);
         samplingTimerRef.current = null;
       }
+      if (messageWatchTimerRef.current !== null) {
+        window.clearInterval(messageWatchTimerRef.current);
+        messageWatchTimerRef.current = null;
+      }
 
+      closeMessageWatcher(reason);
       setIsSampling(false);
 
       if (message) {
         addLog(message);
       }
     },
-    [addLog],
+    [addLog, closeMessageWatcher],
   );
 
   const resetMedia = useCallback(() => {
-    stopSampling();
+    stopSampling(undefined, "stream_stopped");
     stopOcr();
     stopTracks(streamRef.current);
     streamRef.current = null;
@@ -3196,6 +4182,13 @@ export function App() {
       if (samplingTimerRef.current !== null) {
         window.clearInterval(samplingTimerRef.current);
       }
+      if (messageWatchTimerRef.current !== null) {
+        window.clearInterval(messageWatchTimerRef.current);
+      }
+      deferredOcrTimerIdsRef.current.forEach((timerId) =>
+        window.clearTimeout(timerId),
+      );
+      deferredOcrTimerIdsRef.current.clear();
 
       clearActiveOcrJob();
       stopTracks(streamRef.current);
@@ -3369,6 +4362,8 @@ export function App() {
         videoTrack?.addEventListener(
           "ended",
           () => {
+            stopSampling(undefined, "media_ended");
+            stopOcr();
             streamRef.current = null;
             setStream(null);
             mediaModeRef.current = "idle";
@@ -3439,6 +4434,8 @@ export function App() {
       selectedVideoDeviceId,
       setupAudioPlayback,
       stopAudioInput,
+      stopOcr,
+      stopSampling,
       videoDevices,
       warmAudioOutput,
     ],
@@ -3582,6 +4579,62 @@ export function App() {
     return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
   }, []);
 
+  const captureCurrentMessageWatchSample = useCallback(
+    (options?: { logFailure?: boolean }) => {
+      const currentMediaMode = mediaModeRef.current;
+      const source =
+        currentMediaMode === "image-file" ? imagePreviewRef.current : videoRef.current;
+
+      if (currentMediaMode === "idle" || !source) {
+        if (options?.logFailure) {
+          addLog("表示監視する映像または画像がありません。", "warn");
+        }
+        return false;
+      }
+
+      const imageData = captureScaledRoiImageData(
+        source,
+        roiRef.current,
+        MESSAGE_WATCH_MAX_WIDTH,
+      );
+
+      if (!imageData) {
+        if (options?.logFailure) {
+          addLog("フレーム寸法が未取得のため、メッセージ表示をまだ監視できません。", "warn");
+        }
+        return false;
+      }
+
+      messageWatchFrameIndexRef.current += 1;
+      const timestampMs = Math.max(
+        0,
+        Math.round(performance.now() - samplingStartMsRef.current),
+      );
+      const analysis = analyzeMessagePresence(imageData);
+      const sample: MessageWatcherSample = {
+        timestampMs,
+        frameIndex: messageWatchFrameIndexRef.current,
+        analysis,
+      };
+      const nextObservationId = `msgobs_${String(
+        messageObservationCounterRef.current + 1,
+      ).padStart(6, "0")}`;
+      const result = advanceMessageWatcher(
+        messageWatcherStateRef.current,
+        sample,
+        nextObservationId,
+      );
+
+      if (result.transitions.some((transition) => transition.type === "opened")) {
+        messageObservationCounterRef.current += 1;
+      }
+      messageWatcherStateRef.current = result.state;
+      applyMessageWatcherTransitions(result.transitions, sample, source, analysis);
+      return true;
+    },
+    [addLog, applyMessageWatcherTransitions],
+  );
+
   const captureCurrentFrame = useCallback(
     (options?: { logFailure?: boolean }) => {
       const currentMediaMode = mediaModeRef.current;
@@ -3628,6 +4681,8 @@ export function App() {
         roi: roiRef.current,
         preprocess: preprocessOptionsRef.current,
         upscaleFactor: upscaleFactorRef.current,
+        observationId:
+          messageWatcherStateRef.current.activeObservation?.id ?? null,
       };
 
       setFrameSamples((currentSamples) =>
@@ -3636,10 +4691,19 @@ export function App() {
       appendFrameSampleDiagnostic(nextSample, "sampled");
       const messagePhase = handlePhaseGateObservation(nextSample, hudObservation, vsObservation);
 
-      if (messagePhase === "unknown" || messagePhase === "message_candidate") {
+      if (
+        nextSample.observationId &&
+        messagePhase !== "ended"
+      ) {
         queueOcrRecognition(nextSample);
       } else {
-        appendFrameSampleDiagnostic(nextSample, "skippedPhase", `phase ${messagePhase}`);
+        appendFrameSampleDiagnostic(
+          nextSample,
+          "skippedPhase",
+          nextSample.observationId
+            ? `phase ${messagePhase}`
+            : "message watcher has no active observation",
+        );
       }
 
       return true;
@@ -3662,13 +4726,27 @@ export function App() {
     samplingStartMsRef.current = performance.now();
     setFrameSamples([]);
     setIsSampling(true);
-    captureCurrentFrame({ logFailure: true });
+    messageWatchFrameIndexRef.current = 0;
+    messageWatcherStateRef.current = createInitialMessageWatcherState();
+    captureCurrentMessageWatchSample({ logFailure: true });
+    messageWatchTimerRef.current = window.setInterval(
+      () => captureCurrentMessageWatchSample(),
+      Math.round(1000 / DEFAULT_MESSAGE_WATCH_FPS),
+    );
     samplingTimerRef.current = window.setInterval(
       () => captureCurrentFrame(),
       Math.round(1000 / sampleFps),
     );
-    addLog(`フレームサンプリングを開始しました (${sampleFps}fps)。`);
-  }, [addLog, captureCurrentFrame, resetPhaseGateState, sampleFps]);
+    addLog(
+      `フレームサンプリングを開始しました (OCR ${sampleFps}fps / 表示監視 ${DEFAULT_MESSAGE_WATCH_FPS}fps)。`,
+    );
+  }, [
+    addLog,
+    captureCurrentFrame,
+    captureCurrentMessageWatchSample,
+    resetPhaseGateState,
+    sampleFps,
+  ]);
 
   const handleStopSampling = useCallback(() => {
     stopSampling("フレームサンプリングを停止しました。");
@@ -3688,9 +4766,20 @@ export function App() {
     setSampleDiagnostics([]);
     setBattleEvents([]);
     setUnknownEvents([]);
+    commitMessageObservations([]);
     setReviewNotes({});
     setSuppressedTimelineCount(0);
     cropEvidenceBySourceRef.current.clear();
+    observationEvidenceRefById.current.clear();
+    usableOcrTextObservationIdsRef.current.clear();
+    deferredOcrTimerIdsRef.current.forEach((timerId) =>
+      window.clearTimeout(timerId),
+    );
+    deferredOcrTimerIdsRef.current.clear();
+    scheduledDeferredObservationIdsRef.current.clear();
+    messageObservationCounterRef.current = 0;
+    messageWatchFrameIndexRef.current = 0;
+    messageWatcherStateRef.current = createInitialMessageWatcherState();
     sampleDiagnosticCounterRef.current = 0;
     phaseTransitionCounterRef.current = 0;
     phaseDetectionSummaryRef.current = createEmptyPhaseDetectionSummary();
@@ -3710,7 +4799,13 @@ export function App() {
     if (samplingTimerRef.current === null) {
       handleStartSampling();
     }
-  }, [addLog, ensureOcrWorker, handleStartSampling, resetPhaseGateState]);
+  }, [
+    addLog,
+    commitMessageObservations,
+    ensureOcrWorker,
+    handleStartSampling,
+    resetPhaseGateState,
+  ]);
 
   const handleStopOcr = useCallback(() => {
     stopOcr("リアルタイムOCRログを停止しました。");
@@ -3735,14 +4830,14 @@ export function App() {
 
   const handleToolbarStopAnalysis = useCallback(() => {
     const shouldStopOcr = isOcrEnabledRef.current || pendingOcrJobsRef.current > 0;
-    const shouldStopSampling = samplingTimerRef.current !== null;
-
-    if (shouldStopOcr) {
-      stopOcr("リアルタイムOCRログを停止しました。");
-    }
+    const shouldStopSampling =
+      samplingTimerRef.current !== null || messageWatchTimerRef.current !== null;
 
     if (shouldStopSampling) {
       stopSampling("フレームサンプリングを停止しました。");
+    }
+    if (shouldStopOcr) {
+      stopOcr("リアルタイムOCRログを停止しました。");
     }
   }, [stopOcr, stopSampling]);
 
@@ -3865,6 +4960,18 @@ export function App() {
   const displayedBattleEvents = useMemo(
     () => battleEvents.slice(0, MAX_RESOLVED_DISPLAY_ITEMS),
     [battleEvents],
+  );
+  const displayedMessageObservations = useMemo(
+    () => messageObservations.slice(0, MAX_MESSAGE_OBSERVATION_DISPLAY_ITEMS),
+    [messageObservations],
+  );
+  const battleEventById = useMemo(
+    () => new Map(battleEvents.map((event) => [event.id, event])),
+    [battleEvents],
+  );
+  const ocrMessageById = useMemo(
+    () => new Map(ocrMessages.map((message) => [message.id, message])),
+    [ocrMessages],
   );
   const displayedUnknownEvents = useMemo(
     () => unknownEvents.slice(0, MAX_UNKNOWN_DISPLAY_ITEMS),
@@ -4260,6 +5367,7 @@ export function App() {
       ocrMessages,
       events: battleEvents,
       unknowns: unknownEvents,
+      messageObservations,
       frameEvidence,
       sampleDiagnostics,
       phaseDetectionSummary: phaseDetectionSummaryRef.current,
@@ -4274,6 +5382,7 @@ export function App() {
     metadata.frameRate,
     metadata.height,
     metadata.width,
+    messageObservations,
     ocrMessages,
     opponentHudRoi,
     playerHudRoi,
@@ -4291,9 +5400,16 @@ export function App() {
         0,
         MAX_OCR_HISTORY,
       );
+      const restoredMessageObservations = [...document.messageObservations]
+        .sort(
+          (left, right) =>
+            right.openedAtMs - left.openedAtMs || right.id.localeCompare(left.id),
+        )
+        .slice(0, MAX_MESSAGE_OBSERVATION_HISTORY);
+      const restoredFrameEvidence = document.frameEvidence.slice(-MAX_CROP_EVIDENCE);
 
       cropEvidenceBySourceRef.current = new Map(
-        document.frameEvidence.map((evidence) => [
+        restoredFrameEvidence.map((evidence) => [
           evidence.sourceFrameRef,
           {
             sourceFrameRef: evidence.sourceFrameRef,
@@ -4305,6 +5421,40 @@ export function App() {
           },
         ]),
       );
+      observationEvidenceRefById.current = new Map(
+        restoredMessageObservations
+          .filter(
+            (
+              observation,
+            ): observation is MessageObservation & { bestEvidenceRef: string } =>
+              Boolean(
+                observation.bestEvidenceRef &&
+                  cropEvidenceBySourceRef.current.has(observation.bestEvidenceRef),
+              ),
+          )
+          .map((observation) => [observation.id, observation.bestEvidenceRef]),
+      );
+      usableOcrTextObservationIdsRef.current = new Set(
+        restoredOcrMessages
+          .filter(
+            (message) =>
+              Boolean(message.observationId) &&
+              message.normalizedText.trim().length > 0,
+          )
+          .map((message) => message.observationId as string),
+      );
+      messageWatcherStateRef.current = createInitialMessageWatcherState();
+      messageWatchFrameIndexRef.current = 0;
+      messageObservationCounterRef.current = restoredMessageObservations.reduce(
+        (highestCounter, observation) => {
+          const match = /^msgobs_(\d+)$/u.exec(observation.id);
+          return match
+            ? Math.max(highestCounter, Number.parseInt(match[1], 10))
+            : highestCounter;
+        },
+        restoredMessageObservations.length,
+      );
+      commitMessageObservations(restoredMessageObservations);
       setOcrMessages(restoredOcrMessages);
       setOcrLogs(
         restoredOcrMessages
@@ -4345,7 +5495,7 @@ export function App() {
       setActiveReviewTab("timeline");
       addLog(`Battle Logを読み込みました: ${document.events.length} events / ${document.unknowns.length} unknown`);
     },
-    [addLog],
+    [addLog, commitMessageObservations],
   );
 
   const handleExportBattleLogJson = useCallback(() => {
@@ -4707,6 +5857,16 @@ export function App() {
                   playsInline
                   controls={mediaMode === "video-file"}
                   onLoadedMetadata={handleLoadedMetadata}
+                  onEnded={() => {
+                    if (mediaModeRef.current !== "video-file") {
+                      return;
+                    }
+                    stopSampling(
+                      "動画ファイルの再生終了によりフレームサンプリングを停止しました。",
+                      "media_ended",
+                    );
+                    stopOcr();
+                  }}
                 />
               )}
               {mediaMode === "idle" ? (
@@ -5558,14 +6718,67 @@ export function App() {
         <aside
           ref={resolvedLogPanelRef}
           className="log-panel resolved-log-panel"
-          aria-label="解決済みログ"
+          aria-label="ライブイベントログ"
         >
-          <ol className="resolved-text-log" aria-label="resolved text log">
-            {displayedBattleEvents.length === 0 ? (
-              <li className="resolved-text-log-empty">解決ログ空</li>
+          <ol className="resolved-text-log" aria-label="live event log">
+            {displayedMessageObservations.length === 0 &&
+            displayedBattleEvents.length === 0 ? (
+              <li className="resolved-text-log-empty">ライブイベントログ空</li>
+            ) : displayedMessageObservations.length > 0 ? (
+              displayedMessageObservations.map((observation) => {
+                const resolvedEvents = observation.eventIds
+                  .map((eventId) => battleEventById.get(eventId))
+                  .filter((event): event is BattleEvent => Boolean(event));
+                const bestOcrText = [...observation.ocrMessageIds]
+                  .reverse()
+                  .map((messageId) => ocrMessageById.get(messageId)?.normalizedText.trim() ?? "")
+                  .find((text) => text.length > 0);
+                const status =
+                  observation.resolution === "resolved"
+                    ? "解決"
+                    : observation.resolution === "ocr_unknown"
+                      ? "未解決"
+                      : observation.resolution === "unread"
+                        ? "未読"
+                        : observation.lifecycle === "active"
+                          ? "検出中"
+                          : "解析中";
+                const fallbackText =
+                  observation.resolution === "ocr_unknown"
+                    ? `OCR: ${bestOcrText ?? "文字列を取得しました"}`
+                    : observation.resolution === "unread"
+                      ? "内容を認識できませんでした"
+                      : observation.lifecycle === "active"
+                        ? "バトルメッセージを検出"
+                        : "バトルメッセージを解析中";
+
+                return (
+                  <li
+                    key={observation.id}
+                    data-observation-id={observation.id}
+                    className={`live-event-row live-event-row--${observation.resolution}`}
+                  >
+                    <time className="live-event-time">{observation.openedAtMs}ms</time>
+                    <span className="live-event-status">[{status}]</span>
+                    {resolvedEvents.length > 0 ? (
+                      <span className="live-event-lines">
+                        {resolvedEvents.map((event) => (
+                          <span key={event.id}>{formatCanonicalEventText(event)}</span>
+                        ))}
+                      </span>
+                    ) : (
+                      <span className="live-event-text">{fallbackText}</span>
+                    )}
+                  </li>
+                );
+              })
             ) : (
               displayedBattleEvents.map((event) => (
-                <li key={event.id}>{formatCanonicalEventText(event)}</li>
+                <li key={event.id} className="live-event-row live-event-row--resolved">
+                  <time className="live-event-time">{event.timestampMs}ms</time>
+                  <span className="live-event-status">[解決]</span>
+                  <span className="live-event-text">{formatCanonicalEventText(event)}</span>
+                </li>
               ))
             )}
           </ol>

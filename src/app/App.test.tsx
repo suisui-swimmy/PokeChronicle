@@ -5,7 +5,12 @@ import type {
   OCRWorkerRequest,
   OCRWorkerResponse,
 } from "../core/ocr/workerMessages";
-import type { BattleEvent, OCRMessage, UnknownEvent } from "../core/events/schema";
+import type {
+  BattleEvent,
+  MessageObservation,
+  OCRMessage,
+  UnknownEvent,
+} from "../core/events/schema";
 import {
   createBattleLogDocument,
   serializeBattleLogDocument,
@@ -378,8 +383,10 @@ describe("App", () => {
       "style",
       expect.stringContaining("--management-panel-height: 24px"),
     );
-    expect(screen.getByLabelText("解決済みログ")).toBeInTheDocument();
-    expect(within(screen.getByLabelText("resolved text log")).getByText("解決ログ空")).toBeInTheDocument();
+    expect(screen.getByLabelText("ライブイベントログ")).toBeInTheDocument();
+    expect(
+      within(screen.getByLabelText("live event log")).getByText("ライブイベントログ空"),
+    ).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "レビュー" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("project status")).not.toBeInTheDocument();
     const managementPanel = screen.getByLabelText("analysis and data management");
@@ -962,7 +969,7 @@ describe("App", () => {
     );
     vi.spyOn(HTMLVideoElement.prototype, "videoWidth", "get").mockReturnValue(640);
     vi.spyOn(HTMLVideoElement.prototype, "videoHeight", "get").mockReturnValue(360);
-    vi.spyOn(window, "setInterval").mockImplementation(
+    const samplingInterval = vi.spyOn(window, "setInterval").mockImplementation(
       () => 1 as unknown as ReturnType<typeof window.setInterval>,
     );
 
@@ -972,6 +979,16 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "開始" }));
     await waitFor(() => expect(mockOcrWorkers).toHaveLength(1));
     const worker = mockOcrWorkers[0];
+    const watchFrame = samplingInterval.mock.calls.find(([, timeout]) => timeout === 83)?.[0];
+    expect(typeof watchFrame).toBe("function");
+    act(() => (watchFrame as () => void)());
+
+    const liveEventLog = screen.getByLabelText("live event log");
+    const observationRow = within(liveEventLog)
+      .getByText("バトルメッセージを検出")
+      .closest("li");
+    expect(observationRow).not.toBeNull();
+    expect(observationRow).toHaveTextContent("[検出中]");
 
     await waitFor(() => expect(worker.postMessage).toHaveBeenCalledTimes(1));
     const firstRequest = worker.postMessage.mock.calls[0][0];
@@ -982,6 +999,7 @@ describe("App", () => {
     }
     expect(firstRequest.candidate).toMatchObject({ id: "primary", strategy: "block" });
     expect(firstRequest.candidate.variantId).toContain("top-2-lines");
+    expect(firstRequest.meta.observationId).toMatch(/^msgobs_/);
 
     act(() => {
       worker.emit({
@@ -1013,6 +1031,7 @@ describe("App", () => {
       throw new Error("fallback recognize request was not queued");
     }
     expect(fallbackRequest.candidate).toMatchObject({ id: "linewise", strategy: "linewise" });
+    expect(fallbackRequest.meta.observationId).toBe(firstRequest.meta.observationId);
 
     act(() => {
       worker.emit({
@@ -1045,9 +1064,180 @@ describe("App", () => {
     await waitFor(() => {
       expect(screen.getAllByText("ゆけっ! エルフーン!").length).toBeGreaterThan(0);
     });
+    expect(observationRow).toBeInTheDocument();
+    expect(observationRow).toHaveTextContent("[解決]");
+    expect(observationRow).toHaveTextContent("ゆけっ! エルフーン!");
+    expect(within(liveEventLog).getAllByRole("listitem")).toHaveLength(1);
     expect(within(screen.getByRole("tab", { name: /Timeline/ })).getByText("1")).toBeInTheDocument();
     expect(within(screen.getByRole("tab", { name: /Unknown/ })).getByText("0")).toBeInTheDocument();
     expect(worker.postMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it("updates the detected row to unread without inventing an UnknownEvent when OCR stays empty", async () => {
+    const user = userEvent.setup();
+    const canvasContext = {
+      drawImage: vi.fn(),
+      getImageData: vi.fn(
+        (_x: number, _y: number, width: number, height: number) =>
+          createSyntheticMessageImage(width, height),
+      ),
+      imageSmoothingEnabled: false,
+      putImageData: vi.fn(),
+    } as unknown as CanvasRenderingContext2D;
+
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
+      () => canvasContext,
+    );
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue(
+      "data:image/png;base64,mock",
+    );
+    vi.spyOn(HTMLVideoElement.prototype, "videoWidth", "get").mockReturnValue(640);
+    vi.spyOn(HTMLVideoElement.prototype, "videoHeight", "get").mockReturnValue(360);
+    const samplingInterval = vi.spyOn(window, "setInterval").mockImplementation(
+      () => 1 as unknown as ReturnType<typeof window.setInterval>,
+    );
+
+    render(<App />);
+
+    await screen.findByRole("combobox", { name: "映像デバイス" });
+    await user.click(screen.getByRole("button", { name: "開始" }));
+    await waitFor(() => expect(mockOcrWorkers).toHaveLength(1));
+    const worker = mockOcrWorkers[0];
+    const watchFrame = samplingInterval.mock.calls.find(([, timeout]) => timeout === 83)?.[0];
+    expect(typeof watchFrame).toBe("function");
+    act(() => (watchFrame as () => void)());
+
+    const liveEventLog = screen.getByLabelText("live event log");
+    const observationRow = within(liveEventLog)
+      .getByText("バトルメッセージを検出")
+      .closest("li");
+    expect(observationRow).not.toBeNull();
+
+    await waitFor(() => expect(worker.postMessage).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByRole("tab", { name: "サンプラー" }));
+    await user.click(screen.getByRole("button", { name: "サンプル停止" }));
+    expect(observationRow).toHaveTextContent("[解析中]");
+    expect(observationRow).toHaveTextContent("バトルメッセージを解析中");
+
+    for (let candidateIndex = 0; candidateIndex < 3; candidateIndex += 1) {
+      await waitFor(() =>
+        expect(worker.postMessage).toHaveBeenCalledTimes(candidateIndex + 1),
+      );
+      const request = worker.postMessage.mock.calls[candidateIndex][0];
+      expect(request.type).toBe("recognize");
+      if (request.type !== "recognize") {
+        throw new Error("recognize request was not queued");
+      }
+
+      act(() => {
+        worker.emit({
+          type: "result",
+          jobId: request.jobId,
+          meta: request.meta,
+          candidate: request.candidate,
+          result: {
+            rawText: "",
+            confidence: 0,
+            lines: [],
+          },
+          segmentResults: [],
+          durationMs: 12,
+        });
+      });
+    }
+
+    await waitFor(() => {
+      expect(observationRow).toHaveTextContent("[未読]");
+      expect(observationRow).toHaveTextContent("内容を認識できませんでした");
+    });
+    expect(observationRow).toBeInTheDocument();
+    expect(within(liveEventLog).getAllByRole("listitem")).toHaveLength(1);
+
+    await user.click(screen.getByRole("tab", { name: "ログ" }));
+    expect(within(screen.getByRole("tab", { name: /Unknown/ })).getByText("0")).toBeInTheDocument();
+  });
+
+  it("keeps usable OCR text unresolved when a later fallback candidate errors", async () => {
+    const user = userEvent.setup();
+    const canvasContext = {
+      drawImage: vi.fn(),
+      getImageData: vi.fn(
+        (_x: number, _y: number, width: number, height: number) =>
+          createSyntheticMessageImage(width, height),
+      ),
+      imageSmoothingEnabled: false,
+      putImageData: vi.fn(),
+    } as unknown as CanvasRenderingContext2D;
+
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
+      () => canvasContext,
+    );
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue(
+      "data:image/png;base64,mock",
+    );
+    vi.spyOn(HTMLVideoElement.prototype, "videoWidth", "get").mockReturnValue(640);
+    vi.spyOn(HTMLVideoElement.prototype, "videoHeight", "get").mockReturnValue(360);
+    const samplingInterval = vi.spyOn(window, "setInterval").mockImplementation(
+      () => 1 as unknown as ReturnType<typeof window.setInterval>,
+    );
+
+    render(<App />);
+    await screen.findByRole("combobox", { name: "映像デバイス" });
+    await user.click(screen.getByRole("button", { name: "開始" }));
+    await waitFor(() => expect(mockOcrWorkers).toHaveLength(1));
+    const worker = mockOcrWorkers[0];
+    const watchFrame = samplingInterval.mock.calls.find(([, timeout]) => timeout === 83)?.[0];
+    expect(typeof watchFrame).toBe("function");
+    act(() => (watchFrame as () => void)());
+    await waitFor(() => expect(worker.postMessage).toHaveBeenCalledTimes(1));
+    const firstRequest = worker.postMessage.mock.calls[0][0];
+    expect(firstRequest.type).toBe("recognize");
+    if (firstRequest.type !== "recognize") {
+      throw new Error("recognize request was not queued");
+    }
+
+    act(() => {
+      worker.emit({
+        type: "result",
+        jobId: firstRequest.jobId,
+        meta: firstRequest.meta,
+        candidate: firstRequest.candidate,
+        result: {
+          rawText: "くろまろは ー",
+          confidence: 0.86,
+          lines: [{ text: "くろまろは ー", confidence: 0.86, bbox: null }],
+        },
+        segmentResults: [],
+        durationMs: 18,
+      });
+    });
+    await waitFor(() => expect(worker.postMessage).toHaveBeenCalledTimes(2));
+    const fallbackRequest = worker.postMessage.mock.calls[1][0];
+    expect(fallbackRequest.type).toBe("recognize");
+    if (fallbackRequest.type !== "recognize") {
+      throw new Error("fallback recognize request was not queued");
+    }
+
+    await user.click(screen.getByRole("tab", { name: "サンプラー" }));
+    await user.click(screen.getByRole("button", { name: "サンプル停止" }));
+    act(() => {
+      worker.emit({
+        type: "error",
+        jobId: fallbackRequest.jobId,
+        meta: fallbackRequest.meta,
+        message: "fallback failed",
+        recoverable: true,
+      });
+    });
+
+    const liveEventLog = screen.getByLabelText("live event log");
+    await waitFor(() => {
+      expect(liveEventLog).toHaveTextContent("[未解決]");
+      expect(liveEventLog).toHaveTextContent("OCR: くろまろは ー");
+      expect(liveEventLog).not.toHaveTextContent("[未読]");
+    });
+    await user.click(screen.getByRole("tab", { name: "ログ" }));
+    expect(within(screen.getByRole("tab", { name: /Unknown/ })).getByText("0")).toBeInTheDocument();
   });
 
   it("preempts fallback when a different message fingerprint is waiting", async () => {
@@ -1085,6 +1275,9 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "開始" }));
     await waitFor(() => expect(mockOcrWorkers).toHaveLength(1));
     const worker = mockOcrWorkers[0];
+    const watchFrame = samplingInterval.mock.calls.find(([, timeout]) => timeout === 83)?.[0];
+    expect(typeof watchFrame).toBe("function");
+    act(() => (watchFrame as () => void)());
     await waitFor(() => expect(worker.postMessage).toHaveBeenCalledTimes(1));
     const firstRequest = worker.postMessage.mock.calls[0][0];
 
@@ -1094,9 +1287,10 @@ describe("App", () => {
     }
 
     messageRegion = "right";
-    const sampleFrame = samplingInterval.mock.calls.find(([, timeout]) => timeout === 333)?.[0];
-    expect(typeof sampleFrame).toBe("function");
-    act(() => (sampleFrame as () => void)());
+    act(() => {
+      (watchFrame as () => void)();
+      (watchFrame as () => void)();
+    });
 
     await user.click(screen.getByRole("tab", { name: "OCR" }));
     await waitFor(() => {
@@ -1249,6 +1443,12 @@ describe("App", () => {
       expect(within(screen.getByRole("tab", { name: /解決済み/ })).getByText("60")).toBeInTheDocument();
       expect(within(screen.getByRole("tab", { name: /Unknown/ })).getByText("60")).toBeInTheDocument();
     });
+    expect(
+      within(screen.getByLabelText("live event log")).getAllByRole("listitem"),
+    ).toHaveLength(48);
+    expect(screen.getByLabelText("live event log")).toHaveTextContent(
+      "マフォクシーの ねっぷう!",
+    );
 
     await user.click(screen.getByRole("tab", { name: /解決済み/ }));
     expect(
@@ -1264,6 +1464,179 @@ describe("App", () => {
     expect(
       within(screen.getByRole("tabpanel", { name: /OCR Raw/ })).getAllByRole("listitem"),
     ).toHaveLength(30);
+  });
+
+  it("renders multiple canonical events inside one imported observation row", async () => {
+    const user = userEvent.setup();
+    const events: BattleEvent[] = [
+      {
+        id: "evt_bundle_move",
+        battleId: "battle_bundle",
+        observationId: "msgobs_bundle",
+        turn: null,
+        timestampMs: 1200,
+        type: "move",
+        actor: { name: "マフォクシー", side: "player" },
+        move: "ねっぷう",
+        target: null,
+        rawText: "マフォクシーの ねっぷう!",
+        normalizedText: "マフォクシーのねっぷう!",
+        confidence: 0.94,
+        classification: {
+          method: "seed_rule",
+          templateId: "attack_actor_move",
+          alternatives: [],
+        },
+        source: {
+          frameIndex: 12,
+          timestampMs: 1200,
+          cropObjectUrl: null,
+        },
+      },
+      {
+        id: "evt_bundle_switch",
+        battleId: "battle_bundle",
+        observationId: "msgobs_bundle",
+        turn: null,
+        timestampMs: 1200,
+        type: "switch_in",
+        actor: { name: "エルフーン", side: "player" },
+        move: null,
+        target: null,
+        rawText: "ゆけっ! エルフーン!",
+        normalizedText: "ゆけっ!エルフーン!",
+        confidence: 0.9,
+        classification: {
+          method: "seed_rule",
+          templateId: "switch_in_go",
+          alternatives: [],
+        },
+        source: {
+          frameIndex: 12,
+          timestampMs: 1200,
+          cropObjectUrl: null,
+        },
+      },
+    ];
+    const unresolvedOcrMessage: OCRMessage = {
+      id: "ocr_bundle_unknown",
+      battleId: "battle_bundle",
+      observationId: "msgobs_unknown",
+      rawText: "ガフリアスの じじん",
+      normalizedText: "ガフリアスの じじん",
+      matchText: "ガフリアスのじじん",
+      ocrConfidence: 0.58,
+      timestampMs: 1700,
+      frameIndex: 17,
+      roi: { x: 0.15, y: 0.72, w: 0.5, h: 0.14 },
+      lines: [],
+    };
+    const messageObservations: MessageObservation[] = [
+      {
+        id: "msgobs_unknown",
+        battleId: "battle_bundle",
+        openedAtMs: 1600,
+        closedAtMs: 1800,
+        frameStart: 16,
+        frameEnd: 18,
+        lifecycle: "closed",
+        resolution: "ocr_unknown",
+        visualFingerprint: {
+          columns: 2,
+          rows: 2,
+          cells: [1, 3, 2, 0],
+          foregroundPixelRatio: 0.05,
+        },
+        maxPresenceScore: 0.77,
+        bestFrameIndex: 17,
+        bestEvidenceRef: null,
+        ocrAttemptCount: 1,
+        ocrMessageIds: [unresolvedOcrMessage.id],
+        eventIds: [],
+        unknownEventIds: [],
+        failureReason: "parser_unknown",
+        openedWhileOcrBusy: false,
+      },
+      {
+        id: "msgobs_bundle",
+        battleId: "battle_bundle",
+        openedAtMs: 1100,
+        closedAtMs: 1350,
+        frameStart: 10,
+        frameEnd: 13,
+        lifecycle: "closed",
+        resolution: "resolved",
+        visualFingerprint: {
+          columns: 2,
+          rows: 2,
+          cells: [3, 2, 1, 0],
+          foregroundPixelRatio: 0.06,
+        },
+        maxPresenceScore: 0.83,
+        bestFrameIndex: 12,
+        bestEvidenceRef: null,
+        ocrAttemptCount: 1,
+        ocrMessageIds: [],
+        eventIds: events.map((event) => event.id),
+        unknownEventIds: [],
+        failureReason: null,
+        openedWhileOcrBusy: false,
+      },
+    ];
+    const battleLog = createBattleLogDocument({
+      battleId: "battle_bundle",
+      title: "Bundle battle",
+      startedAt: null,
+      media: {
+        sourceKind: "none",
+        videoLabel: null,
+        audioLabel: null,
+        width: null,
+        height: null,
+        frameRate: null,
+      },
+      roi: { x: 0.15, y: 0.72, w: 0.5, h: 0.14 },
+      roiName: "Battle message ROI",
+      opponentHudRoi: { x: 0.55, y: 0.03, w: 0.43, h: 0.14 },
+      opponentHudRoiName: "Opponent battle HUD ROI",
+      playerHudRoi: { x: 0.02, y: 0.84, w: 0.46, h: 0.14 },
+      playerHudRoiName: "Player battle HUD ROI",
+      vsRoi: { x: 0.34, y: 0.32, w: 0.32, h: 0.32 },
+      vsRoiName: "VS splash ROI",
+      ocrMessages: [unresolvedOcrMessage],
+      events,
+      unknowns: [],
+      messageObservations,
+      frameEvidence: [],
+      reviewNotes: {},
+    });
+    const serialized = serializeBattleLogDocument(battleLog);
+    const importFile = new File([serialized], "bundle.json", {
+      type: "application/json",
+    });
+    Object.defineProperty(importFile, "text", {
+      configurable: true,
+      value: vi.fn().mockResolvedValue(serialized),
+    });
+
+    render(<App />);
+    await screen.findByRole("combobox", { name: "映像デバイス" });
+    await user.click(screen.getByRole("tab", { name: "データ" }));
+    const importInput = document.querySelector<HTMLInputElement>(
+      'input[accept="application/json,.json"]',
+    );
+    fireEvent.change(importInput as HTMLInputElement, {
+      target: { files: [importFile] },
+    });
+
+    const liveEventLog = screen.getByLabelText("live event log");
+    await waitFor(() => {
+      expect(within(liveEventLog).getAllByRole("listitem")).toHaveLength(2);
+      expect(liveEventLog).toHaveTextContent("マフォクシーの ねっぷう!");
+      expect(liveEventLog).toHaveTextContent("ゆけっ! エルフーン!");
+      expect(liveEventLog).toHaveTextContent("[未解決]");
+      expect(liveEventLog).toHaveTextContent("OCR: ガフリアスの じじん");
+    });
   });
 
   it("configures ROI from analysis and data management", async () => {

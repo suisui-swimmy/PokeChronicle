@@ -12,6 +12,14 @@ describe("battle log schema", () => {
     expect(document.ocrMessages).toEqual([]);
     expect(document.events).toEqual([]);
     expect(document.unknowns).toEqual([]);
+    expect(document.messageObservations).toEqual([]);
+    expect(document.messageObservationSummary).toEqual({
+      detectedCount: 0,
+      resolvedCount: 0,
+      ocrUnknownCount: 0,
+      unreadCount: 0,
+      openedWhileOcrBusyCount: 0,
+    });
     expect(document.frameEvidence).toEqual([]);
     expect(document.manualCorrections).toEqual([]);
   });

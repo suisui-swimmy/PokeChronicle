@@ -1677,10 +1677,60 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
+.resolved-text-log .live-event-row {
+  display: grid;
+  grid-template-columns: max-content max-content minmax(0, 1fr);
+  align-items: start;
+  gap: 4px 8px;
+}
+
+.live-event-time {
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.live-event-status {
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.live-event-text,
+.live-event-lines,
+.live-event-lines > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.live-event-lines {
+  display: grid;
+  gap: 2px;
+}
+
+.live-event-lines > span {
+  display: block;
+}
+
+.live-event-row--unread .live-event-status,
+.live-event-row--ocr_unknown .live-event-status {
+  color: var(--warning);
+}
+
 .resolved-text-log-empty {
   padding-top: 0;
   color: var(--faint) !important;
   font-weight: 800;
+}
+
+@media (max-width: 420px) {
+  .resolved-text-log .live-event-row {
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+
+  .live-event-text,
+  .live-event-lines {
+    grid-column: 1 / -1;
+  }
 }
 
 .panel-heading {

@@ -7,6 +7,7 @@ export const MAX_DEFERRED_OCR_SAMPLES = 3;
 
 export interface FingerprintedOcrSample {
   messageFingerprint: MessageMaskFingerprint;
+  observationId?: string | null;
 }
 
 export type DeferredOcrEnqueueAction =
@@ -19,30 +20,67 @@ export interface DeferredOcrEnqueueResult<T extends FingerprintedOcrSample> {
   queue: T[];
   action: DeferredOcrEnqueueAction;
   replacedIndex: number | null;
+  droppedSample: T | null;
+}
+
+type ActiveOcrSample = FingerprintedOcrSample | MessageMaskFingerprint;
+
+function hasMessageFingerprint(value: ActiveOcrSample): value is FingerprintedOcrSample {
+  return "messageFingerprint" in value;
+}
+
+function getObservationId(sample: ActiveOcrSample) {
+  return hasMessageFingerprint(sample) ? sample.observationId ?? null : null;
+}
+
+function getMessageFingerprint(sample: ActiveOcrSample) {
+  return hasMessageFingerprint(sample) ? sample.messageFingerprint : sample;
+}
+
+function hasSameObservationIdentity(
+  left: FingerprintedOcrSample,
+  right: ActiveOcrSample,
+) {
+  const leftObservationId = left.observationId ?? null;
+  const rightObservationId = getObservationId(right);
+
+  if (leftObservationId === null || rightObservationId === null) {
+    return leftObservationId === null && rightObservationId === null;
+  }
+
+  return leftObservationId === rightObservationId;
+}
+
+function areSamplesDuplicates(
+  left: FingerprintedOcrSample,
+  right: ActiveOcrSample,
+) {
+  return (
+    hasSameObservationIdentity(left, right) &&
+    areMessageMaskFingerprintsSimilar(
+      left.messageFingerprint,
+      getMessageFingerprint(right),
+    )
+  );
 }
 
 export function enqueueDeferredOcrSample<T extends FingerprintedOcrSample>(
   currentQueue: readonly T[],
   sample: T,
-  activeFingerprint: MessageMaskFingerprint | null,
+  activeSample: ActiveOcrSample | null,
   maxQueueLength = MAX_DEFERRED_OCR_SAMPLES,
 ): DeferredOcrEnqueueResult<T> {
-  if (
-    activeFingerprint &&
-    areMessageMaskFingerprintsSimilar(sample.messageFingerprint, activeFingerprint)
-  ) {
+  if (activeSample && areSamplesDuplicates(sample, activeSample)) {
     return {
       queue: [...currentQueue],
       action: "ignored_active_duplicate",
       replacedIndex: null,
+      droppedSample: null,
     };
   }
 
   const duplicateIndex = currentQueue.findIndex((queuedSample) =>
-    areMessageMaskFingerprintsSimilar(
-      sample.messageFingerprint,
-      queuedSample.messageFingerprint,
-    ),
+    areSamplesDuplicates(sample, queuedSample),
   );
 
   if (duplicateIndex >= 0) {
@@ -53,6 +91,7 @@ export function enqueueDeferredOcrSample<T extends FingerprintedOcrSample>(
       queue: nextQueue,
       action: "replaced_deferred_duplicate",
       replacedIndex: duplicateIndex,
+      droppedSample: null,
     };
   }
 
@@ -61,6 +100,7 @@ export function enqueueDeferredOcrSample<T extends FingerprintedOcrSample>(
       queue: [...currentQueue],
       action: "dropped_queue_full",
       replacedIndex: null,
+      droppedSample: sample,
     };
   }
 
@@ -68,6 +108,7 @@ export function enqueueDeferredOcrSample<T extends FingerprintedOcrSample>(
     queue: [...currentQueue, sample],
     action: "queued_distinct",
     replacedIndex: null,
+    droppedSample: null,
   };
 }
 

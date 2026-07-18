@@ -6,13 +6,15 @@ PokeChronicle is a static browser application. The runtime app must work from th
 
 ```text
 videoinput capture / video / screenshot
--> frame sampling
--> ROI crop
--> Canvas preprocessing
--> OCR provider
+-> lightweight message ROI watcher
+   -> MessageObservation open / close
+-> bounded OCR frame sampling
+   -> ROI crop
+   -> Canvas preprocessing
+   -> OCR provider
 -> text normalization
 -> seed rules / generated champout templates / dictionary
--> battle events or unknowns
+-> OCRMessage / BattleEvent / UnknownEvent linked to the observation
 -> review timeline
 -> statistics and export
 ```
@@ -39,6 +41,20 @@ M2 keeps processing in the browser UI thread until OCR work begins:
 - バトルHUDはHPゲージの緑色を必須にせず、相手側の赤/マゼンタ系または味方側の青/紫系ネームプレート、白枠、暗い情報帯の組み合わせで検出する。HUD消失でメッセージ候補フェーズを開き、再出現で閉じる。
 - 小さいルビ帯は本文行へ関連付ける。元の前処理画像を保持したまま、ルビ候補だけを抑制した画像をfallback候補として生成し、濁点・半濁点は除去しない。
 - Recent frame samples are kept in a small in-memory ring buffer. They are not persisted and do not grow without bounds.
+
+## Message Watcher Boundary
+
+表示発生の検出と内容解読は別レイヤーとして扱う:
+
+- `src/core/preprocess/messagePresenceDetection.ts` はメッセージROIだけを最大幅320pxへ縮小し、既存の白文字・黄色文字pixel predicate、本文行band、foreground component、message fingerprintを再利用する。Tesseract、upscale、OCR candidate生成、parser、全画面motion判定は実行しない。
+- watcherはデフォルト12fps、OCR samplerは従来どおり3fps/5fpsで動く。OCR workerがbusyでもwatcherは停止しない。
+- presence gateはforeground比率 `0.004..0.18`、最大component比率 `0.72` 以下、text-like component 1件以上、本文行band 1件以上をnamed configで要求する。1sample spikeでは開かず、直近3sample中2sampleでopenする。
+- `src/core/events/messageObservation.ts` のpure state machineは、absence 2sampleでclose、別fingerprint 2sampleで旧観測をcloseして新観測をopen、15秒でstale closeする。fingerprint距離 `0.16` 以内の小揺れは同じ観測として継続する。
+- `MessageObservation`は`lifecycle` (`active`/`closed`) と`resolution` (`pending`/`resolved`/`ocr_unknown`/`unread`) を分離する。表示終了後もOCR jobが残る場合は`closed + pending`として扱い、遅延結果による`unread -> ocr_unknown/resolved`の昇格を許可する。逆方向へは戻さない。
+- observation open時は既存OCR schedulerへpriority sampleを1件渡す。queue、distinct FIFO、同一fingerprint置換、fallback、retry、retry preemption、worker request/responseの全経路でoptional `observationId`を維持する。
+- 右側のライブイベントログは`observation.id`をDOM keyにし、`検出中 -> 解析中 -> 解決 / 未解決 / 未読`を同じ行で更新する。`resolved`は同じ観測の全`BattleEvent`をcanonical表示し、`ocr_unknown`はbest normalized text、`unread`は内容未読だけを示す。
+- OCR文字列が完全に空の場合は`UnknownEvent`を捏造しない。`UnknownEvent`の既存noise gateも変更しない。統計は従来どおり`BattleEvent`/既存unknown集計から作り、`MessageObservation`をmove・switch・damageへ推測変換しない。
+- crop evidenceは観測ごとにbest 1件を基本とし、既存の全体上限80件を共有する。watcher sampleそのものはReact stateやSystemログへ毎回流さず、open/change/close/resolution/staleのtransitionだけを診断へ追加する。
 
 ## M3 OCR Boundary
 
@@ -91,7 +107,8 @@ M5 turns OCR/parser output into reviewable in-memory evidence:
 
 M6 makes the review data durable without adding a runtime server:
 
-- `src/storage/export.ts` builds schema-versioned Battle Log JSON documents from OCR messages, parsed events, unknowns, ROI metadata, media metadata, bounded crop evidence, and manual corrections. OCR messageには最大3件の候補履歴を保持し、HUD/VSの永続集計と最大64件のphase遷移もexportする。session履歴はOCR 1024件、event 512件、unknown 512件まで保持し、UIはresolved/unknown各48件とOCR Raw 30件だけを描画する。
+- `src/storage/export.ts` builds schema-versioned Battle Log JSON documents from message observations, OCR messages, parsed events, unknowns, ROI metadata, media metadata, bounded crop evidence, and manual corrections. OCR messageには最大3件の候補履歴を保持し、HUD/VSの永続集計と最大64件のphase遷移もexportする。session履歴はmessage observation 512件、OCR 1024件、event 512件、unknown 512件まで保持し、UIはlive observation/resolved/unknown各48件とOCR Raw 30件だけを描画する。
+- Battle Log JSONの`messageObservations`と`messageObservationSummary`は後方互換fieldである。旧JSONは空配列と空summaryへbackfillし、観測がない場合の右ライブログは従来のresolved eventsを表示する。`bestEvidenceRef`はbounded evidenceの参照だけを保存し、Object URLを永続参照にしない。
 - `src/storage/indexedDb.ts` is the only browser storage adapter for Battle Logs. It stores the current document in IndexedDB and can restore the latest saved log after a reload.
 - JSON import is for user-controlled Battle Log restore, not champout/template import. Imported logs are validated by `schemaVersion` before they replace the review state.
 - Events CSV and Unknown messages CSV exports are derived from the same Battle Log document. Unknown CSV includes review notes from durable manual corrections.

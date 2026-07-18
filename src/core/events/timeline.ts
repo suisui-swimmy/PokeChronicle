@@ -18,6 +18,7 @@ const SIDE_EFFECT_CONTEXT_WINDOW_MS = 6000;
 export interface TimelineObservationInput {
   id: string;
   battleId: string;
+  observationId?: string | null;
   rawText: string;
   parseResult: BattleMessageParseResult;
   ocrConfidence: number | null;
@@ -483,6 +484,7 @@ function createBattleEvents(
     return [{
       id: `evt_${input.id}`,
       battleId: input.battleId,
+      observationId: input.observationId ?? null,
       turn: null,
       timestampMs: input.timestampMs,
       type: promotedCandidate.eventType,
@@ -525,6 +527,7 @@ function createBattleEvents(
   return parsedEvents.map((event, index) => ({
     id: useSlotIds ? `evt_${input.id}_${index + 1}` : `evt_${input.id}`,
     battleId: input.battleId,
+    observationId: input.observationId ?? null,
     turn: null,
     timestampMs: input.timestampMs,
     type: event.type,
@@ -562,6 +565,7 @@ function createUnknownEvent(input: TimelineObservationInput): UnknownEvent | nul
   return {
     id: `unk_${input.id}`,
     battleId: input.battleId,
+    observationId: input.observationId ?? null,
     timestampMs: input.timestampMs,
     afterEventId: input.afterEventId,
     rawText: input.rawText,
@@ -577,6 +581,7 @@ export function createTimelineObservation(input: TimelineObservationInput): Time
   const ocrMessage: OCRMessage = {
     id: input.id,
     battleId: input.battleId,
+    observationId: input.observationId ?? null,
     rawText: input.rawText,
     normalizedText: input.parseResult.normalizedText,
     matchText: input.parseResult.matchText,

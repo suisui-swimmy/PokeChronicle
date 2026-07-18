@@ -7,6 +7,7 @@ export interface OCRWorkerJobMeta {
   cropHeight: number;
   cropWidth: number;
   frameIndex: number;
+  observationId?: string | null;
   roi: NormalizedRoi;
   timestampMs: number;
 }
