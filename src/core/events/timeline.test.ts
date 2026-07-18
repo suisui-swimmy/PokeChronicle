@@ -125,6 +125,10 @@ describe("timeline observation", () => {
       sourceFrameRef: createSourceFrameRef(12, 1000),
     });
     expect(observation.unknown?.rawText).toBe("まだ分類できないメッセージ");
+    expect(observation.unknownGateDecision).toEqual({
+      createUnknown: true,
+      reason: "accepted",
+    });
   });
 
   it("does not create an unknown bucket item for empty OCR output", () => {
@@ -216,6 +220,35 @@ describe("timeline observation", () => {
       expect(observation.dedupes).toEqual([]);
     }
   });
+
+  it.each([
+    ["11", "too_short"],
+    ["06:23", "timer"],
+    ["5 Q06 : 11 閲 B洋", "timer"],
+    ["$写% 子力 チ", "symbol_noise"],
+    ["! 國國細忠 ! 14謀4 子 力 チ", "other_noise"],
+    ["持ち物 マフォクシ", "ui_fragment"],
+    ["相手の キュウコンの", "prefix_only"],
+  ] as const)(
+    "keeps raw OCR while suppressing the regression noise %s as %s",
+    (rawText, reason) => {
+      const observation = createObservation(
+        rawText,
+        `ocr-noise-${reason}`,
+        1900,
+        0.86,
+      );
+
+      expect(observation.ocrMessage.rawText).toBe(rawText);
+      expect(observation.event).toBeNull();
+      expect(observation.unknown).toBeNull();
+      expect(observation.unknownGateDecision).toEqual({
+        createUnknown: false,
+        reason,
+      });
+      expect(observation.dedupes).toEqual([]);
+    },
+  );
 
   it("suppresses same-message timeline repeats in a short time window", () => {
     const first = createObservation("ガブリアスの じしん！", "ocr-1", 1000);

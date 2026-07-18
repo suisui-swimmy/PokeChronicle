@@ -4,6 +4,7 @@ import type {
   OCRLine,
   OCRMessage,
   OCRRecognitionCandidateTrace,
+  UnknownEventGateReason,
   UnknownEvent,
 } from "./schema";
 import {
@@ -46,8 +47,14 @@ export interface TimelineObservation {
   events: BattleEvent[];
   event: BattleEvent | null;
   unknown: UnknownEvent | null;
+  unknownGateDecision: UnknownEventGateDecision;
   dedupes: TimelineDeduplicationRecord[];
   dedupe: TimelineDeduplicationRecord | null;
+}
+
+export interface UnknownEventGateDecision {
+  createUnknown: boolean;
+  reason: UnknownEventGateReason;
 }
 
 export interface TimelineConstrainedCandidateRecord {
@@ -154,38 +161,126 @@ function isPrefixOnlyBattleFragment(matchText: string) {
   );
 }
 
-function isLikelyUiNoiseText(
+function getLikelyUiNoiseReason(
   matchText: string,
   normalizedText: string,
   candidateMatches: readonly string[],
-) {
+): UnknownEventGateReason | null {
   if (isPrefixOnlyBattleFragment(matchText)) {
-    return true;
+    return "prefix_only";
   }
 
   if (hasCandidateMatchWithPrefix(candidateMatches, ["partial-template;"]) && matchText.endsWith("の")) {
-    return true;
+    return "prefix_only";
   }
 
   if (/(?:^|\D)\d{1,2}\s*[:：]\s*\d{2}(?:\D|$)/u.test(normalizedText)) {
-    return true;
+    return "timer";
   }
 
   if (["特性", "持ち物", "もちもの", "味方の"].some((hint) => matchText.includes(hint))) {
-    return true;
+    return "ui_fragment";
   }
 
   const characters = Array.from(matchText);
 
   if (characters.length === 0) {
-    return true;
+    return "too_short";
   }
 
   const symbolCount = characters.filter(
     (character) => !/[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}A-Za-z0-9]/u.test(character),
   ).length;
 
-  return symbolCount / characters.length >= 0.45 && !hasBattleActionSignal(matchText, candidateMatches);
+  return symbolCount / characters.length >= 0.3 &&
+    !hasBattleActionSignal(matchText, candidateMatches)
+    ? "symbol_noise"
+    : null;
+}
+
+function isFragmentedOcrNoise(
+  normalizedText: string,
+  matchText: string,
+  candidateMatches: readonly string[],
+) {
+  if (hasBattleActionSignal(matchText, candidateMatches)) {
+    return false;
+  }
+
+  const tokens = normalizedText.trim().split(/\s+/u).filter(Boolean);
+
+  if (tokens.length < 5) {
+    return false;
+  }
+
+  const singletonTokens = tokens.filter(
+    (token) =>
+      countCharacters(token.replace(/[^\p{L}\p{N}]/gu, "")) <= 1,
+  ).length;
+  const digitCount = Array.from(matchText).filter((character) =>
+    /\p{N}/u.test(character),
+  ).length;
+
+  return singletonTokens / tokens.length >= 0.5 && digitCount >= 2;
+}
+
+export function decideUnknownEventGate(input: {
+  matchText: string;
+  normalizedText: string;
+  ocrConfidence: number | null;
+  candidateMatches: readonly string[];
+}): UnknownEventGateDecision {
+  const matchText = input.matchText.trim();
+
+  if (!matchText) {
+    return { createUnknown: false, reason: "too_short" };
+  }
+
+  const matchTextLength = countCharacters(matchText);
+  const hasActionSignal = hasBattleActionSignal(matchText, input.candidateMatches);
+  const uiNoiseReason = getLikelyUiNoiseReason(
+    matchText,
+    input.normalizedText,
+    input.candidateMatches,
+  );
+
+  if (uiNoiseReason) {
+    return { createUnknown: false, reason: uiNoiseReason };
+  }
+
+  if (
+    isFragmentedOcrNoise(
+      input.normalizedText,
+      matchText,
+      input.candidateMatches,
+    )
+  ) {
+    return { createUnknown: false, reason: "other_noise" };
+  }
+
+  if ((input.ocrConfidence ?? 0) < 0.5 && !hasActionSignal) {
+    return {
+      createUnknown: false,
+      reason: "low_confidence_no_action_signal",
+    };
+  }
+
+  if (matchTextLength >= 6 && (input.ocrConfidence ?? 0) >= 0.7) {
+    return { createUnknown: true, reason: "accepted" };
+  }
+
+  if (input.candidateMatches.length > 0 && matchTextLength >= 3 && hasActionSignal) {
+    return { createUnknown: true, reason: "accepted" };
+  }
+
+  if (containsJapaneseText(input.normalizedText) && matchTextLength >= 8) {
+    return { createUnknown: true, reason: "accepted" };
+  }
+
+  return {
+    createUnknown: false,
+    reason: matchTextLength < 3 ? "too_short" : "other_noise",
+  };
 }
 
 export function shouldCreateUnknownEvent(input: {
@@ -194,32 +289,7 @@ export function shouldCreateUnknownEvent(input: {
   ocrConfidence: number | null;
   candidateMatches: readonly string[];
 }) {
-  const matchText = input.matchText.trim();
-
-  if (!matchText) {
-    return false;
-  }
-
-  const matchTextLength = countCharacters(matchText);
-  const hasActionSignal = hasBattleActionSignal(matchText, input.candidateMatches);
-
-  if (isLikelyUiNoiseText(matchText, input.normalizedText, input.candidateMatches)) {
-    return false;
-  }
-
-  if ((input.ocrConfidence ?? 0) < 0.5 && !hasActionSignal) {
-    return false;
-  }
-
-  if (matchTextLength >= 6 && (input.ocrConfidence ?? 0) >= 0.7) {
-    return true;
-  }
-
-  if (input.candidateMatches.length > 0 && matchTextLength >= 3 && hasActionSignal) {
-    return true;
-  }
-
-  return containsJapaneseText(input.normalizedText) && matchTextLength >= 8;
+  return decideUnknownEventGate(input).createUnknown;
 }
 
 function createResolvedEventDedupeKey(
@@ -546,19 +616,15 @@ function createBattleEvents(
   }));
 }
 
-function createUnknownEvent(input: TimelineObservationInput): UnknownEvent | null {
+function createUnknownEvent(
+  input: TimelineObservationInput,
+  decision: UnknownEventGateDecision,
+): UnknownEvent | null {
   if (input.parseResult.status !== "unknown" || !input.parseResult.matchText) {
     return null;
   }
 
-  if (
-    !shouldCreateUnknownEvent({
-      matchText: input.parseResult.matchText,
-      normalizedText: input.parseResult.normalizedText,
-      ocrConfidence: input.ocrConfidence,
-      candidateMatches: input.parseResult.candidateMatches,
-    })
-  ) {
+  if (!decision.createUnknown) {
     return null;
   }
 
@@ -597,9 +663,19 @@ export function createTimelineObservation(input: TimelineObservationInput): Time
   const promotedCandidate = getPromotedConstrainedCandidate(input);
   const events = createBattleEvents(input, promotedCandidate);
   const event = events[0] ?? null;
-  const unknown = events.length > 0 || shouldSuppressPartialTemplateUnknown(input)
-    ? null
-    : createUnknownEvent(input);
+  const suppressPartialTemplate = shouldSuppressPartialTemplateUnknown(input);
+  const unknownGateDecision: UnknownEventGateDecision =
+    events.length > 0
+      ? { createUnknown: false, reason: "accepted" }
+      : suppressPartialTemplate
+        ? { createUnknown: false, reason: "prefix_only" }
+        : decideUnknownEventGate({
+            matchText: input.parseResult.matchText,
+            normalizedText: input.parseResult.normalizedText,
+            ocrConfidence: input.ocrConfidence,
+            candidateMatches: input.parseResult.candidateMatches,
+          });
+  const unknown = createUnknownEvent(input, unknownGateDecision);
   const dedupes = [
     ...events.map((timelineEvent) => ({
       id: timelineEvent.id,
@@ -626,6 +702,7 @@ export function createTimelineObservation(input: TimelineObservationInput): Time
     events,
     event,
     unknown,
+    unknownGateDecision,
     dedupes,
     dedupe: dedupes[0] ?? null,
   };

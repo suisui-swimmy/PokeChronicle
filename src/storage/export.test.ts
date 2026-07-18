@@ -107,6 +107,13 @@ const messageObservation: MessageObservation = {
   unknownEventIds: [],
   failureReason: null,
   openedWhileOcrBusy: true,
+  disposition: "primary",
+  suppressionReason: null,
+  commitScore: 0.82,
+  persistentUiOverlapRatio: 0.14,
+  dynamicForegroundRatio: 0.86,
+  unknownGateReason: null,
+  mergedIntoObservationId: null,
 };
 
 const sampleDiagnostic: FrameSampleDiagnostic = {
@@ -201,10 +208,15 @@ describe("battle log export", () => {
     expect(document.messageObservations).toEqual([messageObservation]);
     expect(document.messageObservationSummary).toEqual({
       detectedCount: 1,
+      committedCount: 1,
       resolvedCount: 1,
       ocrUnknownCount: 0,
       unreadCount: 0,
       openedWhileOcrBusyCount: 1,
+      suppressedCount: 0,
+      persistentUiSuppressedCount: 0,
+      noiseSuppressedCount: 0,
+      mergedCount: 0,
     });
     expect(document.ocrMessages[0].recognitionCandidates?.[0]).toMatchObject({
       id: "primary",
@@ -425,10 +437,15 @@ describe("battle log export", () => {
         messageObservations: [],
         messageObservationSummary: {
           detectedCount: 0,
+          committedCount: 0,
           resolvedCount: 0,
           ocrUnknownCount: 0,
           unreadCount: 0,
           openedWhileOcrBusyCount: 0,
+          suppressedCount: 0,
+          persistentUiSuppressedCount: 0,
+          noiseSuppressedCount: 0,
+          mergedCount: 0,
         },
         sampleDiagnostics: [],
         phaseDetectionSummary: { opponentHud: { sampleCount: 0 } },
@@ -497,7 +514,112 @@ describe("battle log export", () => {
           openedWhileOcrBusyCount: 0,
         },
       },
-      warnings: ["message observation summaryがないため観測履歴から再集計します。"],
+      warnings: [
+        "message observationの追加fieldがないため既存状態から補完しました。",
+        "message observation summaryがないため観測履歴から再集計します。",
+      ],
+    });
+  });
+
+  it("round-trips disposition and merge metadata while backfilling legacy observations", () => {
+    const mergedObservation: MessageObservation = {
+      ...messageObservation,
+      id: "msg_obs_merged",
+      resolution: "unread",
+      eventIds: [],
+      disposition: "suppressed",
+      suppressionReason: "merged_duplicate",
+      mergedIntoObservationId: "msg_obs_1",
+    };
+    const document = createBattleLogDocument({
+      battleId: "battle_test",
+      title: "Merge metadata",
+      startedAt: null,
+      media: {
+        sourceKind: "none",
+        videoLabel: null,
+        audioLabel: null,
+        width: null,
+        height: null,
+        frameRate: null,
+      },
+      roi: { x: 0, y: 0, w: 1, h: 1 },
+      roiName: "Battle message ROI",
+      opponentHudRoi: { x: 0.55, y: 0.03, w: 0.43, h: 0.14 },
+      opponentHudRoiName: "Opponent battle HUD ROI",
+      playerHudRoi: { x: 0.02, y: 0.84, w: 0.46, h: 0.14 },
+      playerHudRoiName: "Player battle HUD ROI",
+      vsRoi: { x: 0.34, y: 0.32, w: 0.32, h: 0.32 },
+      vsRoiName: "VS splash ROI",
+      ocrMessages: [],
+      events: [],
+      unknowns: [],
+      messageObservations: [messageObservation, mergedObservation],
+      frameEvidence: [],
+      reviewNotes: {},
+    });
+    const roundTrip = parseBattleLogJson(serializeBattleLogDocument(document));
+
+    expect(roundTrip).toMatchObject({
+      ok: true,
+      document: {
+        messageObservations: [
+          {
+            id: "msg_obs_1",
+            disposition: "primary",
+            suppressionReason: null,
+          },
+          {
+            id: "msg_obs_merged",
+            disposition: "suppressed",
+            suppressionReason: "merged_duplicate",
+            mergedIntoObservationId: "msg_obs_1",
+          },
+        ],
+        messageObservationSummary: {
+          committedCount: 2,
+          suppressedCount: 1,
+          mergedCount: 1,
+        },
+      },
+    });
+
+    const legacy = structuredClone(document) as unknown as {
+      messageObservations: Array<Partial<MessageObservation>>;
+    };
+    const legacyUnknown: Partial<MessageObservation> = {
+      ...messageObservation,
+      id: "msg_obs_legacy_unknown",
+      resolution: "ocr_unknown",
+      eventIds: [],
+      unknownEventIds: [],
+    };
+    delete legacyUnknown.disposition;
+    delete legacyUnknown.suppressionReason;
+    delete legacyUnknown.commitScore;
+    delete legacyUnknown.persistentUiOverlapRatio;
+    delete legacyUnknown.dynamicForegroundRatio;
+    delete legacyUnknown.unknownGateReason;
+    delete legacyUnknown.mergedIntoObservationId;
+    legacy.messageObservations = [legacyUnknown];
+
+    const backfilled = parseBattleLogJson(JSON.stringify(legacy));
+
+    expect(backfilled).toMatchObject({
+      ok: true,
+      document: {
+        messageObservations: [
+          {
+            id: "msg_obs_legacy_unknown",
+            disposition: "suppressed",
+            suppressionReason: null,
+            mergedIntoObservationId: null,
+          },
+        ],
+      },
+      warnings: [
+        "message observationの追加fieldがないため既存状態から補完しました。",
+      ],
     });
   });
 

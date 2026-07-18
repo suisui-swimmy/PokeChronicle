@@ -36,6 +36,7 @@ import {
   type PhaseDetectionSummary,
   type PhaseTransitionDiagnostic,
   type PhaseTransitionStage,
+  type UnknownEventGateReason,
   type UnknownEvent,
 } from "../core/events/schema";
 import {
@@ -56,6 +57,7 @@ import {
   closeMessageObservation,
   createInitialMessageWatcherState,
   createMessageObservation,
+  isStrongVisualMessageObservation,
   recordMessageObservationFailure,
   recordMessageObservationOcrAttempt,
   resolveMessageObservationAsOcrUnknown,
@@ -67,6 +69,11 @@ import {
   type MessageWatcherState,
   type MessageWatcherTransition,
 } from "../core/events/messageObservation";
+import {
+  decideObservationMerge,
+  mergeMessageObservationPair,
+  selectPrimaryLiveLogItems,
+} from "../core/events/observationMerge";
 import type { DictionaryEntry } from "../core/dictionary/types";
 import { summarizeBattleStats } from "../core/stats/battleStats";
 import {
@@ -81,6 +88,11 @@ import {
   analyzeMessagePresence,
   type MessagePresenceAnalysis,
 } from "../core/preprocess/messagePresenceDetection";
+import {
+  advancePersistentUiModel,
+  createInitialPersistentUiModelState,
+  type PersistentUiModelState,
+} from "../core/preprocess/persistentUiModel";
 import {
   analyzeBattleHudImage,
   analyzeVsSplashImage,
@@ -196,6 +208,14 @@ const SAMPLE_DIAGNOSTIC_STAGES: readonly FrameSampleDiagnosticStage[] = [
   "messagePhaseOpened",
   "messagePhaseClosed",
   "skippedPhase",
+  "messageWatchCandidateStarted",
+  "messageWatchCandidateCommitted",
+  "messageWatchCandidateSuppressed",
+  "messageWatchPersistentUiSuppressed",
+  "messageWatchNoiseSuppressed",
+  "messageWatchMerged",
+  "messageWatchProgressiveRenderContinued",
+  "messageWatchSwitchConfirmed",
   "messageWatchOpened",
   "messageWatchChanged",
   "messageWatchClosed",
@@ -347,6 +367,12 @@ type FrameSample = CapturedFrameImages & {
   preprocess: MessagePreprocessOptions;
   upscaleFactor: number;
   observationId?: string | null;
+};
+
+type MessageWatchRuntimeAnalysis = MessagePresenceAnalysis & {
+  persistentUiOverlapRatio: number;
+  dynamicForegroundRatio: number;
+  persistentUiModelWarmedUp: boolean;
 };
 
 type HudRoiLabel = "opponent" | "player";
@@ -812,6 +838,14 @@ function formatDiagnosticStage(stage: FrameSampleDiagnosticStage) {
     messageWatchArmed: "messageWatchArmed",
     messageWatchExpired: "messageWatchExpired",
     messageWatchEnded: "messageWatchEnded",
+    messageWatchCandidateStarted: "messageWatchCandidateStarted",
+    messageWatchCandidateCommitted: "messageWatchCandidateCommitted",
+    messageWatchCandidateSuppressed: "messageWatchCandidateSuppressed",
+    messageWatchPersistentUiSuppressed: "messageWatchPersistentUiSuppressed",
+    messageWatchNoiseSuppressed: "messageWatchNoiseSuppressed",
+    messageWatchMerged: "messageWatchMerged",
+    messageWatchProgressiveRenderContinued: "messageWatchProgressiveRenderContinued",
+    messageWatchSwitchConfirmed: "messageWatchSwitchConfirmed",
     messageWatchOpened: "messageWatchOpened",
     messageWatchChanged: "messageWatchChanged",
     messageWatchClosed: "messageWatchClosed",
@@ -1958,8 +1992,17 @@ export function App() {
   const messageWatcherStateRef = useRef<MessageWatcherState>(
     createInitialMessageWatcherState(),
   );
+  const persistentUiModelStateRef = useRef<PersistentUiModelState>(
+    createInitialPersistentUiModelState(),
+  );
   const messageObservationsRef = useRef<MessageObservation[]>([]);
+  const ocrMessagesRef = useRef<OCRMessage[]>([]);
+  const battleEventsRef = useRef<BattleEvent[]>([]);
+  const unknownEventsRef = useRef<UnknownEvent[]>([]);
   const usableOcrTextObservationIdsRef = useRef<Set<string>>(new Set());
+  const unknownGateReasonByObservationIdRef = useRef<
+    Map<string, UnknownEventGateReason>
+  >(new Map());
   const queueOcrRecognitionRef = useRef<(sample: FrameSample) => void>(() => undefined);
   const phaseDetectionSummaryRef = useRef<PhaseDetectionSummary>(
     createEmptyPhaseDetectionSummary(),
@@ -2111,6 +2154,30 @@ export function App() {
     },
     [appendSampleDiagnostic],
   );
+  const commitOcrMessages = useCallback(
+    (nextMessages: readonly OCRMessage[]) => {
+      const bounded = [...nextMessages].slice(0, MAX_OCR_HISTORY);
+      ocrMessagesRef.current = bounded;
+      setOcrMessages(bounded);
+    },
+    [],
+  );
+  const commitBattleEvents = useCallback(
+    (nextEvents: readonly BattleEvent[]) => {
+      const bounded = [...nextEvents].slice(0, MAX_EVENT_HISTORY);
+      battleEventsRef.current = bounded;
+      setBattleEvents(bounded);
+    },
+    [],
+  );
+  const commitUnknownEvents = useCallback(
+    (nextUnknowns: readonly UnknownEvent[]) => {
+      const bounded = [...nextUnknowns].slice(0, MAX_UNKNOWN_HISTORY);
+      unknownEventsRef.current = bounded;
+      setUnknownEvents(bounded);
+    },
+    [],
+  );
   const commitMessageObservations = useCallback(
     (nextObservations: readonly MessageObservation[]) => {
       const bounded = [...nextObservations].slice(0, MAX_MESSAGE_OBSERVATION_HISTORY);
@@ -2123,6 +2190,14 @@ export function App() {
     (input: {
       stage: Extract<
         FrameSampleDiagnosticStage,
+        | "messageWatchCandidateStarted"
+        | "messageWatchCandidateCommitted"
+        | "messageWatchCandidateSuppressed"
+        | "messageWatchPersistentUiSuppressed"
+        | "messageWatchNoiseSuppressed"
+        | "messageWatchMerged"
+        | "messageWatchProgressiveRenderContinued"
+        | "messageWatchSwitchConfirmed"
         | "messageWatchOpened"
         | "messageWatchChanged"
         | "messageWatchClosed"
@@ -2135,7 +2210,7 @@ export function App() {
       frameIndex: number;
       timestampMs: number;
       detail: string;
-      analysis?: MessagePresenceAnalysis | null;
+      analysis?: MessageWatchRuntimeAnalysis | null;
     }) => {
       appendSampleDiagnostic({
         frameIndex: input.frameIndex,
@@ -2164,6 +2239,23 @@ export function App() {
       timestampMs: number,
       frameIndex: number,
     ) => {
+      if (
+        previous.disposition !== "suppressed" &&
+        next.disposition === "suppressed" &&
+        next.suppressionReason === "ocr_noise_gate"
+      ) {
+        appendMessageWatchDiagnostic({
+          stage: "messageWatchNoiseSuppressed",
+          observationId: next.id,
+          frameIndex,
+          timestampMs,
+          detail: `unknown gate ${next.unknownGateReason ?? "other_noise"} / commit ${Math.round(
+            (next.commitScore ?? 0) * 100,
+          )}%`,
+        });
+        return;
+      }
+
       if (previous.resolution === next.resolution || next.resolution === "pending") {
         return;
       }
@@ -2237,6 +2329,86 @@ export function App() {
       commitMessageObservations,
     ],
   );
+  const tryMergeObservation = useCallback(
+    (
+      observationId: string,
+      timestampMs: number,
+      frameIndex: number,
+    ) => {
+      const candidate = messageObservationsRef.current.find(
+        (observation) => observation.id === observationId,
+      );
+
+      if (!candidate || candidate.resolution === "pending") {
+        return null;
+      }
+
+      const decision = decideObservationMerge({
+        candidate,
+        observations: messageObservationsRef.current,
+        ocrMessages: ocrMessagesRef.current,
+        events: battleEventsRef.current,
+      });
+
+      if (
+        !decision.merge ||
+        !decision.targetObservationId ||
+        !decision.secondaryObservationId
+      ) {
+        return null;
+      }
+
+      const target = messageObservationsRef.current.find(
+        (observation) =>
+          observation.id === decision.targetObservationId,
+      );
+      const secondary = messageObservationsRef.current.find(
+        (observation) =>
+          observation.id === decision.secondaryObservationId,
+      );
+
+      if (!target || !secondary || target.id === secondary.id) {
+        return null;
+      }
+
+      const merged = mergeMessageObservationPair(target, secondary);
+      commitMessageObservations(
+        messageObservationsRef.current.map((observation) =>
+          observation.id === target.id
+            ? merged.target
+            : observation.id === secondary.id
+              ? merged.secondary
+              : observation,
+        ),
+      );
+
+      if (merged.target.bestEvidenceRef) {
+        observationEvidenceRefById.current.set(
+          merged.target.id,
+          merged.target.bestEvidenceRef,
+        );
+      }
+      appendMessageWatchDiagnostic({
+        stage: "messageWatchMerged",
+        observationId: secondary.id,
+        frameIndex,
+        timestampMs,
+        detail: `merged into ${target.id} / score ${decision.score.toFixed(
+          2,
+        )} / ${decision.reasons.join(",")}`,
+      });
+      addLog(
+        `近接する同一メッセージ観測を統合しました: ${secondary.id} -> ${target.id}`,
+      );
+
+      return merged.target;
+    },
+    [
+      addLog,
+      appendMessageWatchDiagnostic,
+      commitMessageObservations,
+    ],
+  );
   const getObservationPendingOcrJobCount = useCallback((observationId: string) => {
     const activeCount =
       activeOcrJobRef.current?.sample.observationId === observationId ? 1 : 0;
@@ -2257,18 +2429,35 @@ export function App() {
       timestampMs: number,
       frameIndex: number,
       failureReason?: MessageObservationFailureReason,
-    ) =>
-      updateMessageObservationById(
+    ) => {
+      const settled = updateMessageObservationById(
         observationId,
         (observation) =>
           settleMessageObservationUnread(observation, {
             pendingOcrJobCount: getObservationPendingOcrJobCount(observationId),
             hasUsableOcrText: usableOcrTextObservationIdsRef.current.has(observationId),
             failureReason,
+            unknownGateReason:
+              unknownGateReasonByObservationIdRef.current.get(
+                observationId,
+              ) ?? null,
+            strongVisualEvidence:
+              isStrongVisualMessageObservation(observation),
           }),
         { timestampMs, frameIndex },
-      ),
-    [getObservationPendingOcrJobCount, updateMessageObservationById],
+      );
+
+      if (settled && settled.resolution !== "pending") {
+        tryMergeObservation(observationId, timestampMs, frameIndex);
+      }
+
+      return settled;
+    },
+    [
+      getObservationPendingOcrJobCount,
+      tryMergeObservation,
+      updateMessageObservationById,
+    ],
   );
   const storeObservationCropEvidence = useCallback(
     (
@@ -2401,9 +2590,60 @@ export function App() {
       transitions: readonly MessageWatcherTransition[],
       sample: MessageWatcherSample,
       source: FrameSourceElement | null,
-        analysis: MessagePresenceAnalysis | null,
+      analysis: MessageWatchRuntimeAnalysis | null,
     ) => {
       for (const transition of transitions) {
+        if (transition.type === "candidate_started") {
+          appendMessageWatchDiagnostic({
+            stage: "messageWatchCandidateStarted",
+            observationId: transition.id,
+            frameIndex: transition.frameStart,
+            timestampMs: transition.startedAtMs,
+            detail: `candidate / score ${Math.round(
+              transition.presenceScore * 100,
+            )}%`,
+            analysis,
+          });
+          continue;
+        }
+
+        if (transition.type === "candidate_suppressed") {
+          appendMessageWatchDiagnostic({
+            stage:
+              transition.reason === "persistent_ui"
+                ? "messageWatchPersistentUiSuppressed"
+                : "messageWatchCandidateSuppressed",
+            observationId: transition.id,
+            frameIndex: transition.frameIndex,
+            timestampMs: transition.timestampMs,
+            detail: `${transition.reason} / ${transition.durationMs}ms / commit ${Math.round(
+              transition.commitScore * 100,
+            )}% / persistent ${Math.round(
+              transition.persistentUiOverlapRatio * 100,
+            )}% / dynamic ${Math.round(
+              transition.dynamicForegroundRatio * 100,
+            )}%`,
+            analysis,
+          });
+          continue;
+        }
+
+        if (transition.type === "progressive_render_continued") {
+          appendMessageWatchDiagnostic({
+            stage: "messageWatchProgressiveRenderContinued",
+            observationId: transition.id,
+            frameIndex: transition.frameIndex,
+            timestampMs: transition.timestampMs,
+            detail: `fingerprint ${transition.comparison.fingerprintDistance.toFixed(
+              2,
+            )} / retained ${transition.comparison.retainedFromPrevious.toFixed(
+              2,
+            )}`,
+            analysis,
+          });
+          continue;
+        }
+
         if (transition.type === "opened") {
           const openedWhileOcrBusy = pendingOcrJobsRef.current > 0;
           const createdObservation = createMessageObservation({
@@ -2415,6 +2655,11 @@ export function App() {
             presenceScore: transition.maxPresenceScore,
             bestFrameIndex: transition.bestFrameIndex,
             openedWhileOcrBusy,
+            commitScore: transition.commitScore,
+            persistentUiOverlapRatio:
+              transition.persistentUiOverlapRatio,
+            dynamicForegroundRatio:
+              transition.dynamicForegroundRatio,
           });
           const observation = openedWhileOcrBusy
             ? recordMessageObservationFailure(createdObservation, "ocr_busy")
@@ -2425,6 +2670,20 @@ export function App() {
               (currentObservation) => currentObservation.id !== observation.id,
             ),
           ]);
+          appendMessageWatchDiagnostic({
+            stage: "messageWatchCandidateCommitted",
+            observationId: transition.id,
+            frameIndex: sample.frameIndex,
+            timestampMs: sample.timestampMs,
+            detail: `${transition.candidateDurationMs}ms / commit ${Math.round(
+              transition.commitScore * 100,
+            )}% / persistent ${Math.round(
+              transition.persistentUiOverlapRatio * 100,
+            )}% / dynamic ${Math.round(
+              transition.dynamicForegroundRatio * 100,
+            )}%`,
+            analysis,
+          });
           appendMessageWatchDiagnostic({
             stage: "messageWatchOpened",
             observationId: transition.id,
@@ -2457,6 +2716,14 @@ export function App() {
             frameIndex: transition.frameEnd,
             timestampMs: transition.closedAtMs,
             detail: "different fingerprint stabilized",
+            analysis,
+          });
+          appendMessageWatchDiagnostic({
+            stage: "messageWatchSwitchConfirmed",
+            observationId: transition.id,
+            frameIndex: transition.frameEnd,
+            timestampMs: transition.closedAtMs,
+            detail: "different signature stable for switch",
             analysis,
           });
         }
@@ -2527,6 +2794,8 @@ export function App() {
         null,
         null,
       );
+      persistentUiModelStateRef.current =
+        createInitialPersistentUiModelState();
     },
     [applyMessageWatcherTransitions],
   );
@@ -2958,32 +3227,62 @@ export function App() {
   const preservePartialOcrResult = useCallback(
     (activeJob: ActiveOcrJob | null | undefined) => {
       const observationId = activeJob?.sample.observationId ?? null;
-      const usableCandidates =
-        activeJob?.evaluatedCandidates.filter(
-          (candidate) => candidate.parseResult.normalizedText.length > 0,
-        ) ?? [];
 
-      if (!activeJob || !observationId || usableCandidates.length === 0) {
+      if (
+        !activeJob ||
+        !observationId ||
+        activeJob.evaluatedCandidates.length === 0
+      ) {
         return false;
       }
 
-      const selection = selectOcrCandidate(usableCandidates);
+      const selection = selectOcrCandidate(
+        activeJob.evaluatedCandidates,
+      );
       const selectedResult = selection.selected.result;
       const parseResult = selection.parseResult;
+
+      if (!parseResult.normalizedText) {
+        return false;
+      }
+
       const partialMessageId = `${activeJob.jobId}-partial`;
-      const partialMessage: OCRMessage = {
+      const timelineObservation = createTimelineObservation({
         id: partialMessageId,
         battleId: LIVE_BATTLE_ID,
         observationId,
         rawText: selectedResult.rawText,
-        normalizedText: parseResult.normalizedText,
-        matchText: parseResult.matchText,
+        parseResult,
         ocrConfidence: selectedResult.confidence,
-        timestampMs: activeJob.meta.timestampMs,
-        frameIndex: activeJob.meta.frameIndex,
-        roi: activeJob.meta.roi,
         lines: selectedResult.lines,
-      };
+        frameIndex: activeJob.meta.frameIndex,
+        timestampMs: activeJob.meta.timestampMs,
+        roi: activeJob.meta.roi,
+        afterEventId: lastAcceptedEventIdRef.current,
+        recentConstrainedCandidates:
+          recentConstrainedCandidateRecordsRef.current,
+        recentAcceptedEvents:
+          recentAcceptedEventRecordsRef.current,
+        candidatePromotionWindowMs:
+          TIMELINE_DUPLICATE_WINDOW_MS,
+      });
+      const suppressedDedupeIds = new Set(
+        timelineObservation.dedupes
+          .filter((dedupe) =>
+            shouldSuppressTimelineObservation(
+              recentTimelineDeduplicationRecordsRef.current,
+              dedupe,
+              TIMELINE_DUPLICATE_WINDOW_MS,
+            ),
+          )
+          .map((dedupe) => dedupe.id),
+      );
+      const acceptedEvents = timelineObservation.events.filter(
+        (event) => !suppressedDedupeIds.has(event.id),
+      );
+      const suppressUnknown =
+        timelineObservation.unknown !== null &&
+        suppressedDedupeIds.has(timelineObservation.unknown.id);
       const partialLog: OCRLogEntry = {
         id: partialMessageId,
         frameIndex: activeJob.meta.frameIndex,
@@ -3002,34 +3301,108 @@ export function App() {
       );
 
       usableOcrTextObservationIdsRef.current.add(observationId);
-      setOcrMessages((currentMessages) =>
-        [partialMessage, ...currentMessages].slice(0, MAX_OCR_HISTORY),
+      unknownGateReasonByObservationIdRef.current.set(
+        observationId,
+        suppressUnknown
+          ? "duplicate"
+          : timelineObservation.unknownGateDecision.reason,
       );
+      commitOcrMessages([
+        timelineObservation.ocrMessage,
+        ...ocrMessagesRef.current,
+      ]);
       setOcrLogs((currentLogs) =>
         [partialLog, ...currentLogs].slice(0, MAX_OCR_LOGS),
       );
-      updateMessageObservationById(
+      if (acceptedEvents.length > 0) {
+        acceptedEvents.forEach((event) => {
+          rememberBattleEventDictionaries(event);
+          rememberAcceptedEventRecord(event);
+        });
+        lastAcceptedEventIdRef.current =
+          acceptedEvents[acceptedEvents.length - 1].id;
+        commitBattleEvents([
+          ...acceptedEvents,
+          ...battleEventsRef.current,
+        ]);
+      }
+      if (timelineObservation.unknown && !suppressUnknown) {
+        commitUnknownEvents([
+          timelineObservation.unknown,
+          ...unknownEventsRef.current,
+        ]);
+      }
+      const updated = updateMessageObservationById(
         observationId,
-        (observation) =>
-          resolveMessageObservationAsOcrUnknown(
-            attachMessageObservationOcrMessage(observation, partialMessageId),
-            {
-              ocrMessageId: partialMessageId,
-              unknownEventIds: [],
-            },
-          ),
+        (observation) => {
+          const withOcrMessage = attachMessageObservationOcrMessage(
+            observation,
+            partialMessageId,
+          );
+
+          if (acceptedEvents.length > 0) {
+            return resolveMessageObservationWithEvents(
+              withOcrMessage,
+              {
+                ocrMessageId: partialMessageId,
+                eventIds: acceptedEvents.map((event) => event.id),
+              },
+            );
+          }
+
+          if (timelineObservation.unknown && !suppressUnknown) {
+            return resolveMessageObservationAsOcrUnknown(
+              withOcrMessage,
+              {
+                ocrMessageId: partialMessageId,
+                unknownEventIds: [timelineObservation.unknown.id],
+                unknownGateReason: "accepted",
+              },
+            );
+          }
+
+          return withOcrMessage;
+        },
         {
           timestampMs: resolutionTimestampMs,
           frameIndex: activeJob.meta.frameIndex,
         },
       );
+      if (updated && updated.resolution !== "pending") {
+        tryMergeObservation(
+          observationId,
+          resolutionTimestampMs,
+          activeJob.meta.frameIndex,
+        );
+      }
+      if (timelineObservation.dedupes.length > 0) {
+        recentTimelineDeduplicationRecordsRef.current =
+          updateTimelineDeduplicationRecords(
+            recentTimelineDeduplicationRecordsRef.current,
+            timelineObservation.dedupes,
+            activeJob.meta.timestampMs,
+          );
+      }
       addLog(
-        "OCR fallbackの失敗前に取得できた文字列を未解決として保持しました。",
+        acceptedEvents.length > 0
+          ? "OCR fallbackの失敗前に取得できたeventを解決済みとして保持しました。"
+          : timelineObservation.unknown && !suppressUnknown
+            ? "OCR fallbackの失敗前に取得できたレビュー対象文字列を保持しました。"
+            : "OCR fallbackの失敗前に取得できたraw文字列を詳細証拠として保持しました。",
         "warn",
       );
       return true;
     },
-    [addLog, updateMessageObservationById],
+    [
+      addLog,
+      commitBattleEvents,
+      commitOcrMessages,
+      commitUnknownEvents,
+      rememberAcceptedEventRecord,
+      rememberBattleEventDictionaries,
+      tryMergeObservation,
+      updateMessageObservationById,
+    ],
   );
 
   const queueNextDeferredOcrSample = useCallback(() => {
@@ -3384,9 +3757,10 @@ export function App() {
         }
 
         setOcrLogs((currentLogs) => [nextEntry, ...currentLogs].slice(0, MAX_OCR_LOGS));
-        setOcrMessages((currentMessages) =>
-          [observation.ocrMessage, ...currentMessages].slice(0, MAX_OCR_HISTORY),
-        );
+        commitOcrMessages([
+          observation.ocrMessage,
+          ...ocrMessagesRef.current,
+        ]);
 
         if (suppressedItemCount > 0) {
           setSuppressedTimelineCount((currentCount) => currentCount + suppressedItemCount);
@@ -3394,9 +3768,10 @@ export function App() {
 
         if (acceptedEvents.length > 0) {
           lastAcceptedEventIdRef.current = acceptedEvents[acceptedEvents.length - 1].id;
-          setBattleEvents((currentEvents) =>
-            [...acceptedEvents, ...currentEvents].slice(0, MAX_EVENT_HISTORY),
-          );
+          commitBattleEvents([
+            ...acceptedEvents,
+            ...battleEventsRef.current,
+          ]);
 
           if (acceptedEvents.some((acceptedEvent) => acceptedEvent.type === "battle_end")) {
             phaseGateStateRef.current.messagePhase = "ended";
@@ -3436,12 +3811,10 @@ export function App() {
         }
 
         if (observation.unknown && !suppressUnknown) {
-          setUnknownEvents((currentUnknowns) =>
-            [observation.unknown as UnknownEvent, ...currentUnknowns].slice(
-              0,
-              MAX_UNKNOWN_HISTORY,
-            ),
-          );
+          commitUnknownEvents([
+            observation.unknown,
+            ...unknownEventsRef.current,
+          ]);
         }
 
         const messageObservationId = response.meta.observationId ?? null;
@@ -3454,9 +3827,15 @@ export function App() {
 
           if (hasText) {
             usableOcrTextObservationIdsRef.current.add(messageObservationId);
+            unknownGateReasonByObservationIdRef.current.set(
+              messageObservationId,
+              suppressUnknown
+                ? "duplicate"
+                : observation.unknownGateDecision.reason,
+            );
           }
 
-          updateMessageObservationById(
+          const updatedObservation = updateMessageObservationById(
             messageObservationId,
             (currentObservation) => {
               const withOcrMessage = attachMessageObservationOcrMessage(
@@ -3471,17 +3850,20 @@ export function App() {
                 });
               }
 
-              if (hasText) {
+              if (observation.unknown && !suppressUnknown) {
                 return resolveMessageObservationAsOcrUnknown(withOcrMessage, {
                   ocrMessageId: observation.ocrMessage.id,
-                  unknownEventIds:
-                    observation.unknown && !suppressUnknown
-                      ? [observation.unknown.id]
-                      : [],
+                  unknownEventIds: [observation.unknown.id],
+                  unknownGateReason: "accepted",
                 });
               }
 
-              return recordMessageObservationFailure(withOcrMessage, "ocr_empty");
+              return hasText
+                ? withOcrMessage
+                : recordMessageObservationFailure(
+                    withOcrMessage,
+                    "ocr_empty",
+                  );
             },
             {
               timestampMs: resolutionTimestampMs,
@@ -3489,14 +3871,22 @@ export function App() {
             },
           );
 
-          if (!hasText) {
-            settleObservationIfIdle(
+          if (
+            updatedObservation &&
+            updatedObservation.resolution !== "pending"
+          ) {
+            tryMergeObservation(
               messageObservationId,
               resolutionTimestampMs,
               response.meta.frameIndex,
-              "ocr_empty",
             );
           }
+          settleObservationIfIdle(
+            messageObservationId,
+            resolutionTimestampMs,
+            response.meta.frameIndex,
+            hasText ? undefined : "ocr_empty",
+          );
         }
 
         if (observation.dedupes.length > 0) {
@@ -3568,6 +3958,9 @@ export function App() {
       appendSampleDiagnostic,
       appendOcrErrorLog,
       clearActiveOcrJob,
+      commitBattleEvents,
+      commitOcrMessages,
+      commitUnknownEvents,
       postOcrCandidateAttempt,
       preservePartialOcrResult,
       queueNextDeferredOcrSample,
@@ -3576,6 +3969,7 @@ export function App() {
       resetOcrWorkerAfterFailure,
       setPendingOcrJobCount,
       settleObservationIfIdle,
+      tryMergeObservation,
       updateMessageObservationById,
     ],
   );
@@ -3921,6 +4315,8 @@ export function App() {
 
   useEffect(() => {
     roiRef.current = roi;
+    persistentUiModelStateRef.current =
+      createInitialPersistentUiModelState();
   }, [roi]);
 
   useEffect(() => {
@@ -4610,7 +5006,21 @@ export function App() {
         0,
         Math.round(performance.now() - samplingStartMsRef.current),
       );
-      const analysis = analyzeMessagePresence(imageData);
+      const presenceAnalysis = analyzeMessagePresence(imageData);
+      const persistentUiResult = advancePersistentUiModel(
+        persistentUiModelStateRef.current,
+        presenceAnalysis.visualSignature,
+      );
+      persistentUiModelStateRef.current = persistentUiResult.state;
+      const analysis: MessageWatchRuntimeAnalysis = {
+        ...presenceAnalysis,
+        persistentUiOverlapRatio:
+          persistentUiResult.analysis.persistentUiOverlapRatio,
+        dynamicForegroundRatio:
+          persistentUiResult.analysis.dynamicForegroundRatio,
+        persistentUiModelWarmedUp:
+          persistentUiResult.analysis.isWarmedUp,
+      };
       const sample: MessageWatcherSample = {
         timestampMs,
         frameIndex: messageWatchFrameIndexRef.current,
@@ -4625,7 +5035,11 @@ export function App() {
         nextObservationId,
       );
 
-      if (result.transitions.some((transition) => transition.type === "opened")) {
+      if (
+        result.transitions.some(
+          (transition) => transition.type === "candidate_started",
+        )
+      ) {
         messageObservationCounterRef.current += 1;
       }
       messageWatcherStateRef.current = result.state;
@@ -4762,16 +5176,17 @@ export function App() {
     isOcrEnabledRef.current = true;
     setIsOcrEnabled(true);
     setOcrLogs([]);
-    setOcrMessages([]);
+    commitOcrMessages([]);
     setSampleDiagnostics([]);
-    setBattleEvents([]);
-    setUnknownEvents([]);
+    commitBattleEvents([]);
+    commitUnknownEvents([]);
     commitMessageObservations([]);
     setReviewNotes({});
     setSuppressedTimelineCount(0);
     cropEvidenceBySourceRef.current.clear();
     observationEvidenceRefById.current.clear();
     usableOcrTextObservationIdsRef.current.clear();
+    unknownGateReasonByObservationIdRef.current.clear();
     deferredOcrTimerIdsRef.current.forEach((timerId) =>
       window.clearTimeout(timerId),
     );
@@ -4780,6 +5195,8 @@ export function App() {
     messageObservationCounterRef.current = 0;
     messageWatchFrameIndexRef.current = 0;
     messageWatcherStateRef.current = createInitialMessageWatcherState();
+    persistentUiModelStateRef.current =
+      createInitialPersistentUiModelState();
     sampleDiagnosticCounterRef.current = 0;
     phaseTransitionCounterRef.current = 0;
     phaseDetectionSummaryRef.current = createEmptyPhaseDetectionSummary();
@@ -4801,7 +5218,10 @@ export function App() {
     }
   }, [
     addLog,
+    commitBattleEvents,
     commitMessageObservations,
+    commitOcrMessages,
+    commitUnknownEvents,
     ensureOcrWorker,
     handleStartSampling,
     resetPhaseGateState,
@@ -4961,17 +5381,14 @@ export function App() {
     () => battleEvents.slice(0, MAX_RESOLVED_DISPLAY_ITEMS),
     [battleEvents],
   );
-  const displayedMessageObservations = useMemo(
-    () => messageObservations.slice(0, MAX_MESSAGE_OBSERVATION_DISPLAY_ITEMS),
-    [messageObservations],
-  );
-  const battleEventById = useMemo(
-    () => new Map(battleEvents.map((event) => [event.id, event])),
-    [battleEvents],
-  );
-  const ocrMessageById = useMemo(
-    () => new Map(ocrMessages.map((message) => [message.id, message])),
-    [ocrMessages],
+  const primaryLiveLogItems = useMemo(
+    () =>
+      selectPrimaryLiveLogItems({
+        observations: messageObservations,
+        events: battleEvents,
+        limit: MAX_MESSAGE_OBSERVATION_DISPLAY_ITEMS,
+      }),
+    [battleEvents, messageObservations],
   );
   const displayedUnknownEvents = useMemo(
     () => unknownEvents.slice(0, MAX_UNKNOWN_DISPLAY_ITEMS),
@@ -5443,7 +5860,10 @@ export function App() {
           )
           .map((message) => message.observationId as string),
       );
+      unknownGateReasonByObservationIdRef.current.clear();
       messageWatcherStateRef.current = createInitialMessageWatcherState();
+      persistentUiModelStateRef.current =
+        createInitialPersistentUiModelState();
       messageWatchFrameIndexRef.current = 0;
       messageObservationCounterRef.current = restoredMessageObservations.reduce(
         (highestCounter, observation) => {
@@ -5455,7 +5875,7 @@ export function App() {
         restoredMessageObservations.length,
       );
       commitMessageObservations(restoredMessageObservations);
-      setOcrMessages(restoredOcrMessages);
+      commitOcrMessages(restoredOcrMessages);
       setOcrLogs(
         restoredOcrMessages
           .slice(0, MAX_OCR_LOGS)
@@ -5470,8 +5890,13 @@ export function App() {
         MAX_PHASE_TRANSITIONS,
       );
       phaseTransitionCounterRef.current = phaseTransitionsRef.current.length;
-      setBattleEvents(restoredEvents.slice(0, MAX_EVENT_HISTORY));
-      setUnknownEvents(sortNewestFirst(document.unknowns).slice(0, MAX_UNKNOWN_HISTORY));
+      commitBattleEvents(restoredEvents.slice(0, MAX_EVENT_HISTORY));
+      commitUnknownEvents(
+        sortNewestFirst(document.unknowns).slice(
+          0,
+          MAX_UNKNOWN_HISTORY,
+        ),
+      );
       setReviewNotes(
         Object.fromEntries(
           document.manualCorrections
@@ -5495,7 +5920,13 @@ export function App() {
       setActiveReviewTab("timeline");
       addLog(`Battle Logを読み込みました: ${document.events.length} events / ${document.unknowns.length} unknown`);
     },
-    [addLog, commitMessageObservations],
+    [
+      addLog,
+      commitBattleEvents,
+      commitMessageObservations,
+      commitOcrMessages,
+      commitUnknownEvents,
+    ],
   );
 
   const handleExportBattleLogJson = useCallback(() => {
@@ -5647,14 +6078,14 @@ export function App() {
 
   const handleUnknownReview = useCallback(
     (unknownId: string) => {
-      setUnknownEvents((currentUnknowns) =>
-        currentUnknowns.map((unknown) =>
+      commitUnknownEvents(
+        unknownEventsRef.current.map((unknown) =>
           unknown.id === unknownId ? { ...unknown, reviewStatus: "reviewed" } : unknown,
         ),
       );
       addLog(`unknown ${unknownId} をreviewedにしました。`);
     },
-    [addLog],
+    [addLog, commitUnknownEvents],
   );
 
   const handleReviewNoteChange = useCallback((unknownId: string, note: string) => {
@@ -6721,18 +7152,29 @@ export function App() {
           aria-label="ライブイベントログ"
         >
           <ol className="resolved-text-log" aria-label="live event log">
-            {displayedMessageObservations.length === 0 &&
-            displayedBattleEvents.length === 0 ? (
+            {primaryLiveLogItems.length === 0 ? (
               <li className="resolved-text-log-empty">ライブイベントログ空</li>
-            ) : displayedMessageObservations.length > 0 ? (
-              displayedMessageObservations.map((observation) => {
-                const resolvedEvents = observation.eventIds
-                  .map((eventId) => battleEventById.get(eventId))
-                  .filter((event): event is BattleEvent => Boolean(event));
-                const bestOcrText = [...observation.ocrMessageIds]
-                  .reverse()
-                  .map((messageId) => ocrMessageById.get(messageId)?.normalizedText.trim() ?? "")
-                  .find((text) => text.length > 0);
+            ) : (
+              primaryLiveLogItems.map((item) => {
+                if (item.kind === "legacy_event") {
+                  return (
+                    <li
+                      key={item.id}
+                      className="live-event-row live-event-row--resolved"
+                    >
+                      <time className="live-event-time">
+                        {item.event.timestampMs}ms
+                      </time>
+                      <span className="live-event-status">[解決]</span>
+                      <span className="live-event-text">
+                        {formatCanonicalEventText(item.event)}
+                      </span>
+                    </li>
+                  );
+                }
+
+                const observation = item.observation;
+                const resolvedEvents = item.events;
                 const status =
                   observation.resolution === "resolved"
                     ? "解決"
@@ -6745,7 +7187,7 @@ export function App() {
                           : "解析中";
                 const fallbackText =
                   observation.resolution === "ocr_unknown"
-                    ? `OCR: ${bestOcrText ?? "文字列を取得しました"}`
+                    ? "内容を解決できませんでした"
                     : observation.resolution === "unread"
                       ? "内容を認識できませんでした"
                       : observation.lifecycle === "active"
@@ -6754,7 +7196,7 @@ export function App() {
 
                 return (
                   <li
-                    key={observation.id}
+                    key={item.id}
                     data-observation-id={observation.id}
                     className={`live-event-row live-event-row--${observation.resolution}`}
                   >
@@ -6772,14 +7214,6 @@ export function App() {
                   </li>
                 );
               })
-            ) : (
-              displayedBattleEvents.map((event) => (
-                <li key={event.id} className="live-event-row live-event-row--resolved">
-                  <time className="live-event-time">{event.timestampMs}ms</time>
-                  <span className="live-event-status">[解決]</span>
-                  <span className="live-event-text">{formatCanonicalEventText(event)}</span>
-                </li>
-              ))
             )}
           </ol>
         </aside>

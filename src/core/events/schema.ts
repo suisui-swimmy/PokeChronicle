@@ -138,6 +138,29 @@ export type MessageObservationResolution =
   | "ocr_unknown"
   | "unread";
 
+export type MessageObservationDisposition =
+  | "primary"
+  | "review"
+  | "suppressed";
+
+export type MessageObservationSuppressionReason =
+  | "persistent_ui"
+  | "ocr_noise_gate"
+  | "visual_low_quality"
+  | "merged_duplicate"
+  | null;
+
+export type UnknownEventGateReason =
+  | "accepted"
+  | "too_short"
+  | "timer"
+  | "ui_fragment"
+  | "symbol_noise"
+  | "prefix_only"
+  | "low_confidence_no_action_signal"
+  | "duplicate"
+  | "other_noise";
+
 export type MessageObservationFailureReason =
   | "ocr_empty"
   | "ocr_timeout"
@@ -169,14 +192,26 @@ export interface MessageObservation {
   unknownEventIds: string[];
   failureReason: MessageObservationFailureReason;
   openedWhileOcrBusy: boolean;
+  disposition?: MessageObservationDisposition;
+  suppressionReason?: MessageObservationSuppressionReason;
+  commitScore?: number;
+  persistentUiOverlapRatio?: number;
+  dynamicForegroundRatio?: number;
+  unknownGateReason?: UnknownEventGateReason | null;
+  mergedIntoObservationId?: string | null;
 }
 
 export interface MessageObservationSummary {
   detectedCount: number;
+  committedCount: number;
   resolvedCount: number;
   ocrUnknownCount: number;
   unreadCount: number;
   openedWhileOcrBusyCount: number;
+  suppressedCount: number;
+  persistentUiSuppressedCount: number;
+  noiseSuppressedCount: number;
+  mergedCount: number;
 }
 
 export type BattleLogMediaSourceKind = "device" | "video-file" | "image-file" | "none";
@@ -227,6 +262,14 @@ export type FrameSampleDiagnosticStage =
   | "messageWatchArmed"
   | "messageWatchExpired"
   | "messageWatchEnded"
+  | "messageWatchCandidateStarted"
+  | "messageWatchCandidateCommitted"
+  | "messageWatchCandidateSuppressed"
+  | "messageWatchPersistentUiSuppressed"
+  | "messageWatchNoiseSuppressed"
+  | "messageWatchMerged"
+  | "messageWatchProgressiveRenderContinued"
+  | "messageWatchSwitchConfirmed"
   | "messageWatchOpened"
   | "messageWatchChanged"
   | "messageWatchClosed"
@@ -491,10 +534,15 @@ export function createEmptyBattleLog(battleId: string): BattleLogDocument {
     messageObservations: [],
     messageObservationSummary: {
       detectedCount: 0,
+      committedCount: 0,
       resolvedCount: 0,
       ocrUnknownCount: 0,
       unreadCount: 0,
       openedWhileOcrBusyCount: 0,
+      suppressedCount: 0,
+      persistentUiSuppressedCount: 0,
+      noiseSuppressedCount: 0,
+      mergedCount: 0,
     },
     frameEvidence: [],
     sampleDiagnostics: [],

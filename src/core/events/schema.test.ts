@@ -15,10 +15,15 @@ describe("battle log schema", () => {
     expect(document.messageObservations).toEqual([]);
     expect(document.messageObservationSummary).toEqual({
       detectedCount: 0,
+      committedCount: 0,
       resolvedCount: 0,
       ocrUnknownCount: 0,
       unreadCount: 0,
       openedWhileOcrBusyCount: 0,
+      suppressedCount: 0,
+      persistentUiSuppressedCount: 0,
+      noiseSuppressedCount: 0,
+      mergedCount: 0,
     });
     expect(document.frameEvidence).toEqual([]);
     expect(document.manualCorrections).toEqual([]);

@@ -20,9 +20,11 @@ The M8 MVP is closed on top of the static app foundation:
 - 3fps / 5fps ROI frame sampling
 - Raw ROI crop and Canvas-preprocessed preview
 - White-text candidate extraction, solid background, inversion, and upscale controls
-- OCRとは別の12fps軽量MessageWatcher。最大幅320pxのROIで白/黄色mask、本文行band、foreground component、message fingerprintを確認し、表示発生を先に記録
-- `MessageObservation`単位のライブログ。`検出中 → 解析中 → 解決 / 未解決 / 未読`を同じ行で更新し、1観測から複数eventも表示
-- OCRが空・timeout・busy中のdrop・preprocess/density rejectでも観測を失わず、内容を読めなかった場合はevent typeを推測せず`未読`として保持
+- OCRとは別の12fps軽量MessageWatcher。最大幅320pxのROIで白/黄色mask、本文行band、foreground component、visual signatureを確認し、5sample中3sample・250ms以上を満たした候補だけを観測としてcommit
+- 32x12 gridのbounded persistent UI modelとprogressive render比較で、固定HUD・timer・一瞬のnoiseを抑えつつ、描画途中の同じ文言を1つの`MessageObservation`として維持
+- `MessageObservation`単位のライブログ。committed観測だけを`検出中 → 解析中 → 解決 / 未解決 / 未読`の同じ行で更新し、1観測から複数eventもcanonical表示
+- `未解決`は既存Unknown gateを実際に通過したreview-worthyなUnknownだけ。右側主ログへraw OCR garbageは出さず、OCR Raw・Timeline/Unknown詳細・Battle Log JSONには証拠を保持
+- OCRが空・timeout・busy中のdrop・preprocess/density rejectでも、強いvisual observationはevent typeを推測せず`未読`として保持。visual/OCR双方が弱い固定UI/noiseだけをsuppressedにする
 - 赤/マゼンタ系または青/紫系のネームプレート構造を使う、HP残量色に依存しないバトルHUDフェーズ検出
 - Bounded in-memory frame sample buffer
 - Browser OCR provider interface and Tesseract.js worker integration

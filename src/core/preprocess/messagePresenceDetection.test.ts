@@ -6,6 +6,7 @@ import {
 } from "./messagePreprocess";
 import {
   analyzeMessagePresence,
+  compareMessageVisualSignatures,
   DEFAULT_MESSAGE_PRESENCE_CONFIG,
 } from "./messagePresenceDetection";
 
@@ -66,9 +67,19 @@ function drawTextLikeLine(
   y: number,
   color: readonly [number, number, number],
 ) {
+  drawTextLikeLineRange(image, y, 4, image.width - 12, color);
+}
+
+function drawTextLikeLineRange(
+  image: ImageData,
+  y: number,
+  xStart: number,
+  xEnd: number,
+  color: readonly [number, number, number],
+) {
   const [red, green, blue] = color;
 
-  for (let x = 4; x < image.width - 12; x += 6) {
+  for (let x = xStart; x < xEnd; x += 6) {
     fillRect(image, x, y, 2, 2, red, green, blue);
   }
 }
@@ -200,5 +211,59 @@ describe("analyzeMessagePresence", () => {
     expect(analysis.whiteForegroundRatio).toBeCloseTo(1 / 3);
     expect(analysis.yellowForegroundRatio).toBeCloseTo(1 / 3);
     expect(analysis.foregroundRatio).toBeCloseTo(2 / 3);
+  });
+
+  it("recognizes a progressively rendered continuation as the same visual message", () => {
+    const partialImage = createImage(96, 40);
+    const completedImage = createImage(96, 40);
+
+    drawTextLikeLineRange(partialImage, 8, 6, 48, [244, 244, 244]);
+    drawTextLikeLineRange(partialImage, 24, 6, 48, [244, 244, 244]);
+    drawTextLikeLineRange(completedImage, 8, 6, 78, [244, 244, 244]);
+    drawTextLikeLineRange(completedImage, 24, 6, 78, [244, 244, 244]);
+
+    const partial = analyzeMessagePresence(partialImage);
+    const completed = analyzeMessagePresence(completedImage);
+
+    expect(partial.present).toBe(true);
+    expect(completed.present).toBe(true);
+    expect(partial.visualSignature).not.toBeNull();
+    expect(completed.visualSignature).not.toBeNull();
+
+    const comparison = compareMessageVisualSignatures(
+      partial.visualSignature!,
+      completed.visualSignature!,
+    );
+
+    expect(comparison.retainedFromPrevious).toBe(1);
+    expect(comparison.progressiveRender).toBe(true);
+    expect(comparison.likelySameMessage).toBe(true);
+  });
+
+  it("recognizes a contained shorter rendering as the same visual message", () => {
+    const completedImage = createImage(96, 40);
+    const containedImage = createImage(96, 40);
+
+    drawTextLikeLineRange(completedImage, 8, 6, 78, [244, 244, 244]);
+    drawTextLikeLineRange(completedImage, 24, 6, 78, [244, 244, 244]);
+    drawTextLikeLineRange(containedImage, 8, 6, 54, [244, 244, 244]);
+    drawTextLikeLineRange(containedImage, 24, 6, 54, [244, 244, 244]);
+
+    const completed = analyzeMessagePresence(completedImage);
+    const contained = analyzeMessagePresence(containedImage);
+
+    expect(completed.visualSignature).not.toBeNull();
+    expect(contained.visualSignature).not.toBeNull();
+
+    const comparison = compareMessageVisualSignatures(
+      completed.visualSignature!,
+      contained.visualSignature!,
+    );
+
+    expect(comparison.progressiveRender).toBe(false);
+    expect(comparison.retainedFromCurrent).toBe(1);
+    expect(comparison.sharedOverMinimumForeground).toBe(1);
+    expect(comparison.boundsOverlap).toBeGreaterThanOrEqual(0.45);
+    expect(comparison.likelySameMessage).toBe(true);
   });
 });

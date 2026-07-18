@@ -15,7 +15,10 @@ import {
   type UnknownEvent,
   createEmptyPhaseDetectionSummary,
 } from "../core/events/schema";
-import { summarizeMessageObservations } from "../core/events/messageObservation";
+import {
+  inferMessageObservationDisposition,
+  summarizeMessageObservations,
+} from "../core/events/messageObservation";
 
 export const BATTLE_LOG_APP_VERSION = "0.1.0";
 const MAX_PHASE_TRANSITIONS = 64;
@@ -182,6 +185,56 @@ function isBattleLogDocument(value: unknown): value is BattleLogDocument {
   );
 }
 
+function normalizeImportedMessageObservation(
+  value: unknown,
+): MessageObservation | unknown {
+  if (!isRecord(value)) {
+    return value;
+  }
+
+  const observation = value as unknown as MessageObservation;
+  const disposition = inferMessageObservationDisposition({
+    resolution: observation.resolution,
+    unknownEventIds: Array.isArray(observation.unknownEventIds)
+      ? observation.unknownEventIds
+      : [],
+    disposition:
+      observation.disposition === "primary" ||
+      observation.disposition === "review" ||
+      observation.disposition === "suppressed"
+        ? observation.disposition
+        : undefined,
+  });
+
+  return {
+    ...observation,
+    openedWhileOcrBusy:
+      typeof observation.openedWhileOcrBusy === "boolean"
+        ? observation.openedWhileOcrBusy
+        : false,
+    disposition,
+    suppressionReason:
+      observation.suppressionReason ?? null,
+    commitScore:
+      typeof observation.commitScore === "number"
+        ? observation.commitScore
+        : disposition === "suppressed"
+          ? 0
+          : 1,
+    persistentUiOverlapRatio:
+      typeof observation.persistentUiOverlapRatio === "number"
+        ? observation.persistentUiOverlapRatio
+        : 0,
+    dynamicForegroundRatio:
+      typeof observation.dynamicForegroundRatio === "number"
+        ? observation.dynamicForegroundRatio
+        : 1,
+    unknownGateReason: observation.unknownGateReason ?? null,
+    mergedIntoObservationId:
+      observation.mergedIntoObservationId ?? null,
+  } satisfies MessageObservation;
+}
+
 export function parseBattleLogJson(text: string): BattleLogParseResult {
   let parsed: unknown;
 
@@ -258,11 +311,24 @@ export function parseBattleLogJson(text: string): BattleLogParseResult {
     warnings.push("message observationsがないため検出履歴なしで読み込みます。");
     parsed.messageObservations = [];
   } else {
-    parsed.messageObservations = parsed.messageObservations.map((observation) =>
-      isRecord(observation) && typeof observation.openedWhileOcrBusy !== "boolean"
-        ? { ...observation, openedWhileOcrBusy: false }
-        : observation,
+    const needsObservationBackfill = parsed.messageObservations.some(
+      (observation) =>
+        isRecord(observation) &&
+        (typeof observation.openedWhileOcrBusy !== "boolean" ||
+          typeof observation.disposition !== "string" ||
+          typeof observation.commitScore !== "number" ||
+          typeof observation.persistentUiOverlapRatio !== "number" ||
+          typeof observation.dynamicForegroundRatio !== "number" ||
+          !("mergedIntoObservationId" in observation)),
+    );
+    parsed.messageObservations = parsed.messageObservations.map(
+      normalizeImportedMessageObservation,
     ) as MessageObservation[];
+    if (needsObservationBackfill) {
+      warnings.push(
+        "message observationの追加fieldがないため既存状態から補完しました。",
+      );
+    }
   }
 
   if (!isRecord(parsed.messageObservationSummary)) {

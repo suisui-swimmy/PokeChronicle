@@ -7,7 +7,8 @@ PokeChronicle is a static browser application. The runtime app must work from th
 ```text
 videoinput capture / video / screenshot
 -> lightweight message ROI watcher
-   -> MessageObservation open / close
+   -> provisional visual candidate
+   -> committed MessageObservation open / close
 -> bounded OCR frame sampling
    -> ROI crop
    -> Canvas preprocessing
@@ -48,13 +49,16 @@ M2 keeps processing in the browser UI thread until OCR work begins:
 
 - `src/core/preprocess/messagePresenceDetection.ts` はメッセージROIだけを最大幅320pxへ縮小し、既存の白文字・黄色文字pixel predicate、本文行band、foreground component、message fingerprintを再利用する。Tesseract、upscale、OCR candidate生成、parser、全画面motion判定は実行しない。
 - watcherはデフォルト12fps、OCR samplerは従来どおり3fps/5fpsで動く。OCR workerがbusyでもwatcherは停止しない。
-- presence gateはforeground比率 `0.004..0.18`、最大component比率 `0.72` 以下、text-like component 1件以上、本文行band 1件以上をnamed configで要求する。1sample spikeでは開かず、直近3sample中2sampleでopenする。
-- `src/core/events/messageObservation.ts` のpure state machineは、absence 2sampleでclose、別fingerprint 2sampleで旧観測をcloseして新観測をopen、15秒でstale closeする。fingerprint距離 `0.16` 以内の小揺れは同じ観測として継続する。
-- `MessageObservation`は`lifecycle` (`active`/`closed`) と`resolution` (`pending`/`resolved`/`ocr_unknown`/`unread`) を分離する。表示終了後もOCR jobが残る場合は`closed + pending`として扱い、遅延結果による`unread -> ocr_unknown/resolved`の昇格を許可する。逆方向へは戻さない。
-- observation open時は既存OCR schedulerへpriority sampleを1件渡す。queue、distinct FIFO、同一fingerprint置換、fallback、retry、retry preemption、worker request/responseの全経路でoptional `observationId`を維持する。
-- 右側のライブイベントログは`observation.id`をDOM keyにし、`検出中 -> 解析中 -> 解決 / 未解決 / 未読`を同じ行で更新する。`resolved`は同じ観測の全`BattleEvent`をcanonical表示し、`ocr_unknown`はbest normalized text、`unread`は内容未読だけを示す。
-- OCR文字列が完全に空の場合は`UnknownEvent`を捏造しない。`UnknownEvent`の既存noise gateも変更しない。統計は従来どおり`BattleEvent`/既存unknown集計から作り、`MessageObservation`をmove・switch・damageへ推測変換しない。
-- crop evidenceは観測ごとにbest 1件を基本とし、既存の全体上限80件を共有する。watcher sampleそのものはReact stateやSystemログへ毎回流さず、open/change/close/resolution/staleのtransitionだけを診断へ追加する。
+- presence gateはforeground比率 `0.004..0.18`、最大component比率 `0.72` 以下、text-like component 1件以上、本文行band 1件以上をnamed configで要求する。presence成立はまだ観測確定ではなく、pure state machine内の`CANDIDATE`へ入るだけである。`EMPTY -> CANDIDATE -> ACTIVE`のうち、候補中はReact state、Battle Log、crop evidence、OCR queueへ公開しない。
+- candidate commitは直近5sample中3sample、250ms以上、presence/line/component/巨大component/commit scoreを要求する。候補は900msでtimeoutし、短い1行小領域は650msまで保持してpersistent UI判定を待つ。1〜2sampleのspikeや低品質候補はbounded transition diagnosticsだけを残す。
+- `MessageVisualSignature`は32x12 occupancy grid、foreground bounds、本文行数を持つ。fingerprint距離だけでなく、前景のretention、包含、bounds overlap、line構造を比較し、文字が増えるprogressive renderやfadeは同じ観測へ継続する。通常同一閾値は距離`0.22`、別メッセージ切替は距離`0.28`超・包含`0.70`未満・構造変化・4sample安定・ACTIVE開始350ms経過を要求する。
+- `src/core/preprocess/persistentUiModel.ts`は32x12 gridの直近36sampleだけを保持する。80%以上occupiedかつtransition率20%以下のcellをpersistentとし、candidate前景とのoverlap `0.70`以上かつdynamic foreground `0.30`未満なら固定UIとして抑制する。mask自体はOCR cropから削らない。ROI/media/解析のresetで履歴を破棄し、固定UI上へ動的なメッセージが重なった場合は新candidateへ進める。
+- `src/core/events/messageObservation.ts` のACTIVEはabsence 3sampleでcloseし、15秒でstale closeする。`MessageObservation`は`lifecycle` (`active`/`closed`) と`resolution` (`pending`/`resolved`/`ocr_unknown`/`unread`) に加え、主ログ上の価値を`disposition` (`primary`/`review`/`suppressed`)で分離する。
+- observation commit時だけ既存OCR schedulerへpriority sampleを1件渡す。queue、distinct FIFO、同一fingerprint置換、fallback、retry、retry preemption、worker request/responseの全経路でoptional `observationId`を維持する。表示終了後もOCR jobが残る場合は`closed + pending`で、全候補settle後に最終状態を決める。
+- resolutionは候補全体から `BattleEvent > 実際に生成されたUnknownEvent > 強いvisual evidenceのunread > visual/OCR双方が弱いsuppressed` の順で決める。`ocr_unknown/review`は`unknownEventIds.length > 0`が必須で、`src/core/events/timeline.ts`のUnknown gate decisionを重複実装せず再利用する。empty OCRからUnknownEventを捏造せず、late resultによる`unread/suppressed -> ocr_unknown/resolved`だけを許可する。
+- `src/core/events/observationMerge.ts`は1.5秒以内の隣接観測について、片方だけがresolvedで、OCR similarity、visual fingerprint、resolved entity、間の別resolved eventを組み合わせて安全にmergeする。resolved側をtargetにし、secondaryは削除せず`merged_duplicate`として参照を残す。
+- 右側のライブイベントログはpure selectorを通し、committed pending、resolved、unread、実際のUnknownEventを持つreviewだけを表示する。`observation.id`をDOM keyに`検出中 -> 解析中 -> 解決 / 未解決 / 未読`を同じ行で更新し、raw OCR garbageは表示しない。resolved bundleは全`BattleEvent`をcanonical表示し、未解決は汎用文言にする。raw/normalized OCRはOCR Raw、Unknown/Timeline詳細、JSON exportに残る。
+- crop evidenceは観測ごとにbest 1件を基本とし、既存の全体上限80件を共有する。watcher sampleそのものはReact stateやSystemログへ毎回流さず、candidate/commit/suppress/progressive/switch/merge/resolution transitionだけをbounded diagnosticsへ追加する。統計は従来どおり`BattleEvent`から計算し、`MessageObservation`やsuppressed observationをevent typeへ推測変換しない。
 
 ## M3 OCR Boundary
 
@@ -96,7 +100,7 @@ M4.5 adds the template matcher that later generated champout rules can feed:
 
 M5 turns OCR/parser output into reviewable in-memory evidence:
 
-- `src/core/events/timeline.ts` converts parser results into `OCRMessage`, `BattleEvent`, or `UnknownEvent` records without depending on React.
+- `src/core/events/timeline.ts` converts parser results into `OCRMessage`, `BattleEvent`, or `UnknownEvent` records without depending on React. Unknown gateはreason付きdecisionを返し、短文、timer、UI fragment、記号noise、prefix-only、低confidenceなどを主ログのreviewへ昇格させない。
 - Raw OCR text is kept on every OCR message and timeline item; normalized text remains derived display data.
 - Repeated same-message timeline items within a short near-frame window are suppressed, while raw OCR log entries remain visible.
 - The live review panel is viewport-bounded and tabbed across timeline, resolved events, unknowns, raw OCR, and system logs. It is for monitoring and triage, not for dumping every log category into the page body.
@@ -108,7 +112,7 @@ M5 turns OCR/parser output into reviewable in-memory evidence:
 M6 makes the review data durable without adding a runtime server:
 
 - `src/storage/export.ts` builds schema-versioned Battle Log JSON documents from message observations, OCR messages, parsed events, unknowns, ROI metadata, media metadata, bounded crop evidence, and manual corrections. OCR messageには最大3件の候補履歴を保持し、HUD/VSの永続集計と最大64件のphase遷移もexportする。session履歴はmessage observation 512件、OCR 1024件、event 512件、unknown 512件まで保持し、UIはlive observation/resolved/unknown各48件とOCR Raw 30件だけを描画する。
-- Battle Log JSONの`messageObservations`と`messageObservationSummary`は後方互換fieldである。旧JSONは空配列と空summaryへbackfillし、観測がない場合の右ライブログは従来のresolved eventsを表示する。`bestEvidenceRef`はbounded evidenceの参照だけを保存し、Object URLを永続参照にしない。
+- Battle Log JSONの`messageObservations`と`messageObservationSummary`は後方互換fieldである。disposition、suppression reason、commit/persistent/dynamic score、merge先はoptional fieldとして保存し、欠落する旧JSONはresolutionとUnknownEvent参照からbackfillする。観測がない場合や一部eventが観測へ未紐付けの場合も右ライブログは従来のresolved eventsをfallback表示する。provisional candidateはexportせず、`bestEvidenceRef`はbounded evidenceの参照だけを保存し、Object URLを永続参照にしない。
 - `src/storage/indexedDb.ts` is the only browser storage adapter for Battle Logs. It stores the current document in IndexedDB and can restore the latest saved log after a reload.
 - JSON import is for user-controlled Battle Log restore, not champout/template import. Imported logs are validated by `schemaVersion` before they replace the review state.
 - Events CSV and Unknown messages CSV exports are derived from the same Battle Log document. Unknown CSV includes review notes from durable manual corrections.

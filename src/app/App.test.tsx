@@ -117,6 +117,32 @@ function getBadgeForText(label: string) {
   return screen.getByText(label).closest(".input-badge");
 }
 
+function createMessageWatchClock() {
+  let nowMs = 0;
+
+  vi.spyOn(performance, "now").mockImplementation(() => nowMs);
+
+  return {
+    set(now: number) {
+      nowMs = now;
+    },
+  };
+}
+
+function commitMessageWatchCandidate(
+  watchFrame: () => void,
+  clock: ReturnType<typeof createMessageWatchClock>,
+) {
+  act(() => {
+    clock.set(0);
+    watchFrame();
+    clock.set(125);
+    watchFrame();
+    clock.set(250);
+    watchFrame();
+  });
+}
+
 describe("App", () => {
   beforeEach(() => {
     vi.useRealTimers();
@@ -951,6 +977,7 @@ describe("App", () => {
 
   it("retries a weak block candidate and records only the selected linewise switch event", async () => {
     const user = userEvent.setup();
+    const watchClock = createMessageWatchClock();
     const canvasContext = {
       drawImage: vi.fn(),
       getImageData: vi.fn(
@@ -981,7 +1008,22 @@ describe("App", () => {
     const worker = mockOcrWorkers[0];
     const watchFrame = samplingInterval.mock.calls.find(([, timeout]) => timeout === 83)?.[0];
     expect(typeof watchFrame).toBe("function");
-    act(() => (watchFrame as () => void)());
+
+    act(() => {
+      watchClock.set(0);
+      (watchFrame as () => void)();
+    });
+    expect(screen.getByLabelText("live event log")).not.toHaveTextContent(
+      "バトルメッセージを検出",
+    );
+    expect(worker.postMessage).not.toHaveBeenCalled();
+
+    act(() => {
+      watchClock.set(125);
+      (watchFrame as () => void)();
+      watchClock.set(250);
+      (watchFrame as () => void)();
+    });
 
     const liveEventLog = screen.getByLabelText("live event log");
     const observationRow = within(liveEventLog)
@@ -1075,6 +1117,7 @@ describe("App", () => {
 
   it("updates the detected row to unread without inventing an UnknownEvent when OCR stays empty", async () => {
     const user = userEvent.setup();
+    const watchClock = createMessageWatchClock();
     const canvasContext = {
       drawImage: vi.fn(),
       getImageData: vi.fn(
@@ -1105,7 +1148,7 @@ describe("App", () => {
     const worker = mockOcrWorkers[0];
     const watchFrame = samplingInterval.mock.calls.find(([, timeout]) => timeout === 83)?.[0];
     expect(typeof watchFrame).toBe("function");
-    act(() => (watchFrame as () => void)());
+    commitMessageWatchCandidate(watchFrame as () => void, watchClock);
 
     const liveEventLog = screen.getByLabelText("live event log");
     const observationRow = within(liveEventLog)
@@ -1159,6 +1202,7 @@ describe("App", () => {
 
   it("keeps usable OCR text unresolved when a later fallback candidate errors", async () => {
     const user = userEvent.setup();
+    const watchClock = createMessageWatchClock();
     const canvasContext = {
       drawImage: vi.fn(),
       getImageData: vi.fn(
@@ -1188,7 +1232,7 @@ describe("App", () => {
     const worker = mockOcrWorkers[0];
     const watchFrame = samplingInterval.mock.calls.find(([, timeout]) => timeout === 83)?.[0];
     expect(typeof watchFrame).toBe("function");
-    act(() => (watchFrame as () => void)());
+    commitMessageWatchCandidate(watchFrame as () => void, watchClock);
     await waitFor(() => expect(worker.postMessage).toHaveBeenCalledTimes(1));
     const firstRequest = worker.postMessage.mock.calls[0][0];
     expect(firstRequest.type).toBe("recognize");
@@ -1233,15 +1277,23 @@ describe("App", () => {
     const liveEventLog = screen.getByLabelText("live event log");
     await waitFor(() => {
       expect(liveEventLog).toHaveTextContent("[未解決]");
-      expect(liveEventLog).toHaveTextContent("OCR: くろまろは ー");
+      expect(liveEventLog).toHaveTextContent("内容を解決できませんでした");
+      expect(liveEventLog).not.toHaveTextContent("OCR: くろまろは ー");
       expect(liveEventLog).not.toHaveTextContent("[未読]");
     });
     await user.click(screen.getByRole("tab", { name: "ログ" }));
-    expect(within(screen.getByRole("tab", { name: /Unknown/ })).getByText("0")).toBeInTheDocument();
+    expect(within(screen.getByRole("tab", { name: /Unknown/ })).getByText("1")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: /OCR Raw/ }));
+    expect(
+      within(screen.getByRole("tabpanel", { name: /OCR Raw/ })).getAllByText(
+        "くろまろは ー",
+      ).length,
+    ).toBeGreaterThan(0);
   });
 
   it("preempts fallback when a different message fingerprint is waiting", async () => {
     const user = userEvent.setup();
+    const watchClock = createMessageWatchClock();
     let messageRegion: "left" | "right" = "left";
     const canvasContext = {
       drawImage: vi.fn(),
@@ -1277,7 +1329,7 @@ describe("App", () => {
     const worker = mockOcrWorkers[0];
     const watchFrame = samplingInterval.mock.calls.find(([, timeout]) => timeout === 83)?.[0];
     expect(typeof watchFrame).toBe("function");
-    act(() => (watchFrame as () => void)());
+    commitMessageWatchCandidate(watchFrame as () => void, watchClock);
     await waitFor(() => expect(worker.postMessage).toHaveBeenCalledTimes(1));
     const firstRequest = worker.postMessage.mock.calls[0][0];
 
@@ -1288,7 +1340,13 @@ describe("App", () => {
 
     messageRegion = "right";
     act(() => {
+      watchClock.set(700);
       (watchFrame as () => void)();
+      watchClock.set(800);
+      (watchFrame as () => void)();
+      watchClock.set(900);
+      (watchFrame as () => void)();
+      watchClock.set(1000);
       (watchFrame as () => void)();
     });
 
@@ -1556,6 +1614,13 @@ describe("App", () => {
         unknownEventIds: [],
         failureReason: "parser_unknown",
         openedWhileOcrBusy: false,
+        disposition: "suppressed",
+        suppressionReason: "ocr_noise_gate",
+        commitScore: 0.2,
+        persistentUiOverlapRatio: 0.8,
+        dynamicForegroundRatio: 0.2,
+        unknownGateReason: "symbol_noise",
+        mergedIntoObservationId: null,
       },
       {
         id: "msgobs_bundle",
@@ -1581,6 +1646,13 @@ describe("App", () => {
         unknownEventIds: [],
         failureReason: null,
         openedWhileOcrBusy: false,
+        disposition: "primary",
+        suppressionReason: null,
+        commitScore: 0.8,
+        persistentUiOverlapRatio: 0.1,
+        dynamicForegroundRatio: 0.9,
+        unknownGateReason: null,
+        mergedIntoObservationId: null,
       },
     ];
     const battleLog = createBattleLogDocument({
@@ -1631,12 +1703,19 @@ describe("App", () => {
 
     const liveEventLog = screen.getByLabelText("live event log");
     await waitFor(() => {
-      expect(within(liveEventLog).getAllByRole("listitem")).toHaveLength(2);
+      expect(within(liveEventLog).getAllByRole("listitem")).toHaveLength(1);
       expect(liveEventLog).toHaveTextContent("マフォクシーの ねっぷう!");
       expect(liveEventLog).toHaveTextContent("ゆけっ! エルフーン!");
-      expect(liveEventLog).toHaveTextContent("[未解決]");
-      expect(liveEventLog).toHaveTextContent("OCR: ガフリアスの じじん");
+      expect(liveEventLog).not.toHaveTextContent("[未解決]");
+      expect(liveEventLog).not.toHaveTextContent("OCR: ガフリアスの じじん");
     });
+    await user.click(screen.getByRole("tab", { name: "ログ" }));
+    await user.click(screen.getByRole("tab", { name: /OCR Raw/ }));
+    expect(
+      within(screen.getByRole("tabpanel", { name: /OCR Raw/ })).getAllByText(
+        "ガフリアスの じじん",
+      ).length,
+    ).toBeGreaterThan(0);
   });
 
   it("configures ROI from analysis and data management", async () => {
