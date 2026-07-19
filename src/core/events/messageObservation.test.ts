@@ -4,6 +4,7 @@ import type {
 } from "../preprocess/messagePresenceDetection";
 import type { MessageMaskFingerprint } from "../preprocess/messagePreprocess";
 import {
+  admitMessageObservationOcr,
   advanceMessageWatcher,
   attachMessageObservationOcrMessage,
   closeActiveMessageWatcher,
@@ -12,6 +13,7 @@ import {
   createMessageObservation,
   recordMessageObservationFailure,
   recordMessageObservationOcrAttempt,
+  rejectMessageObservationOcrForPhase,
   resolveMessageObservationAsOcrUnknown,
   resolveMessageObservationWithEvents,
   settleMessageObservationUnread,
@@ -242,6 +244,50 @@ describe("message observation", () => {
       disposition: "primary",
       failureReason: "ocr_timeout",
     });
+  });
+
+  it("keeps a phase-rejected no-attempt observation suppressed", () => {
+    const rejected = rejectMessageObservationOcrForPhase(
+      createPendingObservation("phase-rejected"),
+      "phase_rejected",
+    );
+    const closed = closeMessageObservation(rejected, {
+      closedAtMs: 1700,
+      frameEnd: 17,
+    });
+    const settled = settleMessageObservationUnread(closed, {
+      pendingOcrJobCount: 0,
+      hasUsableOcrText: false,
+      failureReason: "no_ocr_attempt",
+    });
+
+    expect(settled).toMatchObject({
+      resolution: "unread",
+      disposition: "suppressed",
+      suppressionReason: "phase_gate",
+      ocrAdmissionReason: "phase_rejected",
+      failureReason: "no_ocr_attempt",
+    });
+    expect(shouldShowObservationInPrimaryLog(settled)).toBe(false);
+  });
+
+  it("promotes a phase-waiting observation before OCR is queued", () => {
+    const waiting = suppressMessageObservation(
+      createPendingObservation("phase-waiting"),
+      "phase_gate",
+    );
+    const admitted = admitMessageObservationOcr(
+      waiting,
+      "phase_confirmed",
+    );
+
+    expect(admitted).toMatchObject({
+      resolution: "pending",
+      disposition: "primary",
+      suppressionReason: null,
+      ocrAdmissionReason: "phase_confirmed",
+    });
+    expect(shouldShowObservationInPrimaryLog(admitted)).toBe(true);
   });
 
   it("creates review state only when an UnknownEvent actually exists", () => {

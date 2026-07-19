@@ -232,7 +232,129 @@ function normalizeImportedMessageObservation(
     unknownGateReason: observation.unknownGateReason ?? null,
     mergedIntoObservationId:
       observation.mergedIntoObservationId ?? null,
+    phaseAtCommit:
+      observation.phaseAtCommit === "unknown" ||
+      observation.phaseAtCommit === "message_candidate" ||
+      observation.phaseAtCommit === "hud" ||
+      observation.phaseAtCommit === "ended"
+        ? observation.phaseAtCommit
+        : null,
+    ocrAdmissionReason:
+      observation.ocrAdmissionReason === "phase_confirmed" ||
+      observation.ocrAdmissionReason === "phase_transition_grace" ||
+      observation.ocrAdmissionReason === "strong_visual_fallback" ||
+      observation.ocrAdmissionReason === "phase_rejected" ||
+      observation.ocrAdmissionReason === "battle_ended"
+        ? observation.ocrAdmissionReason
+        : null,
   } satisfies MessageObservation;
+}
+
+function normalizePhaseDetectionSummary(
+  value: unknown,
+): PhaseDetectionSummary {
+  const empty = createEmptyPhaseDetectionSummary();
+
+  if (!isRecord(value)) {
+    return empty;
+  }
+
+  const normalizeSignalSummary = (
+    signal: unknown,
+    fallback: PhaseDetectionSummary["opponentHud"],
+  ) => {
+    if (!isRecord(signal)) {
+      return fallback;
+    }
+
+    return {
+      sampleCount:
+        typeof signal.sampleCount === "number"
+          ? signal.sampleCount
+          : fallback.sampleCount,
+      visibleCount:
+        typeof signal.visibleCount === "number"
+          ? signal.visibleCount
+          : fallback.visibleCount,
+      scoreTotal:
+        typeof signal.scoreTotal === "number"
+          ? signal.scoreTotal
+          : fallback.scoreTotal,
+      maxScore:
+        typeof signal.maxScore === "number"
+          ? signal.maxScore
+          : fallback.maxScore,
+    };
+  };
+  const transitionCounts = isRecord(value.transitionCounts)
+    ? value.transitionCounts
+    : {};
+  const ocrAdmissionCounts = isRecord(value.ocrAdmissionCounts)
+    ? value.ocrAdmissionCounts
+    : {};
+
+  return {
+    opponentHud: normalizeSignalSummary(
+      value.opponentHud,
+      empty.opponentHud,
+    ),
+    playerHud: normalizeSignalSummary(
+      value.playerHud,
+      empty.playerHud,
+    ),
+    vsSplash: normalizeSignalSummary(
+      value.vsSplash,
+      empty.vsSplash,
+    ),
+    transitionCounts: {
+      battleHudRose:
+        typeof transitionCounts.battleHudRose === "number"
+          ? transitionCounts.battleHudRose
+          : 0,
+      battleHudFell:
+        typeof transitionCounts.battleHudFell === "number"
+          ? transitionCounts.battleHudFell
+          : 0,
+      vsFell:
+        typeof transitionCounts.vsFell === "number"
+          ? transitionCounts.vsFell
+          : 0,
+      messagePhaseOpened:
+        typeof transitionCounts.messagePhaseOpened === "number"
+          ? transitionCounts.messagePhaseOpened
+          : 0,
+      messagePhaseClosed:
+        typeof transitionCounts.messagePhaseClosed === "number"
+          ? transitionCounts.messagePhaseClosed
+          : 0,
+      messagePhaseExpired:
+        typeof transitionCounts.messagePhaseExpired === "number"
+          ? transitionCounts.messagePhaseExpired
+          : 0,
+    },
+    ocrAdmissionCounts: {
+      confirmed:
+        typeof ocrAdmissionCounts.confirmed === "number"
+          ? ocrAdmissionCounts.confirmed
+          : 0,
+      grace:
+        typeof ocrAdmissionCounts.grace === "number"
+          ? ocrAdmissionCounts.grace
+          : 0,
+      fallback:
+        typeof ocrAdmissionCounts.fallback === "number"
+          ? ocrAdmissionCounts.fallback
+          : 0,
+      deferred:
+        typeof ocrAdmissionCounts.deferred === "number"
+          ? ocrAdmissionCounts.deferred
+          : 0,
+      rejected:
+        typeof ocrAdmissionCounts.rejected === "number"
+          ? ocrAdmissionCounts.rejected
+          : 0,
+    },
+  };
 }
 
 export function parseBattleLogJson(text: string): BattleLogParseResult {
@@ -319,7 +441,9 @@ export function parseBattleLogJson(text: string): BattleLogParseResult {
           typeof observation.commitScore !== "number" ||
           typeof observation.persistentUiOverlapRatio !== "number" ||
           typeof observation.dynamicForegroundRatio !== "number" ||
-          !("mergedIntoObservationId" in observation)),
+          !("mergedIntoObservationId" in observation) ||
+          !("phaseAtCommit" in observation) ||
+          !("ocrAdmissionReason" in observation)),
     );
     parsed.messageObservations = parsed.messageObservations.map(
       normalizeImportedMessageObservation,
@@ -343,8 +467,10 @@ export function parseBattleLogJson(text: string): BattleLogParseResult {
 
   if (!isRecord(parsed.phaseDetectionSummary)) {
     warnings.push("phase detection summaryがないため空集計として扱います。");
-    parsed.phaseDetectionSummary = createEmptyPhaseDetectionSummary();
   }
+  parsed.phaseDetectionSummary = normalizePhaseDetectionSummary(
+    parsed.phaseDetectionSummary,
+  );
 
   if (!Array.isArray(parsed.phaseTransitions)) {
     warnings.push("phase transitionsがないため遷移履歴なしで読み込みます。");

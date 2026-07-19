@@ -114,11 +114,14 @@ const messageObservation: MessageObservation = {
   dynamicForegroundRatio: 0.86,
   unknownGateReason: null,
   mergedIntoObservationId: null,
+  phaseAtCommit: "message_candidate",
+  ocrAdmissionReason: "phase_confirmed",
 };
 
 const sampleDiagnostic: FrameSampleDiagnostic = {
   id: "sample_diag_1",
   battleId: "battle_test",
+  observationId: "msg_obs_1",
   frameIndex: 4,
   timestampMs: 1200,
   stage: "skippedBusy",
@@ -183,6 +186,14 @@ describe("battle log export", () => {
             vsFell: 1,
             messagePhaseOpened: 2,
             messagePhaseClosed: 1,
+            messagePhaseExpired: 0,
+          },
+          ocrAdmissionCounts: {
+            confirmed: 1,
+            grace: 0,
+            fallback: 0,
+            deferred: 0,
+            rejected: 0,
           },
         },
         phaseTransitions: Array.from({ length: 70 }, (_, index) => ({
@@ -225,6 +236,7 @@ describe("battle log export", () => {
     expect(document.ocrMessages[0].observationId).toBe("msg_obs_1");
     expect(document.events[0].observationId).toBe("msg_obs_1");
     expect(document.phaseDetectionSummary.opponentHud.sampleCount).toBe(10);
+    expect(document.phaseDetectionSummary.ocrAdmissionCounts.confirmed).toBe(1);
     expect(document.phaseTransitions).toHaveLength(64);
     expect(document.phaseTransitions[0]).toMatchObject({
       id: "phase_transition_7",
@@ -500,6 +512,8 @@ describe("battle log export", () => {
       Partial<MessageObservation>
     >;
     delete olderObservation.openedWhileOcrBusy;
+    delete olderObservation.phaseAtCommit;
+    delete olderObservation.ocrAdmissionReason;
     delete olderDocument.messageObservationSummary;
 
     const result = parseBattleLogJson(JSON.stringify(olderDocument));
@@ -507,7 +521,12 @@ describe("battle log export", () => {
     expect(result).toMatchObject({
       ok: true,
       document: {
-        messageObservations: [{ id: "msg_obs_1", openedWhileOcrBusy: false }],
+        messageObservations: [{
+          id: "msg_obs_1",
+          openedWhileOcrBusy: false,
+          phaseAtCommit: null,
+          ocrAdmissionReason: null,
+        }],
         messageObservationSummary: {
           detectedCount: 1,
           resolvedCount: 1,
@@ -518,6 +537,104 @@ describe("battle log export", () => {
         "message observationの追加fieldがないため既存状態から補完しました。",
         "message observation summaryがないため観測履歴から再集計します。",
       ],
+    });
+  });
+
+  it("round-trips phase admission evidence and deep-backfills an older phase summary", () => {
+    const phaseSuppressedObservation: MessageObservation = {
+      ...messageObservation,
+      id: "msg_obs_phase_rejected",
+      resolution: "unread",
+      eventIds: [],
+      ocrMessageIds: [],
+      ocrAttemptCount: 0,
+      disposition: "suppressed",
+      suppressionReason: "phase_gate",
+      failureReason: "no_ocr_attempt",
+      phaseAtCommit: "hud",
+      ocrAdmissionReason: "phase_rejected",
+    };
+    const legacy = {
+      schemaVersion: "0.1.0",
+      appVersion: "0.1.0",
+      exportedAt: "2026-06-30T00:00:00.000Z",
+      battle: {
+        id: "battle_test",
+        title: "Phase admission",
+        startedAt: null,
+      },
+      ocrMessages: [],
+      events: [],
+      unknowns: [],
+      messageObservations: [phaseSuppressedObservation],
+      sampleDiagnostics: [sampleDiagnostic],
+      phaseDetectionSummary: {
+        opponentHud: {
+          sampleCount: 12,
+          visibleCount: 7,
+          scoreTotal: 6.4,
+          maxScore: 0.9,
+        },
+        playerHud: {
+          sampleCount: 12,
+          visibleCount: 6,
+          scoreTotal: 5.8,
+          maxScore: 0.86,
+        },
+        vsSplash: {
+          sampleCount: 2,
+          visibleCount: 1,
+          scoreTotal: 0.7,
+          maxScore: 0.7,
+        },
+        transitionCounts: {
+          battleHudRose: 2,
+          battleHudFell: 1,
+          vsFell: 1,
+          messagePhaseOpened: 2,
+          messagePhaseClosed: 2,
+        },
+      },
+      phaseTransitions: [],
+      frameEvidence: [],
+      manualCorrections: [],
+    };
+
+    const result = parseBattleLogJson(JSON.stringify(legacy));
+
+    expect(result).toMatchObject({
+      ok: true,
+      document: {
+        messageObservations: [
+          {
+            id: "msg_obs_phase_rejected",
+            disposition: "suppressed",
+            suppressionReason: "phase_gate",
+            phaseAtCommit: "hud",
+            ocrAdmissionReason: "phase_rejected",
+          },
+        ],
+        sampleDiagnostics: [
+          {
+            id: "sample_diag_1",
+            observationId: "msg_obs_1",
+          },
+        ],
+        phaseDetectionSummary: {
+          opponentHud: { sampleCount: 12 },
+          transitionCounts: {
+            battleHudRose: 2,
+            messagePhaseExpired: 0,
+          },
+          ocrAdmissionCounts: {
+            confirmed: 0,
+            grace: 0,
+            fallback: 0,
+            deferred: 0,
+            rejected: 0,
+          },
+        },
+      },
     });
   });
 
@@ -568,6 +685,8 @@ describe("battle log export", () => {
             id: "msg_obs_1",
             disposition: "primary",
             suppressionReason: null,
+            phaseAtCommit: "message_candidate",
+            ocrAdmissionReason: "phase_confirmed",
           },
           {
             id: "msg_obs_merged",
@@ -601,6 +720,8 @@ describe("battle log export", () => {
     delete legacyUnknown.dynamicForegroundRatio;
     delete legacyUnknown.unknownGateReason;
     delete legacyUnknown.mergedIntoObservationId;
+    delete legacyUnknown.phaseAtCommit;
+    delete legacyUnknown.ocrAdmissionReason;
     legacy.messageObservations = [legacyUnknown];
 
     const backfilled = parseBattleLogJson(JSON.stringify(legacy));
@@ -614,6 +735,8 @@ describe("battle log export", () => {
             disposition: "suppressed",
             suppressionReason: null,
             mergedIntoObservationId: null,
+            phaseAtCommit: null,
+            ocrAdmissionReason: null,
           },
         ],
       },

@@ -30,6 +30,7 @@ import {
   type FrameSampleDiagnosticStage,
   type MessageObservation,
   type MessageObservationFailureReason,
+  type MessageOcrAdmissionReason,
   type NormalizedRoi,
   type OCRMessage,
   type OCRRecognitionCandidateTrace,
@@ -51,6 +52,7 @@ import {
 } from "../core/events/timeline";
 import { renderBattleEventCanonicalText } from "../core/events/canonicalText";
 import {
+  admitMessageObservationOcr,
   advanceMessageWatcher,
   attachMessageObservationOcrMessage,
   closeActiveMessageWatcher,
@@ -60,9 +62,11 @@ import {
   isStrongVisualMessageObservation,
   recordMessageObservationFailure,
   recordMessageObservationOcrAttempt,
+  rejectMessageObservationOcrForPhase,
   resolveMessageObservationAsOcrUnknown,
   resolveMessageObservationWithEvents,
   settleMessageObservationUnread,
+  suppressMessageObservation,
   updateMessageObservationBestEvidence,
   type MessageWatcherCloseReason,
   type MessageWatcherSample,
@@ -99,6 +103,13 @@ import {
   type BattleHudSignal,
   type VsSplashSignal,
 } from "../core/preprocess/hudPhaseDetection";
+import {
+  advanceMessagePhaseGate,
+  createInitialMessagePhaseGateState,
+  endMessagePhase,
+  recordMessagePhaseActivity,
+  type MessagePhaseGateState,
+} from "../core/preprocess/messagePhaseGate";
 import { mapDisplayRoiToSourceRect } from "../core/media/roiMapping";
 import { createTesseractWorkerConfig } from "../core/ocr/tesseractConfig";
 import type {
@@ -119,6 +130,9 @@ import {
   shouldPreemptOcrRetry,
   takeNextDeferredOcrSample,
 } from "../core/ocr/ocrScheduler";
+import {
+  decideMessagePhaseOcrAdmission,
+} from "../core/ocr/messagePhaseOcrAdmission";
 import {
   getParsedBattleEvents,
   parseBattleMessage,
@@ -190,6 +204,7 @@ const HEADER_MEDIA_SETTINGS_STORAGE_KEY = "pokechronicle:header-media-settings:v
 const ROI_SETTINGS_STORAGE_KEY = "pokechronicle:roi-settings:v1";
 const RESOLVED_LOG_RESIZE_STEP = 24;
 const MAX_PENDING_OCR_JOBS = 1;
+const MAX_PHASE_WAITING_OCR_SAMPLES = 3;
 const MAX_OCR_ATTEMPTS_PER_OBSERVATION = 2;
 const OCR_JOB_TIMEOUT_MS = 60_000;
 const TIMELINE_DUPLICATE_WINDOW_MS = 2500;
@@ -207,6 +222,7 @@ const SAMPLE_DIAGNOSTIC_STAGES: readonly FrameSampleDiagnosticStage[] = [
   "vsFell",
   "messagePhaseOpened",
   "messagePhaseClosed",
+  "messagePhaseExpired",
   "skippedPhase",
   "messageWatchCandidateStarted",
   "messageWatchCandidateCommitted",
@@ -230,6 +246,9 @@ const SAMPLE_DIAGNOSTIC_STAGES: readonly FrameSampleDiagnosticStage[] = [
   "ocrDeferredDropped",
   "ocrCandidateSelected",
   "ocrCandidateConflict",
+  "ocrPhaseDeferred",
+  "ocrPhaseAdmitted",
+  "ocrPhaseRejected",
   "skippedBusy",
   "skippedPreprocess",
   "skippedDensity",
@@ -237,10 +256,6 @@ const SAMPLE_DIAGNOSTIC_STAGES: readonly FrameSampleDiagnosticStage[] = [
   "empty",
   "error",
 ];
-const HUD_VISIBLE_STREAK_REQUIRED = 2;
-const HUD_HIDDEN_STREAK_REQUIRED = 2;
-const VS_VISIBLE_STREAK_REQUIRED = 2;
-const VS_HIDDEN_STREAK_REQUIRED = 2;
 const DEFAULT_PREPROCESS_OPTIONS: MessagePreprocessOptions = {
   whiteThreshold: 180,
   background: "black",
@@ -395,17 +410,20 @@ type VsSplashObservation = {
   signal: VsSplashSignal;
 };
 
-type MessagePhase = "unknown" | "message_candidate" | "hud" | "ended";
+type PhaseAdmissionVisualEvidence = {
+  persistentUiModelWarmedUp: boolean;
+  commitScore: number;
+  presenceScore: number;
+  persistentUiOverlapRatio: number;
+  dynamicForegroundRatio: number;
+  lineBandCount: number;
+  componentCount: number;
+  largestComponentRatio: number;
+};
 
-type PhaseGateRuntimeState = {
-  messagePhase: MessagePhase;
-  hpStableVisible: boolean | null;
-  hpVisibleStreak: number;
-  hpHiddenStreak: number;
-  vsStableVisible: boolean | null;
-  vsVisibleStreak: number;
-  vsHiddenStreak: number;
-  hasOpenedFromVs: boolean;
+type PhaseWaitingOcrSample = {
+  sample: FrameSample;
+  evidence: PhaseAdmissionVisualEvidence;
 };
 
 type OCRLogEntry = {
@@ -831,6 +849,7 @@ function formatDiagnosticStage(stage: FrameSampleDiagnosticStage) {
     vsFell: "vsFell",
     messagePhaseOpened: "messagePhaseOpened",
     messagePhaseClosed: "messagePhaseClosed",
+    messagePhaseExpired: "messagePhaseExpired",
     skippedPhase: "skippedPhase",
     waitSampled: "waitSampled",
     waitRose: "waitRose",
@@ -860,6 +879,9 @@ function formatDiagnosticStage(stage: FrameSampleDiagnosticStage) {
     ocrDeferredDropped: "ocrDeferredDropped",
     ocrCandidateSelected: "ocrCandidateSelected",
     ocrCandidateConflict: "ocrCandidateConflict",
+    ocrPhaseDeferred: "ocrPhaseDeferred",
+    ocrPhaseAdmitted: "ocrPhaseAdmitted",
+    ocrPhaseRejected: "ocrPhaseRejected",
     skippedBusy: "skippedBusy",
     skippedPreprocess: "skippedPreprocess",
     skippedDensity: "skippedDensity",
@@ -1988,6 +2010,7 @@ export function App() {
   const pendingOcrJobsRef = useRef(0);
   const activeOcrJobRef = useRef<ActiveOcrJob | null>(null);
   const deferredOcrSamplesRef = useRef<FrameSample[]>([]);
+  const phaseWaitingOcrSamplesRef = useRef<PhaseWaitingOcrSample[]>([]);
   const scheduledDeferredObservationIdsRef = useRef<Set<string>>(new Set());
   const messageWatcherStateRef = useRef<MessageWatcherState>(
     createInitialMessageWatcherState(),
@@ -2004,6 +2027,23 @@ export function App() {
     Map<string, UnknownEventGateReason>
   >(new Map());
   const queueOcrRecognitionRef = useRef<(sample: FrameSample) => void>(() => undefined);
+  const requestPhaseAwareOcrRef = useRef<
+    (
+      sample: FrameSample,
+      evidence: PhaseAdmissionVisualEvidence,
+      nowMs?: number,
+    ) => void
+  >(() => undefined);
+  const flushPhaseWaitingOcrSamplesRef = useRef<(nowMs: number) => void>(
+    () => undefined,
+  );
+  const dropPhaseWaitingOcrSamplesRef = useRef<
+    (
+      reason: "phase_rejected" | "battle_ended",
+      timestampMs: number,
+      frameIndex: number,
+    ) => void
+  >(() => undefined);
   const phaseDetectionSummaryRef = useRef<PhaseDetectionSummary>(
     createEmptyPhaseDetectionSummary(),
   );
@@ -2097,16 +2137,9 @@ export function App() {
   const opponentHudRoiRef = useRef(opponentHudRoi);
   const playerHudRoiRef = useRef(playerHudRoi);
   const vsRoiRef = useRef(vsRoi);
-  const phaseGateStateRef = useRef<PhaseGateRuntimeState>({
-    messagePhase: "unknown",
-    hpStableVisible: null,
-    hpVisibleStreak: 0,
-    hpHiddenStreak: 0,
-    vsStableVisible: null,
-    vsVisibleStreak: 0,
-    vsHiddenStreak: 0,
-    hasOpenedFromVs: false,
-  });
+  const phaseGateStateRef = useRef<MessagePhaseGateState>(
+    createInitialMessagePhaseGateState(),
+  );
   const mediaModeRef = useRef(mediaMode);
   const preprocessOptionsRef = useRef(preprocessOptions);
   const upscaleFactorRef = useRef(upscaleFactor);
@@ -2138,6 +2171,7 @@ export function App() {
       ocrJobId: string | null = null,
     ) => {
       appendSampleDiagnostic({
+        observationId: sample.observationId ?? null,
         frameIndex: sample.frameIndex,
         timestampMs: sample.timestampMs,
         stage,
@@ -2213,6 +2247,7 @@ export function App() {
       analysis?: MessageWatchRuntimeAnalysis | null;
     }) => {
       appendSampleDiagnostic({
+        observationId: input.observationId,
         frameIndex: input.frameIndex,
         timestampMs: input.timestampMs,
         stage: input.stage,
@@ -2420,8 +2455,13 @@ export function App() {
     const scheduledCount = scheduledDeferredObservationIdsRef.current.has(observationId)
       ? 1
       : 0;
+    const phaseWaitingCount = phaseWaitingOcrSamplesRef.current.some(
+      (entry) => entry.sample.observationId === observationId,
+    )
+      ? 1
+      : 0;
 
-    return activeCount + deferredCount + scheduledCount;
+    return activeCount + deferredCount + scheduledCount + phaseWaitingCount;
   }, []);
   const settleObservationIfIdle = useCallback(
     (
@@ -2576,7 +2616,22 @@ export function App() {
           "sampled",
           "message watcher priority sample",
         );
-        queueOcrRecognitionRef.current(nextSample);
+        requestPhaseAwareOcrRef.current(nextSample, {
+          persistentUiModelWarmedUp:
+            watcherSample.analysis.persistentUiModelWarmedUp ?? false,
+          commitScore: transition.commitScore,
+          presenceScore: transition.maxPresenceScore,
+          persistentUiOverlapRatio:
+            transition.persistentUiOverlapRatio,
+          dynamicForegroundRatio:
+            transition.dynamicForegroundRatio,
+          lineBandCount:
+            watcherSample.analysis.lineBandCount ?? 0,
+          componentCount:
+            watcherSample.analysis.componentCount ?? 0,
+          largestComponentRatio:
+            watcherSample.analysis.largestComponentRatio ?? 1,
+        });
       }
     },
     [
@@ -2660,6 +2715,7 @@ export function App() {
               transition.persistentUiOverlapRatio,
             dynamicForegroundRatio:
               transition.dynamicForegroundRatio,
+            phaseAtCommit: phaseGateStateRef.current.phase,
           });
           const observation = openedWhileOcrBusy
             ? recordMessageObservationFailure(createdObservation, "ocr_busy")
@@ -2800,16 +2856,7 @@ export function App() {
     [applyMessageWatcherTransitions],
   );
   const resetPhaseGateState = useCallback(() => {
-    phaseGateStateRef.current = {
-      messagePhase: "unknown",
-      hpStableVisible: null,
-      hpVisibleStreak: 0,
-      hpHiddenStreak: 0,
-      vsStableVisible: null,
-      vsVisibleStreak: 0,
-      vsHiddenStreak: 0,
-      hasOpenedFromVs: false,
-    };
+    phaseGateStateRef.current = createInitialMessagePhaseGateState();
   }, []);
   const appendPhaseTransition = useCallback(
     (sample: FrameSample, stage: PhaseTransitionStage, detail: string) => {
@@ -2907,10 +2954,18 @@ export function App() {
   const appendPhaseDiagnostic = useCallback(
     (
       sample: FrameSample,
-      stage: "messagePhaseOpened" | "messagePhaseClosed" | "skippedPhase",
+      stage:
+        | "messagePhaseOpened"
+        | "messagePhaseClosed"
+        | "messagePhaseExpired"
+        | "skippedPhase",
       detail: string,
     ) => {
-      if (stage === "messagePhaseOpened" || stage === "messagePhaseClosed") {
+      if (
+        stage === "messagePhaseOpened" ||
+        stage === "messagePhaseClosed" ||
+        stage === "messagePhaseExpired"
+      ) {
         appendPhaseTransition(sample, stage, detail);
       }
 
@@ -2931,42 +2986,12 @@ export function App() {
     },
     [appendPhaseTransition, appendSampleDiagnostic],
   );
-  const openMessagePhase = useCallback(
-    (sample: FrameSample, reason: string) => {
-      const phaseState = phaseGateStateRef.current;
-
-      if (phaseState.messagePhase === "ended") {
-        return;
-      }
-
-      if (phaseState.messagePhase !== "message_candidate") {
-        phaseState.messagePhase = "message_candidate";
-        appendPhaseDiagnostic(sample, "messagePhaseOpened", reason);
-        addLog(`メッセージ候補フェーズを開始しました: ${reason}`);
-      }
-    },
-    [addLog, appendPhaseDiagnostic],
-  );
-  const closeMessagePhase = useCallback(
-    (sample: FrameSample, reason: string) => {
-      const phaseState = phaseGateStateRef.current;
-
-      if (phaseState.messagePhase !== "hud") {
-        phaseState.messagePhase = "hud";
-        appendPhaseDiagnostic(sample, "messagePhaseClosed", reason);
-        addLog(`メッセージ候補フェーズを終了しました: ${reason}`);
-      }
-    },
-    [addLog, appendPhaseDiagnostic],
-  );
   const handlePhaseGateObservation = useCallback(
     (
       sample: FrameSample,
       hudObservation: HudPhaseObservation,
       vsObservation: VsSplashObservation | null,
     ) => {
-      const phaseState = phaseGateStateRef.current;
-
       if (hudObservation.opponent) {
         const detail = `${hudObservation.opponent.signal.isVisible ? "visible" : "hidden"} / score ${formatSignalScore(
           hudObservation.opponent.signal,
@@ -2998,99 +3023,96 @@ export function App() {
         appendVsSplashDiagnostic(sample, "vsSampled", vsObservation, detail);
       }
 
-      if (phaseState.messagePhase === "ended") {
-        return phaseState.messagePhase;
-      }
+      const result = advanceMessagePhaseGate(
+        phaseGateStateRef.current,
+        {
+          timestampMs: sample.timestampMs,
+          hudVisible: hudObservation.isVisible,
+          vsVisible: vsObservation?.signal.isVisible ?? null,
+          hasActiveObservation:
+            messageWatcherStateRef.current.activeObservation !== null,
+        },
+      );
+      phaseGateStateRef.current = result.state;
 
-      if (vsObservation?.signal.isVisible) {
-        phaseState.vsVisibleStreak += 1;
-        phaseState.vsHiddenStreak = 0;
-      } else if (vsObservation) {
-        phaseState.vsHiddenStreak += 1;
-        phaseState.vsVisibleStreak = 0;
-      }
-
-      if (
-        vsObservation?.signal.isVisible &&
-        phaseState.vsVisibleStreak >= VS_VISIBLE_STREAK_REQUIRED &&
-        phaseState.vsStableVisible !== true
-      ) {
-        phaseState.vsStableVisible = true;
-      }
-
-      if (
-        vsObservation &&
-        !vsObservation.signal.isVisible &&
-        phaseState.vsHiddenStreak >= VS_HIDDEN_STREAK_REQUIRED &&
-        phaseState.vsStableVisible === true &&
-        !phaseState.hasOpenedFromVs
-      ) {
-        phaseState.vsStableVisible = false;
-        phaseState.hasOpenedFromVs = true;
-        appendVsSplashDiagnostic(
-          sample,
-          "vsFell",
-          vsObservation,
-          `score ${formatSignalScore(vsObservation.signal)}`,
-        );
-        openMessagePhase(sample, "VS消失");
-      }
-
-      if (hudObservation.isVisible) {
-        phaseState.hpVisibleStreak += 1;
-        phaseState.hpHiddenStreak = 0;
-      } else {
-        phaseState.hpHiddenStreak += 1;
-        phaseState.hpVisibleStreak = 0;
-      }
-
-      if (
-        hudObservation.isVisible &&
-        phaseState.hpVisibleStreak >= HUD_VISIBLE_STREAK_REQUIRED &&
-        phaseState.hpStableVisible !== true
-      ) {
-        const selected = hudObservation.selected;
-        phaseState.hpStableVisible = true;
-
-        if (selected) {
-          appendBattleHudDiagnostic(
+      for (const transition of result.transitions) {
+        if (transition === "vs_fell" && vsObservation) {
+          appendVsSplashDiagnostic(
             sample,
-            "battleHudRose",
-            selected,
-            `score ${formatSignalScore(selected.signal)}`,
+            "vsFell",
+            vsObservation,
+            `score ${formatSignalScore(vsObservation.signal)}`,
           );
+          continue;
         }
 
-        closeMessagePhase(sample, "バトルHUD出現");
-      }
+        if (transition === "battle_hud_rose") {
+          if (hudObservation.selected) {
+            appendBattleHudDiagnostic(
+              sample,
+              "battleHudRose",
+              hudObservation.selected,
+              `score ${formatSignalScore(hudObservation.selected.signal)}`,
+            );
+          }
+          continue;
+        }
 
-      if (
-        !hudObservation.isVisible &&
-        phaseState.hpHiddenStreak >= HUD_HIDDEN_STREAK_REQUIRED &&
-        phaseState.hpStableVisible !== false
-      ) {
-        const wasHudVisible = phaseState.hpStableVisible === true;
-        phaseState.hpStableVisible = false;
-
-        if (wasHudVisible) {
-          const selected = hudObservation.selected;
-
-          if (selected) {
+        if (transition === "battle_hud_fell") {
+          if (hudObservation.selected) {
             appendBattleHudDiagnostic(
               sample,
               "battleHudFell",
-              selected,
-              `score ${formatSignalScore(selected.signal)}`,
+              hudObservation.selected,
+              `score ${formatSignalScore(hudObservation.selected.signal)}`,
             );
           }
-
-          openMessagePhase(sample, "バトルHUD消失");
+          continue;
         }
+
+        if (transition === "message_phase_opened") {
+          const reason = result.transitions.includes("vs_fell")
+            ? "VS消失"
+            : "バトルHUD消失";
+          appendPhaseDiagnostic(sample, "messagePhaseOpened", reason);
+          addLog(`メッセージ候補フェーズを開始しました: ${reason}`);
+          continue;
+        }
+
+        if (transition === "message_phase_closed") {
+          appendPhaseDiagnostic(
+            sample,
+            "messagePhaseClosed",
+            "バトルHUD出現",
+          );
+          addLog("メッセージ候補フェーズを終了しました: バトルHUD出現");
+          continue;
+        }
+
+        appendPhaseDiagnostic(
+          sample,
+          "messagePhaseExpired",
+          "candidate idle lease expired",
+        );
+        addLog(
+          "メッセージ候補フェーズが無通信のまま失効したため、厳格fallbackへ戻しました。",
+        );
       }
 
-      return phaseState.messagePhase;
+      if (result.transitions.some((transition) =>
+        transition === "message_phase_opened"
+      )) {
+        flushPhaseWaitingOcrSamplesRef.current(sample.timestampMs);
+      }
+
+      return result.state.phase;
     },
-    [appendBattleHudDiagnostic, appendVsSplashDiagnostic, closeMessagePhase, openMessagePhase],
+    [
+      addLog,
+      appendBattleHudDiagnostic,
+      appendPhaseDiagnostic,
+      appendVsSplashDiagnostic,
+    ],
   );
 
   useEffect(() => {
@@ -3417,7 +3439,7 @@ export function App() {
 
     if (
       !isOcrEnabledRef.current ||
-      phaseGateStateRef.current.messagePhase === "ended"
+      phaseGateStateRef.current.phase === "ended"
     ) {
       if (deferredSample.observationId) {
         updateMessageObservationById(
@@ -3774,7 +3796,15 @@ export function App() {
           ]);
 
           if (acceptedEvents.some((acceptedEvent) => acceptedEvent.type === "battle_end")) {
-            phaseGateStateRef.current.messagePhase = "ended";
+            phaseGateStateRef.current = endMessagePhase(
+              phaseGateStateRef.current,
+              response.meta.timestampMs,
+            );
+            dropPhaseWaitingOcrSamplesRef.current(
+              "battle_ended",
+              response.meta.timestampMs,
+              response.meta.frameIndex,
+            );
             const droppedObservationIds = new Set(
               deferredOcrSamplesRef.current
                 .map((sample) => sample.observationId)
@@ -4076,6 +4106,12 @@ export function App() {
       );
       const frameIndex = messageWatchFrameIndexRef.current;
 
+      dropPhaseWaitingOcrSamplesRef.current(
+        "phase_rejected",
+        timestampMs,
+        frameIndex,
+      );
+
       if (activeObservationId && !preservedPartialResult) {
         updateMessageObservationById(activeObservationId, (observation) =>
           recordMessageObservationFailure(observation, "ocr_error"),
@@ -4313,6 +4349,315 @@ export function App() {
     queueOcrRecognitionRef.current = queueOcrRecognition;
   }, [queueOcrRecognition]);
 
+  const appendPhaseAdmissionDiagnostic = useCallback(
+    (
+      sample: FrameSample,
+      stage: Extract<
+        FrameSampleDiagnosticStage,
+        "ocrPhaseDeferred" | "ocrPhaseAdmitted" | "ocrPhaseRejected"
+      >,
+      detail: string,
+    ) => {
+      appendSampleDiagnostic({
+        observationId: sample.observationId ?? null,
+        frameIndex: sample.frameIndex,
+        timestampMs: sample.timestampMs,
+        stage,
+        detail,
+        preprocessVariantId: sample.preprocessVariantId,
+        preprocessRejectReason: sample.preprocessVariantRejectReason,
+        ocrVariantId: sample.ocrVariantId,
+        ocrForegroundPixelRatio: sample.ocrForegroundPixelRatio,
+        pendingOcrJobs: pendingOcrJobsRef.current,
+        ocrJobId: null,
+        ocrConfidence: null,
+        lineCount: sample.lineBandCount,
+      });
+    },
+    [appendSampleDiagnostic],
+  );
+
+  const requestPhaseAwareOcr = useCallback(
+    (
+      sample: FrameSample,
+      evidence: PhaseAdmissionVisualEvidence,
+      nowMs = sample.timestampMs,
+    ) => {
+      if (!isOcrEnabledRef.current || !sample.observationId) {
+        return;
+      }
+
+      const observation = messageObservationsRef.current.find(
+        (candidate) => candidate.id === sample.observationId,
+      );
+
+      if (!observation) {
+        return;
+      }
+
+      if (
+        observation.ocrAdmissionReason === "strong_visual_fallback" &&
+        phaseGateStateRef.current.phase !== "message_candidate"
+      ) {
+        return;
+      }
+
+      const phaseState = phaseGateStateRef.current;
+      const decision = decideMessagePhaseOcrAdmission({
+        phase: phaseState.phase,
+        nowMs,
+        observationOpenedAtMs: observation.openedAtMs,
+        messagePhaseClosedAtMs:
+          phaseState.phase === "hud"
+            ? phaseState.phaseChangedAtMs
+            : null,
+        ...evidence,
+      });
+
+      if (decision.action === "defer") {
+        const existingIndex =
+          phaseWaitingOcrSamplesRef.current.findIndex(
+            (entry) =>
+              entry.sample.observationId === sample.observationId,
+          );
+
+        if (existingIndex >= 0) {
+          const nextEntries = [...phaseWaitingOcrSamplesRef.current];
+          nextEntries[existingIndex] = { sample, evidence };
+          phaseWaitingOcrSamplesRef.current = nextEntries;
+          return;
+        }
+
+        if (
+          phaseWaitingOcrSamplesRef.current.length >=
+          MAX_PHASE_WAITING_OCR_SAMPLES
+        ) {
+          updateMessageObservationById(
+            sample.observationId,
+            (currentObservation) =>
+              rejectMessageObservationOcrForPhase(
+                currentObservation,
+                "phase_rejected",
+              ),
+            { timestampMs: nowMs, frameIndex: sample.frameIndex },
+          );
+          phaseDetectionSummaryRef.current.ocrAdmissionCounts.rejected += 1;
+          appendPhaseAdmissionDiagnostic(
+            sample,
+            "ocrPhaseRejected",
+            `phase ${phaseState.phase} / phase wait queue full`,
+          );
+          settleObservationIfIdle(
+            sample.observationId,
+            nowMs,
+            sample.frameIndex,
+            "no_ocr_attempt",
+          );
+          return;
+        }
+
+        phaseWaitingOcrSamplesRef.current = [
+          ...phaseWaitingOcrSamplesRef.current,
+          { sample, evidence },
+        ];
+        updateMessageObservationById(
+          sample.observationId,
+          (currentObservation) =>
+            suppressMessageObservation(
+              currentObservation,
+              "phase_gate",
+            ),
+          { timestampMs: nowMs, frameIndex: sample.frameIndex },
+        );
+        phaseDetectionSummaryRef.current.ocrAdmissionCounts.deferred += 1;
+        appendPhaseAdmissionDiagnostic(
+          sample,
+          "ocrPhaseDeferred",
+          `phase ${phaseState.phase} / retry ${decision.retryAtMs}ms`,
+        );
+        return;
+      }
+
+      phaseWaitingOcrSamplesRef.current =
+        phaseWaitingOcrSamplesRef.current.filter(
+          (entry) =>
+            entry.sample.observationId !== sample.observationId,
+        );
+
+      if (decision.action === "reject") {
+        const reason: Extract<
+          MessageOcrAdmissionReason,
+          "phase_rejected" | "battle_ended"
+        > =
+          decision.reason === "phase_ended"
+            ? "battle_ended"
+            : "phase_rejected";
+        const alreadyRejected =
+          observation.ocrAdmissionReason === reason;
+
+        updateMessageObservationById(
+          sample.observationId,
+          (currentObservation) =>
+            rejectMessageObservationOcrForPhase(
+              currentObservation,
+              reason,
+            ),
+          { timestampMs: nowMs, frameIndex: sample.frameIndex },
+        );
+        if (!alreadyRejected) {
+          phaseDetectionSummaryRef.current.ocrAdmissionCounts.rejected += 1;
+          appendPhaseAdmissionDiagnostic(
+            sample,
+            "ocrPhaseRejected",
+            `phase ${phaseState.phase} / ${decision.reason} / commit ${evidence.commitScore.toFixed(
+              2,
+            )} / presence ${evidence.presenceScore.toFixed(2)}`,
+          );
+        }
+        settleObservationIfIdle(
+          sample.observationId,
+          nowMs,
+          sample.frameIndex,
+          "no_ocr_attempt",
+        );
+        return;
+      }
+
+      const reason: Extract<
+        MessageOcrAdmissionReason,
+        | "phase_confirmed"
+        | "phase_transition_grace"
+        | "strong_visual_fallback"
+      > =
+        decision.reason === "message_candidate"
+          ? "phase_confirmed"
+          : decision.reason === "hud_trailing_grace"
+            ? "phase_transition_grace"
+            : "strong_visual_fallback";
+      const firstAdmission =
+        observation.ocrAdmissionReason !== reason;
+
+      updateMessageObservationById(
+        sample.observationId,
+        (currentObservation) =>
+          admitMessageObservationOcr(currentObservation, reason),
+        { timestampMs: nowMs, frameIndex: sample.frameIndex },
+      );
+      if (phaseState.phase === "message_candidate") {
+        phaseGateStateRef.current = recordMessagePhaseActivity(
+          phaseState,
+          nowMs,
+        );
+      }
+      if (firstAdmission) {
+        const countKey =
+          reason === "phase_confirmed"
+            ? "confirmed"
+            : reason === "phase_transition_grace"
+              ? "grace"
+              : "fallback";
+        phaseDetectionSummaryRef.current.ocrAdmissionCounts[countKey] += 1;
+        appendPhaseAdmissionDiagnostic(
+          sample,
+          "ocrPhaseAdmitted",
+          `phase ${phaseState.phase} / ${reason} / commit ${evidence.commitScore.toFixed(
+            2,
+          )} / presence ${evidence.presenceScore.toFixed(2)}`,
+        );
+      }
+      queueOcrRecognitionRef.current(sample);
+    },
+    [
+      appendPhaseAdmissionDiagnostic,
+      settleObservationIfIdle,
+      updateMessageObservationById,
+    ],
+  );
+
+  const flushPhaseWaitingOcrSamples = useCallback(
+    (nowMs: number) => {
+      const waiting = [...phaseWaitingOcrSamplesRef.current];
+
+      for (const entry of waiting) {
+        requestPhaseAwareOcr(
+          entry.sample,
+          entry.evidence,
+          nowMs,
+        );
+      }
+    },
+    [requestPhaseAwareOcr],
+  );
+
+  const dropPhaseWaitingOcrSamples = useCallback(
+    (
+      reason: "phase_rejected" | "battle_ended",
+      timestampMs: number,
+      frameIndex: number,
+    ) => {
+      const waiting = phaseWaitingOcrSamplesRef.current;
+      phaseWaitingOcrSamplesRef.current = [];
+      const byObservationId = new Map<string, FrameSample>();
+
+      for (const entry of waiting) {
+        if (entry.sample.observationId) {
+          byObservationId.set(
+            entry.sample.observationId,
+            entry.sample,
+          );
+        }
+      }
+
+      for (const [observationId, sample] of byObservationId) {
+        const observation = messageObservationsRef.current.find(
+          (candidate) => candidate.id === observationId,
+        );
+        const alreadyRejected =
+          observation?.ocrAdmissionReason === reason;
+        updateMessageObservationById(
+          observationId,
+          (currentObservation) =>
+            rejectMessageObservationOcrForPhase(
+              currentObservation,
+              reason,
+            ),
+          { timestampMs, frameIndex },
+        );
+        if (!alreadyRejected) {
+          phaseDetectionSummaryRef.current.ocrAdmissionCounts.rejected += 1;
+          appendPhaseAdmissionDiagnostic(
+            sample,
+            "ocrPhaseRejected",
+            `phase wait cleared / ${reason}`,
+          );
+        }
+        settleObservationIfIdle(
+          observationId,
+          timestampMs,
+          frameIndex,
+          "no_ocr_attempt",
+        );
+      }
+    },
+    [
+      appendPhaseAdmissionDiagnostic,
+      settleObservationIfIdle,
+      updateMessageObservationById,
+    ],
+  );
+
+  useEffect(() => {
+    requestPhaseAwareOcrRef.current = requestPhaseAwareOcr;
+    flushPhaseWaitingOcrSamplesRef.current =
+      flushPhaseWaitingOcrSamples;
+    dropPhaseWaitingOcrSamplesRef.current =
+      dropPhaseWaitingOcrSamples;
+  }, [
+    dropPhaseWaitingOcrSamples,
+    flushPhaseWaitingOcrSamples,
+    requestPhaseAwareOcr,
+  ]);
+
   useEffect(() => {
     roiRef.current = roi;
     persistentUiModelStateRef.current =
@@ -4543,6 +4888,16 @@ export function App() {
       }
 
       closeMessageWatcher(reason);
+      dropPhaseWaitingOcrSamplesRef.current(
+        "phase_rejected",
+        Math.max(
+          0,
+          Math.round(
+            performance.now() - samplingStartMsRef.current,
+          ),
+        ),
+        messageWatchFrameIndexRef.current,
+      );
       setIsSampling(false);
 
       if (message) {
@@ -4585,6 +4940,7 @@ export function App() {
         window.clearTimeout(timerId),
       );
       deferredOcrTimerIdsRef.current.clear();
+      phaseWaitingOcrSamplesRef.current = [];
 
       clearActiveOcrJob();
       stopTracks(streamRef.current);
@@ -5044,6 +5400,7 @@ export function App() {
       }
       messageWatcherStateRef.current = result.state;
       applyMessageWatcherTransitions(result.transitions, sample, source, analysis);
+      flushPhaseWaitingOcrSamplesRef.current(timestampMs);
       return true;
     },
     [addLog, applyMessageWatcherTransitions],
@@ -5105,24 +5462,41 @@ export function App() {
       appendFrameSampleDiagnostic(nextSample, "sampled");
       const messagePhase = handlePhaseGateObservation(nextSample, hudObservation, vsObservation);
 
-      if (
-        nextSample.observationId &&
-        messagePhase !== "ended"
-      ) {
-        queueOcrRecognition(nextSample);
+      if (nextSample.observationId) {
+        const waitingEntry =
+          phaseWaitingOcrSamplesRef.current.find(
+            (entry) =>
+              entry.sample.observationId === nextSample.observationId,
+          );
+        const observation = messageObservationsRef.current.find(
+          (candidate) => candidate.id === nextSample.observationId,
+        );
+        requestPhaseAwareOcrRef.current(
+          nextSample,
+          waitingEntry?.evidence ?? {
+            persistentUiModelWarmedUp: false,
+            commitScore: observation?.commitScore ?? 0,
+            presenceScore: observation?.maxPresenceScore ?? 0,
+            persistentUiOverlapRatio:
+              observation?.persistentUiOverlapRatio ?? 1,
+            dynamicForegroundRatio:
+              observation?.dynamicForegroundRatio ?? 0,
+            lineBandCount: nextSample.lineBandCount,
+            componentCount: 0,
+            largestComponentRatio: 1,
+          },
+        );
       } else {
         appendFrameSampleDiagnostic(
           nextSample,
           "skippedPhase",
-          nextSample.observationId
-            ? `phase ${messagePhase}`
-            : "message watcher has no active observation",
+          `phase ${messagePhase} / message watcher has no active observation`,
         );
       }
 
       return true;
     },
-    [addLog, appendFrameSampleDiagnostic, handlePhaseGateObservation, queueOcrRecognition],
+    [addLog, appendFrameSampleDiagnostic, handlePhaseGateObservation],
   );
 
   const handleStartSampling = useCallback(() => {
@@ -5202,6 +5576,7 @@ export function App() {
     phaseDetectionSummaryRef.current = createEmptyPhaseDetectionSummary();
     phaseTransitionsRef.current = [];
     deferredOcrSamplesRef.current = [];
+    phaseWaitingOcrSamplesRef.current = [];
     resetPhaseGateState();
     recentTimelineDeduplicationRecordsRef.current = [];
     recentConstrainedCandidateRecordsRef.current = [];

@@ -2,6 +2,8 @@ import type {
   MessageObservation,
   MessageObservationDisposition,
   MessageObservationFailureReason,
+  MessageOcrAdmissionReason,
+  MessagePhase,
   MessageObservationSummary,
   MessageObservationSuppressionReason,
   UnknownEventGateReason,
@@ -219,6 +221,7 @@ export interface CreateMessageObservationInput {
   commitScore?: number;
   persistentUiOverlapRatio?: number;
   dynamicForegroundRatio?: number;
+  phaseAtCommit?: MessagePhase | null;
 }
 
 export interface CloseMessageObservationInput {
@@ -1205,6 +1208,56 @@ export function createMessageObservation(
     dynamicForegroundRatio: input.dynamicForegroundRatio ?? 1,
     unknownGateReason: null,
     mergedIntoObservationId: null,
+    phaseAtCommit: input.phaseAtCommit ?? null,
+    ocrAdmissionReason: null,
+  };
+}
+
+export function admitMessageObservationOcr(
+  observation: MessageObservation,
+  reason: Extract<
+    MessageOcrAdmissionReason,
+    "phase_confirmed" | "phase_transition_grace" | "strong_visual_fallback"
+  >,
+): MessageObservation {
+  if (observation.resolution === "resolved") {
+    return {
+      ...observation,
+      ocrAdmissionReason: reason,
+    };
+  }
+
+  return {
+    ...observation,
+    disposition: "primary",
+    suppressionReason: null,
+    ocrAdmissionReason: reason,
+  };
+}
+
+export function rejectMessageObservationOcrForPhase(
+  observation: MessageObservation,
+  reason: Extract<
+    MessageOcrAdmissionReason,
+    "phase_rejected" | "battle_ended"
+  >,
+): MessageObservation {
+  if (
+    observation.resolution === "resolved" ||
+    (observation.resolution === "ocr_unknown" &&
+      observation.unknownEventIds.length > 0)
+  ) {
+    return {
+      ...observation,
+      ocrAdmissionReason: reason,
+    };
+  }
+
+  return {
+    ...observation,
+    disposition: "suppressed",
+    suppressionReason: "phase_gate",
+    ocrAdmissionReason: reason,
   };
 }
 
@@ -1375,11 +1428,15 @@ export function settleMessageObservationUnread(
       ? "ocr_empty"
       : "no_ocr_attempt");
 
+  const preservePhaseSuppression =
+    observation.disposition === "suppressed" &&
+    observation.suppressionReason === "phase_gate";
+
   return {
     ...observation,
     resolution: "unread",
-    disposition: "primary",
-    suppressionReason: null,
+    disposition: preservePhaseSuppression ? "suppressed" : "primary",
+    suppressionReason: preservePhaseSuppression ? "phase_gate" : null,
     failureReason: selectFailureReason(
       observation.failureReason,
       attemptedFailureReason,

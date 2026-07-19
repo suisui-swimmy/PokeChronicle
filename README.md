@@ -23,6 +23,8 @@ The M8 MVP is closed on top of the static app foundation:
 - OCRとは別の12fps軽量MessageWatcher。最大幅320pxのROIで白/黄色mask、本文行band、foreground component、visual signatureを確認し、5sample中3sample・250ms以上を満たした候補だけを観測としてcommit
 - 32x12 gridのbounded persistent UI modelとprogressive render比較で、固定HUD・timer・一瞬のnoiseを抑えつつ、描画途中の同じ文言を1つの`MessageObservation`として維持
 - `MessageObservation`単位のライブログ。committed観測だけを`検出中 → 解析中 → 解決 / 未解決 / 未読`の同じ行で更新し、1観測から複数eventもcanonical表示
+- VS消失とバトルHUD消失/再出現をpureなphase gateで安定化し、OCR投入を`message_candidate`中心へ制限。候補フェーズ外は最大500msだけphase確定を待ち、HUD復帰後1.5秒のtrailing graceまたは厳格なvisual fallbackを満たす場合だけ既存schedulerへ渡す
+- phase gateはOCRの入場制御だけを担当し、12fpsのMessageWatcherはOCR busyやphase unknownでも監視を継続。phase外の弱い観測は証拠とdiagnosticsを保持したまま主ログから抑制し、強い表示は内容を推測せず未読へ残せる
 - `未解決`は既存Unknown gateを実際に通過したreview-worthyなUnknownだけ。右側主ログへraw OCR garbageは出さず、OCR Raw・Timeline/Unknown詳細・Battle Log JSONには証拠を保持
 - OCRが空・timeout・busy中のdrop・preprocess/density rejectでも、強いvisual observationはevent typeを推測せず`未読`として保持。visual/OCR双方が弱い固定UI/noiseだけをsuppressedにする
 - 赤/マゼンタ系または青/紫系のネームプレート構造を使う、HP残量色に依存しないバトルHUDフェーズ検出
@@ -46,7 +48,7 @@ The M8 MVP is closed on top of the static app foundation:
 - IndexedDB storage adapters remain available internally; the MVP UI focuses on explicit Battle Log JSON restore/export
 - `messageObservations`と観測summaryを含むschema-versioned Battle Log JSON export/import。旧JSONは空観測へbackfillし、右ログは従来のresolved eventsへfallback
 - UI表示を小さく保ったまま、session export履歴をOCR 1024件、event 512件、unknown 512件まで保持
-- OCR候補の選択根拠、バトルHUD/VSの永続集計、最大64件のphase遷移を含む診断export
+- OCR候補の選択根拠、バトルHUD/VSの永続集計、phase別OCR admission理由、最大64件のphase遷移を含む診断export
 - Events CSV and Unknown messages CSV export
 - Bounded representative crop evidence in saved/exported logs
 - MVP statistics for observed moves, Pokemon action count, switches, faints, unknown rate, effectiveness, and critical hits

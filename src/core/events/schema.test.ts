@@ -26,6 +26,18 @@ describe("battle log schema", () => {
       mergedCount: 0,
     });
     expect(document.frameEvidence).toEqual([]);
+    expect(document.phaseDetectionSummary).toMatchObject({
+      transitionCounts: {
+        messagePhaseExpired: 0,
+      },
+      ocrAdmissionCounts: {
+        confirmed: 0,
+        grace: 0,
+        fallback: 0,
+        deferred: 0,
+        rejected: 0,
+      },
+    });
     expect(document.manualCorrections).toEqual([]);
   });
 });

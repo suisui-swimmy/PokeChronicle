@@ -147,8 +147,22 @@ export type MessageObservationSuppressionReason =
   | "persistent_ui"
   | "ocr_noise_gate"
   | "visual_low_quality"
+  | "phase_gate"
   | "merged_duplicate"
   | null;
+
+export type MessagePhase =
+  | "unknown"
+  | "message_candidate"
+  | "hud"
+  | "ended";
+
+export type MessageOcrAdmissionReason =
+  | "phase_confirmed"
+  | "phase_transition_grace"
+  | "strong_visual_fallback"
+  | "phase_rejected"
+  | "battle_ended";
 
 export type UnknownEventGateReason =
   | "accepted"
@@ -199,6 +213,8 @@ export interface MessageObservation {
   dynamicForegroundRatio?: number;
   unknownGateReason?: UnknownEventGateReason | null;
   mergedIntoObservationId?: string | null;
+  phaseAtCommit?: MessagePhase | null;
+  ocrAdmissionReason?: MessageOcrAdmissionReason | null;
 }
 
 export interface MessageObservationSummary {
@@ -255,6 +271,7 @@ export type FrameSampleDiagnosticStage =
   | "vsFell"
   | "messagePhaseOpened"
   | "messagePhaseClosed"
+  | "messagePhaseExpired"
   | "skippedPhase"
   | "waitSampled"
   | "waitRose"
@@ -284,6 +301,9 @@ export type FrameSampleDiagnosticStage =
   | "ocrDeferredDropped"
   | "ocrCandidateSelected"
   | "ocrCandidateConflict"
+  | "ocrPhaseDeferred"
+  | "ocrPhaseAdmitted"
+  | "ocrPhaseRejected"
   | "skippedBusy"
   | "skippedPreprocess"
   | "skippedDensity"
@@ -373,6 +393,7 @@ export type FrameImageSignalDiagnostic =
 export interface FrameSampleDiagnostic {
   id: string;
   battleId: string;
+  observationId?: string | null;
   frameIndex: number;
   timestampMs: number;
   stage: FrameSampleDiagnosticStage;
@@ -409,6 +430,14 @@ export interface PhaseDetectionSummary {
     vsFell: number;
     messagePhaseOpened: number;
     messagePhaseClosed: number;
+    messagePhaseExpired: number;
+  };
+  ocrAdmissionCounts: {
+    confirmed: number;
+    grace: number;
+    fallback: number;
+    deferred: number;
+    rejected: number;
   };
 }
 
@@ -417,7 +446,8 @@ export type PhaseTransitionStage =
   | "battleHudFell"
   | "vsFell"
   | "messagePhaseOpened"
-  | "messagePhaseClosed";
+  | "messagePhaseClosed"
+  | "messagePhaseExpired";
 
 export interface PhaseTransitionDiagnostic {
   id: string;
@@ -445,6 +475,14 @@ export function createEmptyPhaseDetectionSummary(): PhaseDetectionSummary {
       vsFell: 0,
       messagePhaseOpened: 0,
       messagePhaseClosed: 0,
+      messagePhaseExpired: 0,
+    },
+    ocrAdmissionCounts: {
+      confirmed: 0,
+      grace: 0,
+      fallback: 0,
+      deferred: 0,
+      rejected: 0,
     },
   };
 }

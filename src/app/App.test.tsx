@@ -140,6 +140,8 @@ function commitMessageWatchCandidate(
     watchFrame();
     clock.set(250);
     watchFrame();
+    clock.set(750);
+    watchFrame();
   });
 }
 
@@ -1026,6 +1028,16 @@ describe("App", () => {
     });
 
     const liveEventLog = screen.getByLabelText("live event log");
+    expect(liveEventLog).not.toHaveTextContent(
+      "バトルメッセージを検出",
+    );
+    expect(worker.postMessage).not.toHaveBeenCalled();
+
+    act(() => {
+      watchClock.set(750);
+      (watchFrame as () => void)();
+    });
+
     const observationRow = within(liveEventLog)
       .getByText("バトルメッセージを検出")
       .closest("li");
@@ -1291,10 +1303,10 @@ describe("App", () => {
     ).toBeGreaterThan(0);
   });
 
-  it("preempts fallback when a different message fingerprint is waiting", async () => {
+  it("does not queue a persistent UI change as a distinct message while OCR is active", async () => {
     const user = userEvent.setup();
     const watchClock = createMessageWatchClock();
-    let messageRegion: "left" | "right" = "left";
+    let messageRegion: "full" | "left" | "right" = "full";
     const canvasContext = {
       drawImage: vi.fn(),
       getImageData: vi.fn(
@@ -1353,7 +1365,7 @@ describe("App", () => {
     await user.click(screen.getByRole("tab", { name: "OCR" }));
     await waitFor(() => {
       expect(screen.getByLabelText("OCR sampling diagnostic log")).toHaveTextContent(
-        "distinct message queued",
+        "messageWatchPersistentUiSuppressed",
       );
     });
 
@@ -1380,27 +1392,20 @@ describe("App", () => {
     });
 
     await waitFor(() => expect(worker.postMessage).toHaveBeenCalledTimes(2));
-    const nextMessageRequest = worker.postMessage.mock.calls[1][0];
+    const fallbackRequest = worker.postMessage.mock.calls[1][0];
 
-    expect(nextMessageRequest.type).toBe("recognize");
-    if (nextMessageRequest.type !== "recognize") {
-      throw new Error("next message recognize request was not queued");
+    expect(fallbackRequest.type).toBe("recognize");
+    if (fallbackRequest.type !== "recognize") {
+      throw new Error("fallback recognize request was not queued");
     }
-    expect(nextMessageRequest.jobId).not.toBe(firstRequest.jobId);
-    expect(nextMessageRequest.candidate).toMatchObject({ id: "primary", strategy: "block" });
-    expect(
-      worker.postMessage.mock.calls.some(
-        ([request]) => request.type === "recognize" && request.candidate.id === "linewise",
-      ),
-    ).toBe(false);
-
-    await user.click(screen.getByRole("tab", { name: "ログ" }));
-    await user.click(screen.getByRole("tab", { name: /System/ }));
-    expect(
-      within(screen.getByRole("tabpanel", { name: /System/ })).getByText(
-        "後続の異なるメッセージを優先し、OCR fallbackを打ち切りました。",
-      ),
-    ).toBeInTheDocument();
+    expect(fallbackRequest.jobId).toBe(firstRequest.jobId);
+    expect(fallbackRequest.candidate).toMatchObject({
+      id: "linewise",
+      strategy: "linewise",
+    });
+    expect(screen.getByLabelText("OCR sampling diagnostic log")).not.toHaveTextContent(
+      "distinct message queued",
+    );
   });
 
   it("keeps imported session history while bounding each rendered review list", async () => {
